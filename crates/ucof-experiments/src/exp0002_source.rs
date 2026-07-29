@@ -23,6 +23,11 @@ const OBJECT_DOMAIN: &[u8] = b"UCOF-EXP-0002-OBJECT\0";
 
 pub trait Exp0002ReadAt {
     fn len(&mut self) -> io::Result<u64>;
+
+    fn is_empty(&mut self) -> io::Result<bool> {
+        Ok(self.len()? == 0)
+    }
+
     fn read_exact_at(&mut self, offset: u64, buffer: &mut [u8]) -> io::Result<()>;
 }
 
