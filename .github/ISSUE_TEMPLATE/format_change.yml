@@ -1,0 +1,71 @@
+name: Format change proposal intake
+description: Propose a normative wire-format, compatibility, profile, capability, or registry change
+title: "fcp: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This form starts proposal discussion. Accepted normative changes require an FCP document under docs/proposals/.
+  - type: input
+    id: summary
+    attributes:
+      label: Proposed change
+      description: State the proposed normative change in one sentence.
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem and affected use cases
+      description: Link specific use cases, threats, interoperability failures, or measurements.
+    validations:
+      required: true
+  - type: textarea
+    id: semantics
+    attributes:
+      label: Intended semantics
+      description: Describe required reader and writer behavior without relying on one implementation.
+    validations:
+      required: true
+  - type: textarea
+    id: compatibility
+    attributes:
+      label: Compatibility and migration
+      description: Address old/new readers and writers, capabilities, profiles, identities, and experimental epoch impact.
+    validations:
+      required: true
+  - type: textarea
+    id: security
+    attributes:
+      label: Security, privacy, and resource limits
+      description: Identify attacker-controlled inputs, metadata leakage, failure behavior, and bounded work.
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Include at least one meaningful alternative and why it may be preferable.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence required before acceptance
+      description: List prototypes, vectors, benchmarks, differential tests, or primary references.
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Proposal checks
+      options:
+        - label: I read the proposal process and registry policy.
+          required: true
+        - label: I did not assign a permanent numeric identifier.
+          required: true
+        - label: I identified whether a new experimental epoch may be required.
+          required: true
+        - label: I understand that a working prototype is evidence, not the normative specification.
+          required: true
