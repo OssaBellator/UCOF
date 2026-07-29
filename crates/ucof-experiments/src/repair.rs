@@ -57,7 +57,9 @@ impl fmt::Display for RepairError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::SourceNotVerified => write!(f, "repair source snapshot is not verified"),
-            Self::ProgressCheckpoint => write!(f, "progress checkpoint cannot be repaired as a snapshot"),
+            Self::ProgressCheckpoint => {
+                write!(f, "progress checkpoint cannot be repaired as a snapshot")
+            }
             Self::DuplicateLocator(id) => write!(f, "duplicate locator for object {id}"),
             Self::MissingLocator(id) => write!(f, "missing locator for reachable object {id}"),
             Self::RangeOverflow(id) => write!(f, "physical range overflow for object {id}"),
