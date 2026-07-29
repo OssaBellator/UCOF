@@ -69,6 +69,20 @@ doc = false
 bench = false
 
 [[bin]]
+name = "root_enumeration"
+path = "fuzz_targets/root_enumeration.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "publication_model"
+path = "fuzz_targets/publication_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "recovery_scan"
 path = "fuzz_targets/recovery_scan.rs"
 test = false
