@@ -17,11 +17,17 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Format working tree
-        run: cargo fmt --all
+      - name: Check formatting
+        run: cargo fmt --all -- --check
       - name: Lint
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test Rust implementation
         run: cargo test --workspace --all-targets
       - name: Test independent Python parser
         run: python3 tools/validate_exp_0001.py --vectors tests/vectors/exp-0001
+      - name: Test adversarial Python cases
+        run: python3 tools/test_exp_0001_adversarial.py
+      - name: Reproduce framing experiments
+        run: |
+          python3 tools/experiment_framing_widths.py
+          python3 tools/experiment_footer_discovery.py
