@@ -7,7 +7,13 @@ fuzz_target!(|data: &[u8]| {
     let leaf_capacity = usize::from(data.first().copied().unwrap_or(0) % 31) + 1;
     let fanout = usize::from(data.get(1).copied().unwrap_or(0) % 31) + 2;
     let mut entries = Vec::new();
-    for (index, chunk) in data.get(2..).unwrap_or_default().chunks(16).take(128).enumerate() {
+    for (index, chunk) in data
+        .get(2..)
+        .unwrap_or_default()
+        .chunks(16)
+        .take(128)
+        .enumerate()
+    {
         let mut id_bytes = [0_u8; 8];
         id_bytes[..chunk.len().min(8)].copy_from_slice(&chunk[..chunk.len().min(8)]);
         let mut length_bytes = [0_u8; 8];
@@ -28,7 +34,10 @@ fuzz_target!(|data: &[u8]| {
 
     if let Ok(directory) = PagedDirectory::build(entries, leaf_capacity, fanout) {
         let _ = directory.validate(4096);
-        let query = u64::from_le_bytes(data.get(..8).unwrap_or_default().try_into().unwrap_or([0; 8]));
+        let mut query_bytes = [0_u8; 8];
+        let query_len = data.len().min(query_bytes.len());
+        query_bytes[..query_len].copy_from_slice(&data[..query_len]);
+        let query = u64::from_le_bytes(query_bytes);
         let _ = directory.lookup(query, 64);
     }
 });
