@@ -22,42 +22,33 @@ jobs:
         run: |
           python3 - <<'PY'
           from pathlib import Path
+          import re
 
           path = Path("crates/ucof-core/src/stream.rs")
           text = path.read_text(encoding="utf-8")
+
+          text, count = re.subn(
+              r"(let manifest = self\s*\.manifests\s*\.get\(&footer\.manifest_id\))\s*(\.ok_or\(Error::MissingManifest\(footer\.manifest_id\)\)\?;)",
+              r"\1\n            .cloned()\n            \2",
+              text,
+              count=1,
+          )
+          if count != 1 and ".cloned()\n            .ok_or(Error::MissingManifest" not in text:
+              raise SystemExit("manifest borrow patch did not apply")
+
           text = text.replace(
-              '''        let manifest = self
-              .manifests
-              .get(&footer.manifest_id)
-              .ok_or(Error::MissingManifest(footer.manifest_id))?;''',
-              '''        let manifest = self
-              .manifests
-              .get(&footer.manifest_id)
-              .cloned()
-              .ok_or(Error::MissingManifest(footer.manifest_id))?;''',
+              "roots: manifest.roots.clone(),\n            unsupported_required_capabilities: manifest.required_capabilities.clone(),",
+              "roots: manifest.roots,\n            unsupported_required_capabilities: manifest.required_capabilities,",
               1,
           )
           text = text.replace(
-              '''            roots: manifest.roots.clone(),
-            unsupported_required_capabilities: manifest.required_capabilities.clone(),''',
-              '''            roots: manifest.roots,
-            unsupported_required_capabilities: manifest.required_capabilities,''',
+              "fn ensure_exact_end(&mut self) -> Result<(), Error> {\n        self.check_file_budget(1)?;\n        let mut byte = [0_u8; 1];",
+              "fn ensure_exact_end(&mut self) -> Result<(), Error> {\n        let mut byte = [0_u8; 1];",
               1,
           )
           text = text.replace(
-              '''    fn ensure_exact_end(&mut self) -> Result<(), Error> {
-        self.check_file_budget(1)?;
-        let mut byte = [0_u8; 1];''',
-              '''    fn ensure_exact_end(&mut self) -> Result<(), Error> {
-        let mut byte = [0_u8; 1];''',
-              1,
-          )
-          text = text.replace(
-              '''            Err(error) => Some(Err(error)),''',
-              '''            Err(error) => {
-                self.state = State::Done;
-                Some(Err(error))
-            }''',
+              "Err(error) => Some(Err(error)),",
+              "Err(error) => {\n                self.state = State::Done;\n                Some(Err(error))\n            }",
               1,
           )
           path.write_text(text, encoding="utf-8")
