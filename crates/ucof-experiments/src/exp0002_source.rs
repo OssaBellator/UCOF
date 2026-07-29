@@ -40,9 +40,8 @@ impl<'a> Exp0002SliceSource<'a> {
 
 impl Exp0002ReadAt for Exp0002SliceSource<'_> {
     fn len(&mut self) -> io::Result<u64> {
-        u64::try_from(self.bytes.len()).map_err(|_| {
-            io::Error::new(io::ErrorKind::InvalidData, "source length exceeds u64")
-        })
+        u64::try_from(self.bytes.len())
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "source length exceeds u64"))
     }
 
     fn read_exact_at(&mut self, offset: u64, buffer: &mut [u8]) -> io::Result<()> {
@@ -212,8 +211,7 @@ pub fn lookup_authenticated_at<S: Exp0002ReadAt>(
     if file_len > limits.validation.max_file_bytes {
         return Err(Exp0002Error::ResourceLimit("file bytes").into());
     }
-    let minimum = u64::try_from(64 + FOOTER_LEN)
-        .map_err(|_| Exp0002Error::ArithmeticOverflow)?;
+    let minimum = u64::try_from(64 + FOOTER_LEN).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
     if file_len < minimum {
         return Err(Exp0002Error::Truncated.into());
     }
@@ -261,11 +259,8 @@ pub fn lookup_authenticated_at<S: Exp0002ReadAt>(
     if footer.snapshot_offset < footer.commit_start || snapshot_end > footer_offset {
         return Err(Exp0002Error::InvalidCommitRange.into());
     }
-    let snapshot_bytes = reader.read_vec(
-        footer.snapshot_offset,
-        footer.snapshot_len,
-        "snapshot",
-    )?;
+    let snapshot_bytes =
+        reader.read_vec(footer.snapshot_offset, footer.snapshot_len, "snapshot")?;
     reader.add_hashed(footer.snapshot_len)?;
     if digest(SNAPSHOT_DOMAIN, &snapshot_bytes) != footer.snapshot_digest {
         return Err(Exp0002Error::DigestMismatch("snapshot").into());
@@ -278,11 +273,7 @@ pub fn lookup_authenticated_at<S: Exp0002ReadAt>(
     }
     validate_parent_link(&mut reader, footer_offset, &footer, &snapshot)?;
 
-    let snapshot_range = to_range(
-        footer.snapshot_offset,
-        footer.snapshot_len,
-        file_len,
-    )?;
+    let snapshot_range = to_range(footer.snapshot_offset, footer.snapshot_len, file_len)?;
     let footer_range = to_range(footer_offset, FOOTER_LEN as u64, file_len)?;
     let mut page_ranges = Vec::new();
     let mut expected = ExpectedPage {
@@ -314,8 +305,12 @@ pub fn lookup_authenticated_at<S: Exp0002ReadAt>(
         page_ranges.push(page_range);
         let header = parse_page_header(&page, snapshot.sequence)?;
         if u16::from(header.level) != expected.level
-            || expected.minimum.is_some_and(|value| value != header.minimum)
-            || expected.maximum.is_some_and(|value| value != header.maximum)
+            || expected
+                .minimum
+                .is_some_and(|value| value != header.minimum)
+            || expected
+                .maximum
+                .is_some_and(|value| value != header.maximum)
         {
             return Err(Exp0002Error::InvalidPageReference.into());
         }
@@ -327,11 +322,7 @@ pub fn lookup_authenticated_at<S: Exp0002ReadAt>(
                 let Some(selected) = select_leaf(&page, &header, object_id)? else {
                     return Ok(None);
                 };
-                let record_range = to_range(
-                    selected.record_offset,
-                    selected.record_len,
-                    file_len,
-                )?;
+                let record_range = to_range(selected.record_offset, selected.record_len, file_len)?;
                 if page_ranges
                     .iter()
                     .any(|page_range| ranges_overlap(&record_range, page_range))
@@ -415,11 +406,16 @@ impl<'a, S: Exp0002ReadAt> BudgetedSource<'a, S> {
         context: &'static str,
     ) -> Result<Vec<u8>, Exp0002SourceError> {
         let length = usize::try_from(length).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
-        if length > self.limits.max_read_request_bytes {
-            return Err(Exp0002Error::ResourceLimit("source read request").into());
-        }
         let mut bytes = vec![0_u8; length];
-        self.read_exact(offset, &mut bytes, context)?;
+        let mut cursor = 0_usize;
+        while cursor < length {
+            let take = (length - cursor).min(self.limits.max_read_request_bytes);
+            let read_offset = offset
+                .checked_add(u64::try_from(cursor).map_err(|_| Exp0002Error::ArithmeticOverflow)?)
+                .ok_or(Exp0002Error::ArithmeticOverflow)?;
+            self.read_exact(read_offset, &mut bytes[cursor..cursor + take], context)?;
+            cursor += take;
+        }
         Ok(bytes)
     }
 
@@ -546,10 +542,8 @@ fn validate_parent_link<S: Exp0002ReadAt>(
     {
         return Err(Exp0002Error::InvalidPreviousFooter.into());
     }
-    let previous_bytes = reader.read_array::<FOOTER_LEN>(
-        footer.previous_footer_offset,
-        "previous footer",
-    )?;
+    let previous_bytes =
+        reader.read_array::<FOOTER_LEN>(footer.previous_footer_offset, "previous footer")?;
     let previous = parse_footer(&previous_bytes)?;
     if previous.snapshot_digest != snapshot.parent_snapshot_digest
         || previous
@@ -655,10 +649,7 @@ fn select_internal(
     object_id: u64,
 ) -> Result<Option<ExpectedPage>, Exp0002Error> {
     let capacity = (PAGE_SIZE - PAGE_HEADER_LEN) / INTERNAL_ENTRY_LEN;
-    if header.level == 0
-        || header.entry_size != INTERNAL_ENTRY_LEN
-        || header.count > capacity
-    {
+    if header.level == 0 || header.entry_size != INTERNAL_ENTRY_LEN || header.count > capacity {
         return Err(Exp0002Error::InvalidEntrySize);
     }
     let used = PAGE_HEADER_LEN
@@ -679,10 +670,7 @@ fn select_internal(
         let entry = &page[start..start + INTERNAL_ENTRY_LEN];
         let minimum = read_u64(entry, 0)?;
         let maximum = read_u64(entry, 8)?;
-        if minimum == 0
-            || minimum > maximum
-            || previous_max.is_some_and(|value| value >= minimum)
-        {
+        if minimum == 0 || minimum > maximum || previous_max.is_some_and(|value| value >= minimum) {
             return Err(Exp0002Error::OverlappingRanges);
         }
         if read_u32(entry, 24)? as usize != PAGE_SIZE
@@ -718,10 +706,7 @@ fn validate_selected_object<S: Exp0002ReadAt>(
     if selected.record_len < OBJECT_HEADER_LEN as u64 {
         return Err(Exp0002Error::InvalidLength("object record").into());
     }
-    let header = reader.read_array::<OBJECT_HEADER_LEN>(
-        selected.record_offset,
-        "object header",
-    )?;
+    let header = reader.read_array::<OBJECT_HEADER_LEN>(selected.record_offset, "object header")?;
     if &header[0..4] != OBJECT_MAGIC
         || usize::from(read_u16(&header, 4)?) != OBJECT_HEADER_LEN
         || read_u16(&header, 6)? != selected.kind
@@ -872,26 +857,21 @@ mod tests {
     fn slice_and_seek_sources_match() {
         let bytes = build_genesis(
             header(),
-            vec![object(1, b"one".to_vec(), true), object(2, b"two".to_vec(), false)],
+            vec![
+                object(1, b"one".to_vec(), true),
+                object(2, b"two".to_vec(), false),
+            ],
         )
         .expect("genesis");
         let mut slice = Exp0002SliceSource::new(&bytes);
-        let slice_result = lookup_authenticated_at(
-            &mut slice,
-            2,
-            &Exp0002SourceLimits::default(),
-        )
-        .expect("slice")
-        .expect("object");
+        let slice_result = lookup_authenticated_at(&mut slice, 2, &Exp0002SourceLimits::default())
+            .expect("slice")
+            .expect("object");
         let cursor = std::io::Cursor::new(bytes);
         let mut seek = Exp0002SeekSource::new(cursor);
-        let seek_result = lookup_authenticated_at(
-            &mut seek,
-            2,
-            &Exp0002SourceLimits::default(),
-        )
-        .expect("seek")
-        .expect("object");
+        let seek_result = lookup_authenticated_at(&mut seek, 2, &Exp0002SourceLimits::default())
+            .expect("seek")
+            .expect("object");
         assert_eq!(slice_result, seek_result);
     }
 
@@ -900,13 +880,11 @@ mod tests {
         let large = vec![7_u8; 1024 * 1024];
         let genesis = build_genesis(
             header(),
-            vec![
-                object(1, b"root".to_vec(), true),
-                object(2, large, false),
-            ],
+            vec![object(1, b"root".to_vec(), true), object(2, large, false)],
         )
         .expect("genesis");
-        let genesis_report = validate_strict(&genesis, &ValidationLimits::default()).expect("valid");
+        let genesis_report =
+            validate_strict(&genesis, &ValidationLimits::default()).expect("valid");
         let large_entry = genesis_report
             .objects
             .iter()
@@ -945,8 +923,8 @@ mod tests {
 
     #[test]
     fn source_read_budget_fails_closed() {
-        let bytes = build_genesis(header(), vec![object(1, b"one".to_vec(), true)])
-            .expect("genesis");
+        let bytes =
+            build_genesis(header(), vec![object(1, b"one".to_vec(), true)]).expect("genesis");
         let mut source = Exp0002SliceSource::new(&bytes);
         let error = lookup_authenticated_at(
             &mut source,
@@ -967,17 +945,16 @@ mod tests {
     fn source_lookup_reports_authenticated_absence() {
         let bytes = build_genesis(
             header(),
-            vec![object(1, b"one".to_vec(), true), object(3, b"three".to_vec(), false)],
+            vec![
+                object(1, b"one".to_vec(), true),
+                object(3, b"three".to_vec(), false),
+            ],
         )
         .expect("genesis");
         let mut source = Exp0002SliceSource::new(&bytes);
         assert_eq!(
-            lookup_authenticated_at(
-                &mut source,
-                2,
-                &Exp0002SourceLimits::default()
-            )
-            .expect("absence"),
+            lookup_authenticated_at(&mut source, 2, &Exp0002SourceLimits::default())
+                .expect("absence"),
             None
         );
     }
@@ -986,7 +963,10 @@ mod tests {
     fn selected_historical_object_tamper_fails() {
         let genesis = build_genesis(
             header(),
-            vec![object(1, b"one".to_vec(), true), object(2, b"two".to_vec(), false)],
+            vec![
+                object(1, b"one".to_vec(), true),
+                object(2, b"two".to_vec(), false),
+            ],
         )
         .expect("genesis");
         let mut appended = build_append(
@@ -998,11 +978,6 @@ mod tests {
         .expect("append");
         appended[64 + OBJECT_HEADER_LEN] ^= 1;
         let mut source = Exp0002SliceSource::new(&appended);
-        assert!(lookup_authenticated_at(
-            &mut source,
-            1,
-            &Exp0002SourceLimits::default()
-        )
-        .is_err());
+        assert!(lookup_authenticated_at(&mut source, 1, &Exp0002SourceLimits::default()).is_err());
     }
 }
