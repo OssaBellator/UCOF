@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -67,29 +67,3 @@ jobs:
           key: ${{ matrix.target }}
       - name: Check all libraries for target
         run: cargo check --locked --workspace --lib --target ${{ matrix.target }}
-
-  integrate:
-    if: github.event_name == 'pull_request' && github.actor != 'github-actions[bot]' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - name: Normalize and lock workspace
-        run: |
-          cargo fmt --all
-          cargo fmt --manifest-path fuzz/Cargo.toml
-          cargo generate-lockfile
-      - name: Commit generated state
-        run: |
-          if [[ -z "$(git status --porcelain -- Cargo.lock crates)" ]]; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.lock crates
-          git commit -m "style: normalize and lock Phase 3 research models"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
