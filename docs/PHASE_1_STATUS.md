@@ -26,7 +26,12 @@ Create the smallest end-to-end format experiment that can encode, locate, inspec
 | Independent vector generator | Implemented | `tools/generate_exp_0001_vectors.py` |
 | Independent second parser | Implemented | `tools/validate_exp_0001.py` |
 | Valid and invalid hexadecimal vectors | Initial set implemented | `tests/vectors/exp-0001/` |
-| CI format, lint, Rust tests, and independent validation | Passing prototype checks | `.github/workflows/rust.yml` |
+| Fixed-field and canonical-CBOR attacks | Implemented | `tools/test_exp_0001_adversarial.py` |
+| Framing-width experiment | Complete | `docs/experiments/0001-framing-widths.md` |
+| Footer-discovery experiment | Complete | `docs/experiments/0002-footer-discovery.md` |
+| UC-02 scale-limit model | Complete; design fails UC-02 | `docs/experiments/0003-scale-limits.md` |
+| Threat-model findings | Companion evidence published | `docs/security/EXP_0001_FINDINGS.md` |
+| CI format, lint, Rust, Python, attacks, and experiments | Passing strict checks | `.github/workflows/rust.yml` |
 
 ## Current experiment decisions
 
@@ -50,27 +55,30 @@ These choices apply only to `UCOF-EXP-0001`:
 - Payload mutation that preserves framing reaches the digest check and produces `digest_mismatch`.
 - Required capabilities fail closed.
 - Every byte-boundary truncation of the Rust demo fails without a parser panic.
-- Caller file-size limits fail before structural parsing.
+- Caller limits fail before oversized file, record, payload, metadata, text, byte-string, depth, and item work.
+- Fixed file-header, record-header, and footer fields have targeted mutation coverage in the independent parser.
+- The restricted CBOR parser rejects non-shortest arguments, indefinite forms, duplicate or out-of-order map keys, invalid UTF-8, negative integers, and floating-point values.
+- A compact variable-width strawman saves 55–70% of record-header bytes, but the whole-file benefit is negligible for page- and media-sized payloads.
+- A 64 KiB backward-search tail can expose 8,184 footer-magic candidates, supporting strict exact-end discovery for normal validation.
+- One million zero-byte objects require a lower-bound 40 MB of record headers and approximately 52 MB of directory payload. The flat materialized directory therefore fails UC-02 and must not be promoted as a massive-archive design.
 
 ## Remaining exit work
 
 Phase 1 is not complete until:
 
-1. Source files are committed in rustfmt-normalized form so CI can restore `cargo fmt --check` rather than formatting the runner workspace.
-2. Mutation tests cover every fixed header and footer field.
-3. The Python parser receives direct limit and canonical-CBOR adversarial tests beyond the shared vector corpus.
-4. Fixed-width and variable-width framing alternatives are measured.
-5. Exact-end footer discovery is compared with bounded backward search.
-6. Canonical CBOR subset behavior is compared with another established CBOR implementation.
-7. Resource limits are stress-tested against UC-02 and UC-10 scales.
-8. FCP-0001 receives public review and disposition of objections.
-9. The threat model is updated with findings from executable tests.
+1. The canonical CBOR subset is compared with another established implementation and disagreements are documented.
+2. FCP-0001 receives public review and all material objections are dispositioned.
+3. The executable findings companion is integrated into the primary threat model.
+4. The first framing proposal explicitly records the UC-02 failure and the exact-end versus recovery-mode distinction.
+5. Maintainers decide whether the evidence justifies accepting EXP-0001 for continued experimentation, revising it, or retiring it in favor of EXP-0002.
 
 ## Explicit limitations
 
 The current Rust reader validates a complete in-memory byte slice. It demonstrates sequential framing and validated random lookup, but it is not yet a bounded-buffer streaming API over `Read` or a range-source API.
 
 The current digest provides integrity relative to the stored footer, not authenticity.
+
+The flat directory and in-memory inventory do not satisfy UC-02-scale object counts. Raising limits does not resolve that architecture problem.
 
 The experiment has one active root and no recovery from a missing footer. Append-only snapshots and checkpoint recovery belong to Phase 3 after framing experiments establish safe root-selection rules.
 
