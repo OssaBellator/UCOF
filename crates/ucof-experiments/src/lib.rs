@@ -6,6 +6,7 @@
 
 mod compaction;
 mod directory;
+mod recovery;
 mod snapshots;
 
 pub use compaction::{CompactionError, CompactionLimits, CompactionPlan, ObjectGraph};
@@ -13,7 +14,12 @@ pub use directory::{
     DirectoryBuildError, DirectoryLookupError, DirectoryStats, LookupResult, ObjectLocator,
     PagedDirectory,
 };
+pub use recovery::{
+    has_exact_end_candidate, scan_backwards, RecoveryScanError, RecoveryScanLimits,
+    RecoveryScanReport, ScannedCandidate,
+};
 pub use snapshots::{
-    CandidateStatus, CheckpointKind, RootSelectionError, RootSelectionLimits, RootSelectionMode,
-    RootSelectionReport, SnapshotCandidate, SnapshotIdentity,
+    CandidateStatus, CheckpointKind, RejectedCandidate, RootRejection, RootSelectionError,
+    RootSelectionLimits, RootSelectionMode, RootSelectionReport, SnapshotCandidate,
+    SnapshotIdentity,
 };
