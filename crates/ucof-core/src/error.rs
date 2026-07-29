@@ -20,6 +20,7 @@ pub enum ErrorCategory {
     UnsupportedRequiredCapability,
     DigestMismatch,
     LimitExceeded,
+    Io,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -41,6 +42,7 @@ pub enum Error {
     UnsupportedRequiredCapability(u64),
     DigestMismatch,
     LimitExceeded(&'static str),
+    Io(&'static str),
 }
 
 impl Error {
@@ -64,6 +66,7 @@ impl Error {
             Self::UnsupportedRequiredCapability(_) => ErrorCategory::UnsupportedRequiredCapability,
             Self::DigestMismatch => ErrorCategory::DigestMismatch,
             Self::LimitExceeded(_) => ErrorCategory::LimitExceeded,
+            Self::Io(_) => ErrorCategory::Io,
         }
     }
 }
@@ -96,6 +99,7 @@ impl fmt::Display for Error {
             }
             Self::DigestMismatch => write!(f, "committed-prefix digest mismatch"),
             Self::LimitExceeded(limit) => write!(f, "resource limit exceeded: {limit}"),
+            Self::Io(context) => write!(f, "I/O failure while reading {context}"),
         }
     }
 }
