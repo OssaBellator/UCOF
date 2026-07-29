@@ -25,7 +25,7 @@ jobs:
           cargo generate-lockfile
       - name: Commit normalization
         run: |
-          if git diff --quiet; then
+          if [[ -z "$(git status --porcelain -- Cargo.lock crates fuzz)" ]]; then
             exit 0
           fi
           git config user.name "github-actions[bot]"
