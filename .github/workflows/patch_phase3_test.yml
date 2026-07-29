@@ -25,14 +25,12 @@ jobs:
 
           path = Path("crates/ucof-experiments/src/directory.rs")
           text = path.read_text(encoding="utf-8")
-          old = '''            DirectoryLookupError::PageCycle | DirectoryLookupError::ChildRangeMismatch
-          ));'''
-          new = '''            DirectoryLookupError::PageCycle
+          old = "            DirectoryLookupError::PageCycle | DirectoryLookupError::ChildRangeMismatch"
+          new = """            DirectoryLookupError::PageCycle
                   | DirectoryLookupError::ChildRangeMismatch
-                  | DirectoryLookupError::OverlappingChildRange
-          ));'''
+                  | DirectoryLookupError::OverlappingChildRange"""
           if old not in text:
-              raise SystemExit("cycle assertion anchor not found")
+              raise SystemExit("cycle assertion line not found")
           path.write_text(text.replace(old, new, 1), encoding="utf-8")
           PY
           cargo fmt --all
