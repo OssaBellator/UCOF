@@ -6,10 +6,12 @@
 
 **UCOF is an early design and research project.** No stable specification, production wire format, or production-compatible file exists yet.
 
-Current implementation stage: **Phase 1 — Minimal Wire-Format Experiment, in progress**.
+Current implementation stage: **Phase 2 — Safety-First Core Codec, technical implementation under review**.
 
-Phase 0 governance and research foundations remain under review while Phase 1 exercises them with the first real proposal and executable prototype.
+Phase 1's disposable framing proposal remains in public review. Phase 2 exercises those bytes through bounded hostile-input APIs without making them stable.
 
+- [Phase 2 status](docs/PHASE_2_STATUS.md)
+- [Phase 2 bounded API guide](docs/PHASE_2_API_GUIDE.md)
 - [Phase 1 status](docs/PHASE_1_STATUS.md)
 - [UCOF-EXP-0001 specification](spec/experimental/UCOF-EXP-0001.md)
 - [FCP-0001 framing proposal](docs/proposals/0001-exp-0001-framing.md)
@@ -26,9 +28,9 @@ It does not force documents, media, analytical tables, databases, scientific arr
 
 A future conforming core reader should be able to identify a version, discover the active snapshot, enumerate objects and required capabilities, validate structure and integrity, preserve unknown optional data, extract safe opaque payloads, and explain unsupported semantics under explicit resource limits.
 
-## Phase 1 experiment
+## Current experimental core
 
-`UCOF-EXP-0001` is the first executable framing experiment. It currently includes:
+`UCOF-EXP-0001` is the first executable framing experiment. It includes:
 
 - a 32-byte fixed bootstrap header;
 - contiguous 40-byte record headers;
@@ -40,23 +42,45 @@ A future conforming core reader should be able to identify a version, discover t
 - strict structural and directory cross-validation;
 - caller-controlled hostile-input limits;
 - deterministic writing and object lookup;
-- a small inspector and verifier CLI;
 - independently generated valid and invalid vectors.
 
-It deliberately excludes compression, encryption, signatures, provenance, external references, append history, schemas, and profiles.
+Phase 2 adds implementation-local safety APIs over those bytes:
+
+- metadata-only inspection over borrowed, seekable, or future range-backed sources;
+- strict source validation with bounded block hashing;
+- non-seeking sequential event reading with bounded payload chunks;
+- strict diagnostics that never convert integrity failure into validity;
+- explicitly unverified prefix salvage;
+- deterministic streaming and seekable writers with explicit finalization;
+- separate accounting for reads, hashes, allocations, logical bytes, and diagnostics;
+- property tests, sparse virtual-source tests, cross-language corpus checks, and continuous fuzz targets.
+
+The epoch deliberately excludes compression, encryption, signatures, provenance, external references, append history, schemas, and profiles.
 
 No field width, magic value, byte order, metadata choice, footer rule, identifier width, or digest in this experiment is stable merely because the implementation works.
 
 ## Quick start
 
-The reference experiment uses stable Rust.
+The reference implementation has a provisional Rust 1.85 minimum supported version.
 
 ```console
-cargo test --workspace
-cargo run -p ucof-cli --bin ucof -- make-demo demo.ucof
-cargo run -p ucof-cli --bin ucof -- inspect demo.ucof
-cargo run -p ucof-cli --bin ucof -- verify demo.ucof
+cargo test --locked --workspace
+cargo run --locked -p ucof-cli --bin ucof -- make-demo demo.ucof
+cargo run --locked -p ucof-cli --bin ucof -- inspect demo.ucof
+cargo run --locked -p ucof-cli --bin ucof -- verify demo.ucof
+cargo run --locked -p ucof-cli --bin ucof -- diagnose demo.ucof
+cargo run --locked -p ucof-cli --bin ucof -- salvage demo.ucof
 ```
+
+The command assurance levels are deliberately different:
+
+| Command | Meaning |
+|---|---|
+| `inspect` | Structural metadata inventory; payload integrity is not checked |
+| `verify` | Strict bounded committed-prefix integrity validation |
+| `diagnose` | Strict verified-or-invalid status with categorized failures |
+| `salvage` | Unverified complete-prefix record discovery; never a conformance claim |
+| `make-demo` | Deterministic experimental output through explicit finalization |
 
 Generate the independent vector corpus with:
 
@@ -70,16 +94,18 @@ Generated `.ucof` binaries are ignored by Git. Canonical hexadecimal fixtures an
 
 ```text
 crates/
-  ucof-core/        Experimental framing, metadata, reader, and writer
-  ucof-cli/         inspect, verify, and make-demo commands
+  ucof-core/        Bounded experimental readers, validators, diagnostics, and writers
+  ucof-cli/         inspect, verify, diagnose, salvage, and make-demo commands
+fuzz/                Standalone cargo-fuzz package and parser/writer targets
 spec/
   experimental/     Disposable wire specifications
 docs/
   decisions/        Implementation-local Architecture Decision Records
   proposals/        Normative Format Change Proposals
+  security/         Executable security findings and supporting evidence
 tests/
   vectors/          Reproducible valid and invalid byte fixtures
-tools/              Independent generators and experiment tooling
+tools/               Independent generators and experiment tooling
 ```
 
 Future crates and profile directories will be added only when their responsibilities are validated.
@@ -136,7 +162,9 @@ UCOF does not attempt to make every workload equally efficient under one layout,
 
 Every input byte is assumed hostile. The project explicitly considers checked arithmetic, forged or overlapping ranges, bounded metadata and allocation, decompression expansion, recursive object graphs, malicious indexes, parser differentials, digest and algorithm confusion, signature wrapping, metadata leakage, stale-root selection, external-reference confusion, and safe extraction or repair.
 
-See the [initial threat model](docs/THREAT_MODEL.md) and [security policy](SECURITY.md).
+The primary threat model now incorporates executable EXP-0001 findings, including validation-order effects, exact-end versus recovery separation, the flat-directory scale failure, bounded source behaviour, fuzzing, and portability evidence.
+
+See the [threat model](docs/THREAT_MODEL.md) and [security policy](SECURITY.md).
 
 ## Decision process
 

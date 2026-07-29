@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [main, "phase-1/**"]
+    branches: [main, "phase-1/**", "phase-2/**"]
   pull_request:
 
 permissions:
@@ -17,12 +17,16 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Check locked dependency graph
+        run: cargo metadata --locked --no-deps --format-version 1 > /dev/null
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Lint
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: Test Rust implementation
-        run: cargo test --workspace --all-targets
+        run: cargo test --locked --workspace --all-targets
+      - name: Test Rust documentation
+        run: cargo test --locked --workspace --doc
       - name: Test independent Python parser
         run: python3 tools/validate_exp_0001.py --vectors tests/vectors/exp-0001
       - name: Test adversarial Python cases
@@ -32,3 +36,33 @@ jobs:
           python3 tools/experiment_framing_widths.py
           python3 tools/experiment_footer_discovery.py
           python3 tools/experiment_scale_limits.py
+
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-1.85.0
+      - name: Check workspace at MSRV
+        run: cargo check --locked --workspace --all-targets
+
+  portability:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - i686-unknown-linux-gnu
+          - powerpc64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Check core library for target
+        run: cargo check --locked -p ucof-core --lib --target ${{ matrix.target }}
