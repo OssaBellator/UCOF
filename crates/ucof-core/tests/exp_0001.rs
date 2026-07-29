@@ -15,7 +15,9 @@ fn deterministic_round_trip_and_lookup() {
 
 #[test]
 fn checked_in_minimal_vector_matches_writer() {
-    let expected = decode_hex(include_str!("../../../tests/vectors/exp-0001/minimal-valid.hex"));
+    let expected = decode_hex(include_str!(
+        "../../../tests/vectors/exp-0001/minimal-valid.hex"
+    ));
     let mut writer = Writer::new();
     writer
         .add_manifest(1, &Manifest::new(Vec::new()))
@@ -26,7 +28,9 @@ fn checked_in_minimal_vector_matches_writer() {
 
 #[test]
 fn checked_in_two_object_vector_is_valid() {
-    let bytes = decode_hex(include_str!("../../../tests/vectors/exp-0001/two-objects.hex"));
+    let bytes = decode_hex(include_str!(
+        "../../../tests/vectors/exp-0001/two-objects.hex"
+    ));
     let file = ValidatedFile::parse(&bytes, &Limits::default()).expect("valid vector");
     assert_eq!(file.manifest.roots, vec![1, 2]);
     assert_eq!(file.object(1), Some(&b"hello"[..]));
@@ -38,14 +42,18 @@ fn every_truncation_fails_without_panic() {
     let bytes = demo_bytes();
     for length in 0..bytes.len() {
         let result = ValidatedFile::parse(&bytes[..length], &Limits::default());
-        assert!(result.is_err(), "truncation at {length} unexpectedly passed");
+        assert!(
+            result.is_err(),
+            "truncation at {length} unexpectedly passed"
+        );
     }
 }
 
 #[test]
 fn modified_prefix_fails_digest() {
     let mut bytes = demo_bytes();
-    bytes[40] ^= 1;
+    // File header (32 bytes) plus first record header (40 bytes).
+    bytes[72] ^= 1;
     let error = ValidatedFile::parse(&bytes, &Limits::default()).expect_err("tamper must fail");
     assert_eq!(error.category(), ErrorCategory::DigestMismatch);
 }
@@ -84,7 +92,10 @@ fn demo_bytes() -> Vec<u8> {
 }
 
 fn decode_hex(source: &str) -> Vec<u8> {
-    let compact: String = source.chars().filter(|character| !character.is_whitespace()).collect();
+    let compact: String = source
+        .chars()
+        .filter(|character| !character.is_whitespace())
+        .collect();
     assert_eq!(compact.len() % 2, 0, "hex fixture length");
     compact
         .as_bytes()
