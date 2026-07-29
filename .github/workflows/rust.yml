@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -17,14 +17,16 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Check locked dependency graph
+        run: cargo metadata --locked --no-deps --format-version 1 > /dev/null
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Lint
-        run: cargo clippy --workspace --all-targets -- -D warnings
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: Test Rust implementation
-        run: cargo test --workspace --all-targets
+        run: cargo test --locked --workspace --all-targets
       - name: Test Rust documentation
-        run: cargo test --workspace --doc
+        run: cargo test --locked --workspace --doc
       - name: Test independent Python parser
         run: python3 tools/validate_exp_0001.py --vectors tests/vectors/exp-0001
       - name: Test adversarial Python cases
@@ -44,7 +46,7 @@ jobs:
         with:
           key: msrv-1.85.0
       - name: Check workspace at MSRV
-        run: cargo check --workspace --all-targets
+        run: cargo check --locked --workspace --all-targets
 
   portability:
     runs-on: ubuntu-latest
@@ -63,31 +65,4 @@ jobs:
         with:
           key: ${{ matrix.target }}
       - name: Check core library for target
-        run: cargo check -p ucof-core --lib --target ${{ matrix.target }}
-
-  integrate:
-    if: github.event_name == 'pull_request' && github.actor != 'github-actions[bot]' && github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt
-      - name: Generate deterministic repository state
-        run: |
-          cargo fmt --all
-          cargo fmt --manifest-path fuzz/Cargo.toml
-          cargo generate-lockfile
-          python3 tools/integrate_exp_0001_threat_findings.py
-      - name: Commit generated state
-        run: |
-          if [[ -z "$(git status --porcelain -- Cargo.lock crates fuzz docs/THREAT_MODEL.md)" ]]; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add Cargo.lock crates fuzz docs/THREAT_MODEL.md
-          git commit -m "docs: integrate EXP-0001 threat findings and lock dependencies"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+        run: cargo check --locked -p ucof-core --lib --target ${{ matrix.target }}
