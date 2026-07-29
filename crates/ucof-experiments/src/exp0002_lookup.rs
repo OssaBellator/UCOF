@@ -124,7 +124,7 @@ pub fn lookup_authenticated(
     if snapshot_offset < commit_start || snapshot_range.end > footer_offset {
         return Err(Exp0002Error::InvalidCommitRange);
     }
-    let snapshot_bytes = &bytes[snapshot_range];
+    let snapshot_bytes = &bytes[snapshot_range.clone()];
     if digest(SNAPSHOT_DOMAIN, snapshot_bytes) != snapshot_digest {
         return Err(Exp0002Error::DigestMismatch("snapshot"));
     }
@@ -133,9 +133,7 @@ pub fn lookup_authenticated(
         .ok_or(Exp0002Error::ArithmeticOverflow)?;
     check_hashed(bytes_hashed, limits)?;
     let snapshot = Snapshot::parse(snapshot_bytes, &limits.validation)?;
-    if snapshot.sequence != sequence
-        || snapshot.previous_footer_offset != previous_footer_offset
-    {
+    if snapshot.sequence != sequence || snapshot.previous_footer_offset != previous_footer_offset {
         return Err(Exp0002Error::InvalidSnapshotSequence);
     }
     validate_parent_link(
@@ -155,6 +153,7 @@ pub fn lookup_authenticated(
         maximum: None,
     };
     let mut pages_read = 0_usize;
+    let mut authenticated_page_ranges = Vec::new();
     loop {
         pages_read = pages_read
             .checked_add(1)
@@ -166,6 +165,7 @@ pub fn lookup_authenticated(
             return Err(Exp0002Error::ResourceLimit("lookup pages"));
         }
         let page_range = checked_range(expected.offset, PAGE_SIZE as u64, bytes.len())?;
+        authenticated_page_ranges.push(page_range.clone());
         let page = &bytes[page_range];
         bytes_hashed = bytes_hashed
             .checked_add(PAGE_SIZE as u64)
@@ -176,8 +176,12 @@ pub fn lookup_authenticated(
         }
         let header = parse_page_header(page, sequence)?;
         if u16::from(header.level) != expected.level
-            || expected.minimum.is_some_and(|value| value != header.minimum)
-            || expected.maximum.is_some_and(|value| value != header.maximum)
+            || expected
+                .minimum
+                .is_some_and(|value| value != header.minimum)
+            || expected
+                .maximum
+                .is_some_and(|value| value != header.maximum)
         {
             return Err(Exp0002Error::InvalidPageReference);
         }
@@ -190,11 +194,16 @@ pub fn lookup_authenticated(
                 let Some(selected) = selected else {
                     return Ok(None);
                 };
-                let record_range = checked_range(
-                    selected.record_offset,
-                    selected.record_len,
-                    bytes.len(),
-                )?;
+                let record_range =
+                    checked_range(selected.record_offset, selected.record_len, bytes.len())?;
+                if authenticated_page_ranges
+                    .iter()
+                    .any(|page_range| ranges_overlap(&record_range, page_range))
+                    || ranges_overlap(&record_range, &snapshot_range)
+                    || ranges_overlap(&record_range, &(footer_offset..bytes.len()))
+                {
+                    return Err(Exp0002Error::PhysicalOverlap);
+                }
                 let record = &bytes[record_range];
                 bytes_hashed = bytes_hashed
                     .checked_add(selected.record_len)
@@ -241,10 +250,7 @@ struct LookupPageHeader {
     maximum: u64,
 }
 
-fn parse_page_header(
-    page: &[u8],
-    sequence: u64,
-) -> Result<LookupPageHeader, Exp0002Error> {
+fn parse_page_header(page: &[u8], sequence: u64) -> Result<LookupPageHeader, Exp0002Error> {
     if page.len() != PAGE_SIZE || &page[0..4] != PAGE_MAGIC {
         return Err(Exp0002Error::InvalidMagic("page"));
     }
@@ -304,10 +310,7 @@ fn select_leaf(
         if key == 0 || previous.is_some_and(|value| value >= key) {
             return Err(Exp0002Error::UnorderedEntries);
         }
-        if read_u16(entry, 8)? == 0
-            || read_u16(entry, 10)? != 0
-            || read_u32(entry, 12)? != 0
-        {
+        if read_u16(entry, 8)? == 0 || read_u16(entry, 10)? != 0 || read_u32(entry, 12)? != 0 {
             return Err(Exp0002Error::InvalidFlags("leaf entry"));
         }
         require_zero(&entry[72..88], "leaf entry")?;
@@ -339,10 +342,7 @@ fn select_internal(
     object_id: u64,
 ) -> Result<Option<ExpectedPage>, Exp0002Error> {
     let capacity = (PAGE_SIZE - PAGE_HEADER_LEN) / INTERNAL_ENTRY_LEN;
-    if header.level == 0
-        || header.entry_size != INTERNAL_ENTRY_LEN
-        || header.count > capacity
-    {
+    if header.level == 0 || header.entry_size != INTERNAL_ENTRY_LEN || header.count > capacity {
         return Err(Exp0002Error::InvalidEntrySize);
     }
     let used = PAGE_HEADER_LEN
@@ -363,10 +363,7 @@ fn select_internal(
         let entry = &page[start..start + INTERNAL_ENTRY_LEN];
         let minimum = read_u64(entry, 0)?;
         let maximum = read_u64(entry, 8)?;
-        if minimum == 0
-            || minimum > maximum
-            || previous_max.is_some_and(|value| value >= minimum)
-        {
+        if minimum == 0 || minimum > maximum || previous_max.is_some_and(|value| value >= minimum) {
             return Err(Exp0002Error::OverlappingRanges);
         }
         if read_u32(entry, 24)? as usize != PAGE_SIZE
@@ -479,10 +476,11 @@ fn validate_parent_link(
     Ok(())
 }
 
-fn check_hashed(
-    bytes_hashed: u64,
-    limits: &AuthenticatedLookupLimits,
-) -> Result<(), Exp0002Error> {
+fn ranges_overlap(left: &std::ops::Range<usize>, right: &std::ops::Range<usize>) -> bool {
+    left.start < right.end && right.start < left.end
+}
+
+fn check_hashed(bytes_hashed: u64, limits: &AuthenticatedLookupLimits) -> Result<(), Exp0002Error> {
     if bytes_hashed > limits.validation.max_hashed_bytes {
         Err(Exp0002Error::ResourceLimit("hashed bytes"))
     } else {
@@ -591,8 +589,7 @@ mod tests {
         )
         .expect("genesis");
         assert_eq!(
-            lookup_authenticated(&bytes, 2, &AuthenticatedLookupLimits::default())
-                .expect("lookup"),
+            lookup_authenticated(&bytes, 2, &AuthenticatedLookupLimits::default()).expect("lookup"),
             None
         );
     }
@@ -613,19 +610,12 @@ mod tests {
         .expect("append");
         let mut damaged = appended.clone();
         damaged[64 + OBJECT_HEADER_LEN] ^= 1;
-        assert!(lookup_authenticated(
-            &damaged,
-            1,
-            &AuthenticatedLookupLimits::default()
-        )
-        .is_err());
+        assert!(lookup_authenticated(&damaged, 1, &AuthenticatedLookupLimits::default()).is_err());
     }
 
     #[test]
     fn page_read_limit_fails_before_path_completion() {
-        let objects = (1_u64..=500)
-            .map(|id| object(id, b"x", id == 1))
-            .collect();
+        let objects = (1_u64..=500).map(|id| object(id, b"x", id == 1)).collect();
         let bytes = build_genesis(header(), objects).expect("genesis");
         assert_eq!(
             lookup_authenticated(
