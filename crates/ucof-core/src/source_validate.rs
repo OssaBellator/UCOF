@@ -1,4 +1,6 @@
-use crate::format::{read_u32_le, read_u64_le, FOOTER_LEN, FOOTER_MAGIC, HEADER_LEN, RECORD_HEADER_LEN};
+use crate::format::{
+    read_u32_le, read_u64_le, FOOTER_LEN, FOOTER_MAGIC, HEADER_LEN, RECORD_HEADER_LEN,
+};
 use crate::{DirectoryEntry, Error, IntegrityStatus, Limits, Manifest, MetadataInspector, ReadAt};
 use sha2::{Digest, Sha256};
 
@@ -62,12 +64,8 @@ impl SourceValidator {
             bytes_hashed: 0,
             largest_allocation: inspection.stats.largest_allocation,
         };
-        let mut reader = ValidationReader::new(
-            source,
-            inspection.file_len,
-            &self.limits,
-            initial_stats,
-        );
+        let mut reader =
+            ValidationReader::new(source, inspection.file_len, &self.limits, initial_stats);
 
         let chunk_limit = self
             .limits
@@ -76,8 +74,8 @@ impl SourceValidator {
         if chunk_limit == 0 {
             return Err(Error::LimitExceeded("hash chunk bytes"));
         }
-        let chunk_capacity = usize::try_from(chunk_limit)
-            .map_err(|_| Error::LimitExceeded("hash chunk bytes"))?;
+        let chunk_capacity =
+            usize::try_from(chunk_limit).map_err(|_| Error::LimitExceeded("hash chunk bytes"))?;
         let mut buffer = vec![0_u8; chunk_capacity];
         reader.stats.largest_allocation = reader.stats.largest_allocation.max(chunk_limit);
 
@@ -88,8 +86,8 @@ impl SourceValidator {
                 .checked_sub(offset)
                 .ok_or(Error::RangeOutOfBounds("committed prefix"))?;
             let length = remaining.min(chunk_limit);
-            let length_usize = usize::try_from(length)
-                .map_err(|_| Error::LimitExceeded("hash chunk bytes"))?;
+            let length_usize =
+                usize::try_from(length).map_err(|_| Error::LimitExceeded("hash chunk bytes"))?;
             reader.read_exact(offset, &mut buffer[..length_usize], "committed prefix")?;
             hasher.update(&buffer[..length_usize]);
             reader.stats.bytes_hashed = reader
@@ -104,7 +102,12 @@ impl SourceValidator {
 
         let footer_bytes = reader.read_array::<FOOTER_LEN>(footer_offset, "footer")?;
         let footer = parse_footer(&footer_bytes)?;
-        validate_footer_against_inspection(&footer, footer_offset, &inspection.entries, inspection.manifest_id)?;
+        validate_footer_against_inspection(
+            &footer,
+            footer_offset,
+            &inspection.entries,
+            inspection.manifest_id,
+        )?;
 
         let actual_digest = hasher.finalize();
         if actual_digest.as_slice() != footer.digest {
@@ -237,7 +240,9 @@ fn validate_footer_against_inspection(
     manifest_id: u64,
 ) -> Result<(), Error> {
     if footer.manifest_id != manifest_id {
-        return Err(Error::DirectoryMismatch("footer manifest changed during validation"));
+        return Err(Error::DirectoryMismatch(
+            "footer manifest changed during validation",
+        ));
     }
     let expected_count = u64::try_from(entries.len())
         .map_err(|_| Error::LimitExceeded("record count"))?

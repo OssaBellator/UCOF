@@ -23,9 +23,7 @@ pub use source::{
     InspectionReport, IntegrityStatus, MetadataInspector, ReadAt, ReadStats, SeekSource,
     SliceSource,
 };
-pub use source_validate::{
-    SourceValidationReport, SourceValidationStats, SourceValidator,
-};
+pub use source_validate::{SourceValidationReport, SourceValidationStats, SourceValidator};
 pub use stream::{SequentialReader, StreamCommit, StreamEvent, StreamRecord, StreamStats};
 pub use writer::Writer;
 

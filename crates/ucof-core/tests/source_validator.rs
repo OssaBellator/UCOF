@@ -1,7 +1,5 @@
 use std::io;
-use ucof_core::{
-    Error, IntegrityStatus, Limits, Manifest, ReadAt, SourceValidator, Writer,
-};
+use ucof_core::{Error, IntegrityStatus, Limits, Manifest, ReadAt, SourceValidator, Writer};
 
 #[derive(Debug)]
 struct TrackingSource {
