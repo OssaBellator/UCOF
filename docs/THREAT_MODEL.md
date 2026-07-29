@@ -573,3 +573,61 @@ The following remain intentionally unresolved:
 - signature and provenance claim envelope.
 
 These must be resolved through Format Change Proposals with adversarial vectors, not hidden implementation choices.
+
+## 16. Executable findings from UCOF-EXP-0001
+
+The Phase 1 and Phase 2 implementations provide executable evidence for the following controls and limitations. These findings refine the initial threat catalogue but do not stabilize the experimental epoch.
+
+### 16.1 Confirmed controls
+
+- file-size policy is applied before structural parsing;
+- offsets and lengths are checked before range construction and host-size conversion;
+- record, payload, metadata, text, byte-string, nesting, container-item, allocation, logical-byte, read-byte, and diagnostic limits are caller controlled;
+- unknown required capabilities fail closed for conforming interpretation while remaining visible to structural inventory;
+- the restricted deterministic-CBOR subset rejects non-shortest arguments, indefinite forms, duplicate or unordered map keys, invalid UTF-8, negative integers, and floating-point values;
+- directories are cross-checked against physical framing rather than treated as authoritative;
+- strict validation uses exact-end footer discovery and does not silently fall back to recovery scanning;
+- metadata-only inspection can skip multi-gigabyte virtual payload ranges while reading only bounded structural bytes;
+- sequential validation hashes the committed prefix incrementally and publishes a verified commit event only after footer, directory, manifest, digest, and exact-end checks pass;
+- strict random-access validation hashes payloads in bounded blocks under the same cumulative read budget as metadata inspection;
+- streaming writers emit the footer only through explicit successful finalization and become terminal after source or sink failure;
+- strict diagnosis remains invalid after integrity failure even when structural context is available;
+- prefix salvage reports only complete in-bounds records and always labels its result `UnverifiedPrefix`.
+
+### 16.2 Validation-order finding
+
+A changed committed byte does not imply one universal error category. Framing mutations may fail structural checks before digest comparison. Payload mutations that preserve framing reach `DigestMismatch`. A record-identity mutation with a recomputed digest can reach directory cross-validation and fail as `DirectoryMismatch`.
+
+Tests must therefore target and assert the intended validation layer. Implementations must not reorder checks in a way that exposes unsafe allocation or semantic use before required structural checks.
+
+### 16.3 Footer and recovery finding
+
+EXP-0001 stores footer fields outside the committed-prefix digest, so manifest identity, record count, directory location, and digest bytes require explicit structural and semantic checks. The current strict readers perform those checks.
+
+A bounded 64 KiB backward-search region can contain thousands of attacker-selected footer-magic candidates. Normal validation must remain exact-end. Future recovery scanning must independently bound scan bytes, candidate count, validation work, and diagnostics, and must never upgrade a recovery candidate to strict validity without satisfying the active-root rules defined in Phase 3.
+
+### 16.4 Scale finding
+
+The flat EXP-0001 directory is not suitable for UC-02-scale archives. One million zero-byte objects require a lower bound of approximately 40 MB of record headers and about 52 MB of directory payload before application data. Raising parser limits does not solve this architecture failure. Phase 3 must use a paged or hierarchical lookup structure whose single-object lookup does not require materializing every entry.
+
+### 16.5 Differential and fuzz evidence
+
+- Rust and independent Python implementations agree on the valid and malformed shared corpus;
+- supported primitive encodings and deterministic map order match pinned Ciborium 0.2.2, while UCOF intentionally rejects broader general-CBOR forms;
+- property tests cover deterministic writer equivalence, truncation rejection, and payload mutation;
+- dedicated fuzz targets cover full-file validation, canonical metadata, metadata inspection, prefix salvage, sequential reading, and writer round trips;
+- fuzz targets compile and run bounded smoke campaigns in pull requests and scheduled campaigns weekly;
+- the core library compiles for 32-bit little-endian and 64-bit big-endian targets, while serialized integers remain explicitly little-endian.
+
+### 16.6 Residual risks
+
+- SHA-256 in EXP-0001 provides integrity relative to stored footer data, not authenticity, signer trust, freshness, or rollback protection;
+- strict random-access validation assumes a stable source view for one operation;
+- the directory and writer ledger remain materialized and therefore bounded by object count and metadata limits;
+- sequential payload events currently own their chunk buffers;
+- salvage stops at the first fatal framing error and does not resynchronize;
+- transforms, compression, schemas, signatures, provenance, encryption, external references, snapshots, and checkpoint recovery remain outside the experimental epoch;
+- native dependencies introduced by future transforms require sanitizer-backed and supply-chain review beyond the current pure-Rust core.
+
+The detailed Phase 1 evidence remains in `docs/security/EXP_0001_FINDINGS.md` and the FCP-0001 evidence appendix. Future experiments must update this section when they confirm, invalidate, or supersede these findings.
+
