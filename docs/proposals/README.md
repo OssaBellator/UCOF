@@ -8,7 +8,7 @@ Read [the proposal process](../PROPOSAL_PROCESS.md) before submitting an FCP.
 
 | FCP | Title | Status | Core/profile impact |
 |---|---|---|---|
-| [FCP-0001](0001-exp-0001-framing.md) | UCOF-EXP-0001 minimal framing experiment | Review | Disposable core framing experiment |
+| [FCP-0001](0001-exp-0001-framing.md) ([evidence](0001-exp-0001-evidence.md)) | UCOF-EXP-0001 minimal framing experiment | Review | Disposable core framing experiment; evidence records a UC-02 scale failure |
 
 ## Rules
 
