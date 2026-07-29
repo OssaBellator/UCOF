@@ -34,7 +34,9 @@ jobs:
       - name: Test independent Phase 3 models
         run: python3 tools/validate_phase3_models.py
       - name: Test independent EXP-0002 codec
-        run: python3 tools/exp0002_codec.py --self-test
+        run: |
+          python3 tools/exp0002_codec.py --self-test
+          python3 tools/exp0002_codec.py --verify-vectors tests/vectors/exp-0002
       - name: Reproduce framing experiments
         run: |
           python3 tools/experiment_framing_widths.py
