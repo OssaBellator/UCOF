@@ -137,3 +137,10 @@ path = "fuzz_targets/exp0002_rewrite.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "exp0002_source_lookup"
+path = "fuzz_targets/exp0002_source_lookup.rs"
+test = false
+doc = false
+bench = false
