@@ -47,16 +47,6 @@ jobs:
               1,
           )
           enumeration_path.write_text(enumeration, encoding="utf-8")
-
-          fuzz_path = Path(".github/workflows/fuzz.yml")
-          fuzz = fuzz_path.read_text(encoding="utf-8")
-          if "            root_enumeration \\\n" not in fuzz:
-              fuzz = fuzz.replace(
-                  "            snapshot_selection \\\n            recovery_scan \\\n",
-                  "            snapshot_selection \\\n            root_enumeration \\\n            publication_model \\\n            recovery_scan \\\n",
-                  1,
-              )
-          fuzz_path.write_text(fuzz, encoding="utf-8")
           PY
           cargo fmt --all
           cargo fmt --manifest-path fuzz/Cargo.toml
@@ -67,6 +57,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/ucof-experiments fuzz .github/workflows/fuzz.yml
-          git commit -m "test: correct and register Phase 3 research coverage"
+          git add crates/ucof-experiments fuzz
+          git commit -m "test: correct Phase 3 research model coverage"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
