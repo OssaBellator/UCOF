@@ -1,0 +1,34 @@
+name: Fuzz
+
+on:
+  pull_request:
+    paths:
+      - "fuzz/**"
+      - "crates/ucof-core/**"
+      - ".github/workflows/fuzz.yml"
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@nightly
+      - name: Install cargo-fuzz
+        run: cargo install cargo-fuzz --locked
+      - name: Compile fuzz targets
+        run: cargo fuzz build
+      - name: Smoke fuzz targets
+        run: |
+          for target in full_file canonical_metadata sequential_reader writer_roundtrip; do
+            if [[ "${{ github.event_name }}" == "schedule" ]]; then
+              cargo fuzz run "$target" -- -max_total_time=30 -max_len=65536
+            else
+              cargo fuzz run "$target" -- -runs=256 -max_len=65536
+            fi
+          done
