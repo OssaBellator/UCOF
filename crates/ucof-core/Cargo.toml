@@ -12,6 +12,7 @@ sha2 = "0.10"
 
 [dev-dependencies]
 ciborium = "=0.2.2"
+proptest = "=1.6.0"
 
 [lints]
 workspace = true
