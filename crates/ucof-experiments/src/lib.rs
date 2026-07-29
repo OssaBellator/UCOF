@@ -8,6 +8,7 @@ mod compaction;
 mod directory;
 mod enumeration;
 pub mod exp0002;
+pub mod exp0002_recovery;
 mod publication;
 mod recovery;
 mod repair;
