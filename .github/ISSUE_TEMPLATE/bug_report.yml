@@ -1,0 +1,70 @@
+name: Bug report
+description: Report incorrect repository, tooling, specification, or implementation behavior
+title: "bug: "
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not disclose an unpatched security vulnerability here. Follow SECURITY.md for private reporting.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Documentation
+        - Governance or process
+        - Specification draft
+        - Reference implementation
+        - CLI or tooling
+        - Test vector or corpus
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version, commit, or experimental epoch
+      placeholder: commit SHA, release, UCOF-EXP-####, or not applicable
+    validations:
+      required: true
+  - type: textarea
+    id: observed
+    attributes:
+      label: Observed behavior
+      description: State what happened, including stable error codes or diagnostics where available.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+      description: Link the requirement, proposal, vector, or documentation that supports the expectation.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Minimal reproduction
+      description: Include commands, a synthetic fixture, or precise steps. Remove confidential data.
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: impact
+    attributes:
+      label: Compatibility, security, and resource impact
+      description: Identify parser disagreements, corruption risk, excessive work, or data-loss risk.
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues and proposals.
+          required: true
+        - label: This report does not publicly disclose an unpatched vulnerability.
+          required: true
+        - label: I have identified generated or third-party material in the reproducer.
+          required: false
