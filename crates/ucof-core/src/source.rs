@@ -48,9 +48,9 @@ impl ReadAt for SliceSource<'_> {
         let start = usize::try_from(offset).map_err(|_| {
             io::Error::new(io::ErrorKind::InvalidInput, "source offset exceeds usize")
         })?;
-        let end = start.checked_add(buffer.len()).ok_or_else(|| {
-            io::Error::new(io::ErrorKind::InvalidInput, "source range overflow")
-        })?;
+        let end = start
+            .checked_add(buffer.len())
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "source range overflow"))?;
         let source = self.bytes.get(start..end).ok_or_else(|| {
             io::Error::new(io::ErrorKind::UnexpectedEof, "source range is truncated")
         })?;
@@ -174,10 +174,8 @@ impl MetadataInspector {
             return Err(Error::InvalidLength("directory record"));
         }
 
-        let directory_header_bytes = reader.read_array::<RECORD_HEADER_LEN>(
-            footer.directory_offset,
-            "directory record header",
-        )?;
+        let directory_header_bytes = reader
+            .read_array::<RECORD_HEADER_LEN>(footer.directory_offset, "directory record header")?;
         let directory_header = parse_record_header(
             &directory_header_bytes,
             footer.directory_offset,
@@ -301,8 +299,8 @@ impl<'a, S: ReadAt> BudgetedSource<'a, S> {
         if length > self.limits.max_allocation_bytes {
             return Err(Error::LimitExceeded("single allocation bytes"));
         }
-        let length_usize = usize::try_from(length)
-            .map_err(|_| Error::LimitExceeded("single allocation bytes"))?;
+        let length_usize =
+            usize::try_from(length).map_err(|_| Error::LimitExceeded("single allocation bytes"))?;
         let mut bytes = vec![0_u8; length_usize];
         self.read_exact(offset, &mut bytes, context)?;
         Ok(bytes)
@@ -314,8 +312,8 @@ impl<'a, S: ReadAt> BudgetedSource<'a, S> {
         buffer: &mut [u8],
         context: &'static str,
     ) -> Result<(), Error> {
-        let length = u64::try_from(buffer.len())
-            .map_err(|_| Error::LimitExceeded("total bytes read"))?;
+        let length =
+            u64::try_from(buffer.len()).map_err(|_| Error::LimitExceeded("total bytes read"))?;
         checked_end(offset, length, self.file_len, context)?;
         let next_total = self
             .stats
@@ -457,20 +455,22 @@ fn validate_inventory_headers<S: ReadAt>(
         if entry.offset != expected_offset {
             return Err(Error::DirectoryMismatch("non-contiguous record offset"));
         }
-        let header_bytes = reader.read_array::<RECORD_HEADER_LEN>(
-            entry.offset,
-            "inventory record header",
-        )?;
+        let header_bytes =
+            reader.read_array::<RECORD_HEADER_LEN>(entry.offset, "inventory record header")?;
         let header = parse_record_header(&header_bytes, entry.offset, limits)?;
         if header.kind == RecordKind::Directory || header.object_id == 0 {
-            return Err(Error::InvalidRecordOrder("directory entry describes structural record"));
+            return Err(Error::InvalidRecordOrder(
+                "directory entry describes structural record",
+            ));
         }
         if header.kind != entry.kind
             || header.object_id != entry.id
             || header.stored_len != entry.stored_len
             || header.logical_len != entry.logical_len
         {
-            return Err(Error::DirectoryMismatch("entry does not match record header"));
+            return Err(Error::DirectoryMismatch(
+                "entry does not match record header",
+            ));
         }
         expected_offset = checked_end(
             header.payload_offset,
@@ -480,7 +480,9 @@ fn validate_inventory_headers<S: ReadAt>(
         )?;
     }
     if expected_offset != directory_offset {
-        return Err(Error::DirectoryMismatch("inventory does not end at directory"));
+        return Err(Error::DirectoryMismatch(
+            "inventory does not end at directory",
+        ));
     }
     Ok(())
 }
@@ -580,10 +582,7 @@ fn unsigned(value: Option<&&CborValue>, context: &'static str) -> Result<u64, Er
     }
 }
 
-fn unsigned_array(
-    value: Option<&&CborValue>,
-    context: &'static str,
-) -> Result<Vec<u64>, Error> {
+fn unsigned_array(value: Option<&&CborValue>, context: &'static str) -> Result<Vec<u64>, Error> {
     let Some(CborValue::Array(values)) = value else {
         return Err(Error::InvalidMetadataSchema(context));
     };
