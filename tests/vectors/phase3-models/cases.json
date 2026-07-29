@@ -1,0 +1,91 @@
+{
+  "directory_shapes": [
+    {
+      "entries": 1000,
+      "leaf_capacity": 240,
+      "fanout": 256,
+      "expected_pages": 6,
+      "expected_depth": 2
+    },
+    {
+      "entries": 1000000,
+      "leaf_capacity": 240,
+      "fanout": 256,
+      "expected_pages": 4185,
+      "expected_depth": 3
+    },
+    {
+      "entries": 100000000,
+      "leaf_capacity": 240,
+      "fanout": 256,
+      "expected_pages": 418303,
+      "expected_depth": 4
+    }
+  ],
+  "root_cases": [
+    {
+      "name": "strict-linear-chain",
+      "mode": "strict",
+      "candidates": [
+        {"id": "genesis", "sequence": 0, "parent": null, "exact_end": false, "status": "verified", "checkpoint": "complete"},
+        {"id": "second", "sequence": 1, "parent": "genesis", "exact_end": true, "status": "verified", "checkpoint": "complete"}
+      ],
+      "expected_selected": "second"
+    },
+    {
+      "name": "interrupted-append-recovery",
+      "mode": "recovery",
+      "candidates": [
+        {"id": "genesis", "sequence": 0, "parent": null, "exact_end": false, "status": "verified", "checkpoint": "complete"},
+        {"id": "second", "sequence": 1, "parent": "genesis", "exact_end": false, "status": "verified", "checkpoint": "complete"},
+        {"id": "third", "sequence": 2, "parent": "second", "exact_end": false, "status": "truncated", "checkpoint": "complete"}
+      ],
+      "expected_selected": "second"
+    },
+    {
+      "name": "ambiguous-fork",
+      "mode": "recovery",
+      "candidates": [
+        {"id": "genesis", "sequence": 0, "parent": null, "exact_end": false, "status": "verified", "checkpoint": "complete"},
+        {"id": "left", "sequence": 1, "parent": "genesis", "exact_end": false, "status": "verified", "checkpoint": "complete"},
+        {"id": "right", "sequence": 1, "parent": "genesis", "exact_end": false, "status": "verified", "checkpoint": "complete"}
+      ],
+      "expected_error": "ambiguous_fork"
+    },
+    {
+      "name": "progress-not-root",
+      "mode": "strict",
+      "candidates": [
+        {"id": "genesis", "sequence": 0, "parent": null, "exact_end": false, "status": "verified", "checkpoint": "complete"},
+        {"id": "progress", "sequence": 1, "parent": "genesis", "exact_end": true, "status": "verified", "checkpoint": "progress"}
+      ],
+      "expected_error": "no_exact_end_root"
+    }
+  ],
+  "compaction_cases": [
+    {
+      "name": "reachable-and-orphan",
+      "roots": [1],
+      "graph": {
+        "1": [2, 3],
+        "2": [4],
+        "3": [],
+        "4": [],
+        "5": []
+      },
+      "expected_reachable": [1, 2, 3, 4],
+      "expected_orphaned": [5]
+    },
+    {
+      "name": "cycle-terminates",
+      "roots": [1],
+      "graph": {
+        "1": [2],
+        "2": [3],
+        "3": [1]
+      },
+      "expected_reachable": [1, 2, 3],
+      "expected_orphaned": []
+    }
+  ]
+}
