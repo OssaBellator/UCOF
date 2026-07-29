@@ -8,7 +8,7 @@ Read [the proposal process](../PROPOSAL_PROCESS.md) before submitting an FCP.
 
 | FCP | Title | Status | Core/profile impact |
 |---|---|---|---|
-| — | No proposals allocated yet | — | — |
+| [FCP-0001](0001-exp-0001-framing.md) ([evidence](0001-exp-0001-evidence.md)) | UCOF-EXP-0001 minimal framing experiment | Review | Disposable core framing experiment; evidence records a UC-02 scale failure |
 
 ## Rules
 
@@ -20,4 +20,4 @@ Read [the proposal process](../PROPOSAL_PROCESS.md) before submitting an FCP.
 - Link implementation pull requests and conformance vectors, but keep normative requirements in the proposal or specification.
 - Update this index when proposal status changes.
 
-Phase 0 intentionally allocates no permanent wire-format proposal or identifier. The first expected proposals in Phase 1 will address experimental framing, canonical core metadata, identifier widths, footer discovery, active-root selection, and the baseline digest.
+The current proposal allocates only an experimental epoch. It does not allocate permanent registry identifiers or stabilize any wire behavior.

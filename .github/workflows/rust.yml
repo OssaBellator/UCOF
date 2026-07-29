@@ -1,0 +1,34 @@
+name: Rust
+
+on:
+  push:
+    branches: [main, "phase-1/**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: Test Rust implementation
+        run: cargo test --workspace --all-targets
+      - name: Test independent Python parser
+        run: python3 tools/validate_exp_0001.py --vectors tests/vectors/exp-0001
+      - name: Test adversarial Python cases
+        run: python3 tools/test_exp_0001_adversarial.py
+      - name: Reproduce framing experiments
+        run: |
+          python3 tools/experiment_framing_widths.py
+          python3 tools/experiment_footer_discovery.py
+          python3 tools/experiment_scale_limits.py
