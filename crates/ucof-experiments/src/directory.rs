@@ -528,7 +528,9 @@ mod tests {
         let error = directory.validate(100).expect_err("cycle");
         assert!(matches!(
             error,
-            DirectoryLookupError::PageCycle | DirectoryLookupError::ChildRangeMismatch
+            DirectoryLookupError::PageCycle
+                | DirectoryLookupError::ChildRangeMismatch
+                | DirectoryLookupError::OverlappingChildRange
         ));
     }
 }
