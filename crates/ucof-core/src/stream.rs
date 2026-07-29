@@ -243,7 +243,15 @@ impl<R: Read> SequentialReader<R> {
         if chunk_limit == 0 {
             return Err(Error::LimitExceeded("stream chunk bytes"));
         }
-        let chunk_len = active.remaining.min(chunk_limit);
+        let logical_remaining = self
+            .limits
+            .max_logical_decoded_bytes
+            .checked_sub(self.stats.logical_bytes)
+            .ok_or(Error::LimitExceeded("logical decoded bytes"))?;
+        if logical_remaining == 0 {
+            return Err(Error::LimitExceeded("logical decoded bytes"));
+        }
+        let chunk_len = active.remaining.min(chunk_limit).min(logical_remaining);
         let chunk_len_usize =
             usize::try_from(chunk_len).map_err(|_| Error::LimitExceeded("stream chunk bytes"))?;
         let mut bytes = vec![0_u8; chunk_len_usize];
