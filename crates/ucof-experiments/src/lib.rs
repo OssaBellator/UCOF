@@ -2,12 +2,12 @@
 //!
 //! Nothing in this crate defines UCOF wire compatibility. The models exist to
 //! test paged-directory, snapshot-selection, enumeration, recovery,
-//! publication, repair, and compaction invariants before an EXP-0002 byte
-//! layout is selected.
+//! publication, repair, compaction, and provisional EXP-0002 byte invariants.
 
 mod compaction;
 mod directory;
 mod enumeration;
+pub mod exp0002;
 mod publication;
 mod recovery;
 mod repair;
