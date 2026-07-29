@@ -104,7 +104,7 @@ fn seekable_source_matches_slice_source() {
 #[test]
 fn metadata_inspection_does_not_hide_record_header_corruption() {
     let mut bytes = file_with_payload(b"payload", Vec::new());
-    bytes[32 + 28] ^= 1;
+    bytes[32 + 28] = 9;
     let mut source = SliceSource::new(&bytes);
     let error = MetadataInspector::default()
         .inspect(&mut source)
