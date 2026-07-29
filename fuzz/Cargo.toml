@@ -102,3 +102,24 @@ path = "fuzz_targets/repair_plan.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "exp0002_strict"
+path = "fuzz_targets/exp0002_strict.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exp0002_recovery"
+path = "fuzz_targets/exp0002_recovery.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exp0002_roundtrip"
+path = "fuzz_targets/exp0002_roundtrip.rs"
+test = false
+doc = false
+bench = false
