@@ -36,10 +36,8 @@ fuzz_target!(|data: &[u8]| {
                 let _ = model.advance(PublicationStage::Footer);
             }
             5 | 6 => {
-                let checkpoint = SnapshotIdentity::derive(&[
-                    byte,
-                    u8::try_from(index).unwrap_or(u8::MAX),
-                ]);
+                let checkpoint =
+                    SnapshotIdentity::derive(&[byte, u8::try_from(index).unwrap_or(u8::MAX)]);
                 let kind = if byte % 7 == 5 {
                     CheckpointKind::Complete
                 } else {

@@ -518,11 +518,12 @@ mod tests {
         let entries = (1..=100).map(locator).collect();
         let mut directory = PagedDirectory::build(entries, 10, 4).expect("directory");
         let root = directory.root;
+        let root_range = directory.pages[root].range().expect("root range");
         let Page::Internal { children, .. } = &mut directory.pages[root] else {
             panic!("expected internal root");
         };
         children[0].page_id = root;
-        children[0].range = directory.pages[root].range().expect("root range");
+        children[0].range = root_range;
 
         let error = directory.validate(100).expect_err("cycle");
         assert!(matches!(

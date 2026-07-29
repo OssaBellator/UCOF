@@ -69,7 +69,9 @@ impl fmt::Display for RootEnumerationError {
         match self {
             Self::CandidateLimitExceeded => write!(f, "root-enumeration candidate limit exceeded"),
             Self::ResultLimitExceeded => write!(f, "root-enumeration result limit exceeded"),
-            Self::DuplicateIdentity(identity) => write!(f, "duplicate snapshot identity {identity}"),
+            Self::DuplicateIdentity(identity) => {
+                write!(f, "duplicate snapshot identity {identity}")
+            }
         }
     }
 }
@@ -130,9 +132,7 @@ impl RootEnumerationReport {
             .max();
         let highest: Vec<_> = terminals
             .iter()
-            .filter(|identity| {
-                Some(by_identity[identity].sequence) == highest_valid_sequence
-            })
+            .filter(|identity| Some(by_identity[identity].sequence) == highest_valid_sequence)
             .copied()
             .collect();
         let has_ambiguous_highest_fork = highest.len() > 1;
@@ -232,7 +232,12 @@ mod tests {
         SnapshotIdentity::derive(label.as_bytes())
     }
 
-    fn candidate(label: &str, sequence: u64, parent: Option<&str>, offset: u64) -> SnapshotCandidate {
+    fn candidate(
+        label: &str,
+        sequence: u64,
+        parent: Option<&str>,
+        offset: u64,
+    ) -> SnapshotCandidate {
         SnapshotCandidate {
             identity: id(label),
             sequence,
@@ -264,9 +269,18 @@ mod tests {
         ];
         let report = RootEnumerationReport::enumerate(&candidates, EnumerationLimits::default())
             .expect("enumeration");
-        assert_eq!(status(&report, "genesis"), EnumeratedRootStatus::VerifiedAncestor);
-        assert_eq!(status(&report, "second"), EnumeratedRootStatus::VerifiedTerminal);
-        assert_eq!(status(&report, "invalid"), EnumeratedRootStatus::IntegrityFailed);
+        assert_eq!(
+            status(&report, "genesis"),
+            EnumeratedRootStatus::VerifiedAncestor
+        );
+        assert_eq!(
+            status(&report, "second"),
+            EnumeratedRootStatus::VerifiedTerminal
+        );
+        assert_eq!(
+            status(&report, "invalid"),
+            EnumeratedRootStatus::IntegrityFailed
+        );
         assert_eq!(report.valid_complete_count, 2);
         assert_eq!(report.highest_valid_sequence, Some(1));
         assert!(!report.has_ambiguous_highest_fork);
@@ -282,8 +296,14 @@ mod tests {
         let report = RootEnumerationReport::enumerate(&candidates, EnumerationLimits::default())
             .expect("enumeration");
         assert!(report.has_ambiguous_highest_fork);
-        assert_eq!(status(&report, "left"), EnumeratedRootStatus::VerifiedForkTerminal);
-        assert_eq!(status(&report, "right"), EnumeratedRootStatus::VerifiedForkTerminal);
+        assert_eq!(
+            status(&report, "left"),
+            EnumeratedRootStatus::VerifiedForkTerminal
+        );
+        assert_eq!(
+            status(&report, "right"),
+            EnumeratedRootStatus::VerifiedForkTerminal
+        );
     }
 
     #[test]
@@ -298,8 +318,14 @@ mod tests {
             EnumerationLimits::default(),
         )
         .expect("enumeration");
-        assert_eq!(status(&report, "progress"), EnumeratedRootStatus::ProgressCheckpoint);
-        assert_eq!(status(&report, "missing"), EnumeratedRootStatus::MissingParent);
+        assert_eq!(
+            status(&report, "progress"),
+            EnumeratedRootStatus::ProgressCheckpoint
+        );
+        assert_eq!(
+            status(&report, "missing"),
+            EnumeratedRootStatus::MissingParent
+        );
         assert_eq!(status(&report, "gap"), EnumeratedRootStatus::SequenceGap);
     }
 
@@ -318,8 +344,11 @@ mod tests {
     }
 
     #[test]
-    fn candidate_and_result_limits_apply_before enumeration_growth() {
-        let candidates = [candidate("one", 0, None, 100), candidate("two", 0, None, 200)];
+    fn candidate_and_result_limits_apply_before_enumeration_growth() {
+        let candidates = [
+            candidate("one", 0, None, 100),
+            candidate("two", 0, None, 200),
+        ];
         assert_eq!(
             RootEnumerationReport::enumerate(
                 &candidates,

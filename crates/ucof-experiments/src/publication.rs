@@ -233,7 +233,8 @@ mod tests {
 
     #[test]
     fn only_footer_publishes_main_snapshot() {
-        let mut model = PublicationModel::new(id("new"), 2, Some(id("old")), PublicationLimits::default());
+        let mut model =
+            PublicationModel::new(id("new"), 2, Some(id("old")), PublicationLimits::default());
         for stage in [
             PublicationStage::Objects,
             PublicationStage::DirectoryLeaves,
@@ -260,12 +261,8 @@ mod tests {
             PublicationStage::SnapshotManifest,
         ];
         for cut in 0..=stages.len() {
-            let mut model = PublicationModel::new(
-                id("new"),
-                2,
-                Some(id("old")),
-                PublicationLimits::default(),
-            );
+            let mut model =
+                PublicationModel::new(id("new"), 2, Some(id("old")), PublicationLimits::default());
             for &stage in &stages[..cut] {
                 model.advance(stage).expect("stage before interruption");
             }
@@ -277,7 +274,8 @@ mod tests {
 
     #[test]
     fn complete_and_progress_checkpoints_have_distinct_authority() {
-        let mut model = PublicationModel::new(id("new"), 3, Some(id("old")), PublicationLimits::default());
+        let mut model =
+            PublicationModel::new(id("new"), 3, Some(id("old")), PublicationLimits::default());
         model.advance(PublicationStage::Objects).expect("objects");
         let progress = model
             .checkpoint(id("progress"), 2, CheckpointKind::Progress)
@@ -332,7 +330,9 @@ mod tests {
                 ..PublicationLimits::default()
             },
         );
-        model.advance(PublicationStage::Objects).expect("first event");
+        model
+            .advance(PublicationStage::Objects)
+            .expect("first event");
         assert_eq!(
             model.advance(PublicationStage::DirectoryLeaves),
             Err(PublicationError::EventLimitExceeded)
