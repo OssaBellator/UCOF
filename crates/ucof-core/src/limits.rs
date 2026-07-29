@@ -13,6 +13,7 @@ pub struct Limits {
     pub max_byte_string_bytes: u64,
     pub max_dependency_depth: usize,
     pub max_allocation_bytes: u64,
+    pub max_stream_chunk_bytes: u64,
     pub max_diagnostics: usize,
     pub max_transform_expansion_ratio: u64,
 }
@@ -32,6 +33,7 @@ impl Default for Limits {
             max_byte_string_bytes: 8 * 1024 * 1024,
             max_dependency_depth: 128,
             max_allocation_bytes: 8 * 1024 * 1024,
+            max_stream_chunk_bytes: 64 * 1024,
             max_diagnostics: 100,
             max_transform_expansion_ratio: 1_000,
         }
