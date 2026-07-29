@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [main, "phase-1/**"]
+    branches: [main, "phase-1/**", "phase-2/**"]
   pull_request:
 
 permissions:
