@@ -20,14 +20,38 @@ def cbor_uint_bytes(value: int) -> int:
     return 9
 
 
+def sum_cbor_widths(count: int, start: int, step: int) -> int:
+    if count < 0 or start < 0 or step <= 0:
+        raise ValueError("invalid arithmetic sequence")
+
+    def values_at_most(limit: int) -> int:
+        if count == 0 or start > limit:
+            return 0
+        return min(count, (limit - start) // step + 1)
+
+    through_23 = values_at_most(23)
+    through_255 = values_at_most(0xFF)
+    through_65_535 = values_at_most(0xFFFF)
+    through_u32 = values_at_most(0xFFFF_FFFF)
+
+    return (
+        through_23
+        + (through_255 - through_23) * 2
+        + (through_65_535 - through_255) * 3
+        + (through_u32 - through_65_535) * 5
+        + (count - through_u32) * 9
+    )
+
+
 def directory_payload_bytes(record_count: int) -> int:
     # Wrapper: one-pair map, encoded "entries" key, and array head.
-    total = 9 + cbor_uint_bytes(record_count)
-    for object_id in range(1, record_count + 1):
-        offset = HEADER_LEN + (object_id - 1) * RECORD_HEADER_LEN
-        # Five-pair canonical map with fixed text keys and zero lengths.
-        total += 42 + cbor_uint_bytes(object_id) + cbor_uint_bytes(offset)
-    return total
+    wrapper = 9 + cbor_uint_bytes(record_count)
+    fixed_entry_bytes = record_count * 42
+    identifier_bytes = sum_cbor_widths(record_count, start=1, step=1)
+    offset_bytes = sum_cbor_widths(
+        record_count, start=HEADER_LEN, step=RECORD_HEADER_LEN
+    )
+    return wrapper + fixed_entry_bytes + identifier_bytes + offset_bytes
 
 
 def lower_bound_file_bytes(record_count: int) -> tuple[int, int, int]:
