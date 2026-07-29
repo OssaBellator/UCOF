@@ -22,15 +22,27 @@ fn encode_into(value: &Value, output: &mut Vec<u8>) -> Result<(), Error> {
     match value {
         Value::Unsigned(value) => encode_head(0, *value, output),
         Value::Bytes(bytes) => {
-            encode_head(2, u64::try_from(bytes.len()).map_err(|_| Error::InvalidLength("CBOR byte string"))?, output);
+            encode_head(
+                2,
+                u64::try_from(bytes.len()).map_err(|_| Error::InvalidLength("CBOR byte string"))?,
+                output,
+            );
             output.extend_from_slice(bytes);
         }
         Value::Text(text) => {
-            encode_head(3, u64::try_from(text.len()).map_err(|_| Error::InvalidLength("CBOR text string"))?, output);
+            encode_head(
+                3,
+                u64::try_from(text.len()).map_err(|_| Error::InvalidLength("CBOR text string"))?,
+                output,
+            );
             output.extend_from_slice(text.as_bytes());
         }
         Value::Array(values) => {
-            encode_head(4, u64::try_from(values.len()).map_err(|_| Error::InvalidLength("CBOR array"))?, output);
+            encode_head(
+                4,
+                u64::try_from(values.len()).map_err(|_| Error::InvalidLength("CBOR array"))?,
+                output,
+            );
             for value in values {
                 encode_into(value, output)?;
             }
@@ -46,7 +58,11 @@ fn encode_into(value: &Value, output: &mut Vec<u8>) -> Result<(), Error> {
                     return Err(Error::NonCanonicalMetadata("duplicate map key"));
                 }
             }
-            encode_head(5, u64::try_from(encoded.len()).map_err(|_| Error::InvalidLength("CBOR map"))?, output);
+            encode_head(
+                5,
+                u64::try_from(encoded.len()).map_err(|_| Error::InvalidLength("CBOR map"))?,
+                output,
+            );
             for (key, value) in encoded {
                 output.extend_from_slice(&key);
                 output.extend_from_slice(&value);
@@ -69,11 +85,19 @@ fn encode_head(major: u8, argument: u64, output: &mut Vec<u8>) {
         }
         0x100..=0xffff => {
             output.push(prefix | 25);
-            output.extend_from_slice(&u16::try_from(argument).expect("bounded by match").to_be_bytes());
+            output.extend_from_slice(
+                &u16::try_from(argument)
+                    .expect("bounded by match")
+                    .to_be_bytes(),
+            );
         }
         0x1_0000..=0xffff_ffff => {
             output.push(prefix | 26);
-            output.extend_from_slice(&u32::try_from(argument).expect("bounded by match").to_be_bytes());
+            output.extend_from_slice(
+                &u32::try_from(argument)
+                    .expect("bounded by match")
+                    .to_be_bytes(),
+            );
         }
         _ => {
             output.push(prefix | 27);
@@ -191,9 +215,7 @@ impl Decoder<'_> {
                     "unsupported CBOR simple or floating-point value",
                 )),
             },
-            _ => Err(Error::NonCanonicalMetadata(
-                "unsupported CBOR major type",
-            )),
+            _ => Err(Error::NonCanonicalMetadata("unsupported CBOR major type")),
         }
     }
 
@@ -246,7 +268,10 @@ impl Decoder<'_> {
     }
 
     fn byte(&mut self, context: &'static str) -> Result<u8, Error> {
-        let byte = *self.bytes.get(self.offset).ok_or(Error::Truncated(context))?;
+        let byte = *self
+            .bytes
+            .get(self.offset)
+            .ok_or(Error::Truncated(context))?;
         self.offset += 1;
         Ok(byte)
     }

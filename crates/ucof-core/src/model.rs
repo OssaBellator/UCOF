@@ -41,7 +41,10 @@ impl DirectoryEntry {
     pub(crate) fn to_cbor(&self) -> CborValue {
         CborValue::Map(vec![
             (text("id"), CborValue::Unsigned(self.id)),
-            (text("kind"), CborValue::Unsigned(u64::from(u16::from(self.kind)))),
+            (
+                text("kind"),
+                CborValue::Unsigned(u64::from(u16::from(self.kind))),
+            ),
             (text("offset"), CborValue::Unsigned(self.offset)),
             (text("stored_len"), CborValue::Unsigned(self.stored_len)),
             (text("logical_len"), CborValue::Unsigned(self.logical_len)),

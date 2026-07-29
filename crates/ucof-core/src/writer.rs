@@ -3,7 +3,9 @@ use crate::format::{
     RECORD_HEADER_LEN, RECORD_MAGIC,
 };
 use crate::model::text;
-use crate::{encode_canonical, CborValue, DirectoryEntry, Error, Manifest, RecordKind, EXPERIMENTAL_EPOCH};
+use crate::{
+    encode_canonical, CborValue, DirectoryEntry, Error, Manifest, RecordKind, EXPERIMENTAL_EPOCH,
+};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeSet;
 
@@ -27,7 +29,10 @@ impl Writer {
         bytes.extend_from_slice(&FILE_MAGIC);
         push_u32_le(&mut bytes, EXPERIMENTAL_EPOCH);
         push_u32_le(&mut bytes, 0);
-        push_u32_le(&mut bytes, u32::try_from(HEADER_LEN).expect("fixed header length"));
+        push_u32_le(
+            &mut bytes,
+            u32::try_from(HEADER_LEN).expect("fixed header length"),
+        );
         bytes.extend_from_slice(&[0_u8; 12]);
         Self {
             bytes,
@@ -53,18 +58,22 @@ impl Writer {
         payload: &[u8],
     ) -> Result<(), Error> {
         if matches!(kind, RecordKind::Directory) {
-            return Err(Error::InvalidRecordOrder("directory is created during finalization"));
+            return Err(Error::InvalidRecordOrder(
+                "directory is created during finalization",
+            ));
         }
         if object_id == 0 {
-            return Err(Error::InvalidMetadataSchema("object identifier zero is reserved"));
+            return Err(Error::InvalidMetadataSchema(
+                "object identifier zero is reserved",
+            ));
         }
         if !self.object_ids.insert(object_id) {
             return Err(Error::DuplicateObjectId(object_id));
         }
         let offset = u64::try_from(self.bytes.len())
             .map_err(|_| Error::RangeOutOfBounds("writer offset"))?;
-        let stored_len = u64::try_from(payload.len())
-            .map_err(|_| Error::InvalidLength("record payload"))?;
+        let stored_len =
+            u64::try_from(payload.len()).map_err(|_| Error::InvalidLength("record payload"))?;
         append_record(&mut self.bytes, kind, object_id, payload)?;
         self.entries.push(DirectoryEntry {
             id: object_id,
@@ -100,7 +109,9 @@ impl Writer {
             &directory_payload,
         )?;
         let directory_total_len = u64::try_from(RECORD_HEADER_LEN)
-            .and_then(|header| u64::try_from(directory_payload.len()).map(|payload| header + payload))
+            .and_then(|header| {
+                u64::try_from(directory_payload.len()).map(|payload| header + payload)
+            })
             .map_err(|_| Error::InvalidLength("directory record"))?;
         let record_count = u64::try_from(self.entries.len())
             .map_err(|_| Error::InvalidLength("record count"))?

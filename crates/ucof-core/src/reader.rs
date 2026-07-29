@@ -2,7 +2,10 @@ use crate::format::{
     checked_range, read_u16_le, read_u32_le, read_u64_le, take, FILE_MAGIC, FOOTER_LEN,
     FOOTER_MAGIC, HEADER_LEN, RECORD_HEADER_LEN, RECORD_MAGIC,
 };
-use crate::{decode_canonical, CborValue, DirectoryEntry, Error, Limits, Manifest, RecordKind, EXPERIMENTAL_EPOCH};
+use crate::{
+    decode_canonical, CborValue, DirectoryEntry, Error, Limits, Manifest, RecordKind,
+    EXPERIMENTAL_EPOCH,
+};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::ops::Range;
@@ -29,7 +32,8 @@ pub struct ValidatedFile<'a> {
 
 impl<'a> ValidatedFile<'a> {
     pub fn parse(bytes: &'a [u8], limits: &Limits) -> Result<Self, Error> {
-        let file_len = u64::try_from(bytes.len()).map_err(|_| Error::LimitExceeded("file bytes"))?;
+        let file_len =
+            u64::try_from(bytes.len()).map_err(|_| Error::LimitExceeded("file bytes"))?;
         if file_len > limits.max_file_bytes {
             return Err(Error::LimitExceeded("file bytes"));
         }
@@ -65,7 +69,9 @@ impl<'a> ValidatedFile<'a> {
             return Err(Error::InvalidRecordOrder("last record is not directory"));
         }
         if directory_record.object_id != 0 {
-            return Err(Error::InvalidRecordOrder("directory identifier is not zero"));
+            return Err(Error::InvalidRecordOrder(
+                "directory identifier is not zero",
+            ));
         }
         let actual_directory_start = usize::try_from(directory_record.offset)
             .map_err(|_| Error::RangeOutOfBounds("directory offset"))?;
@@ -74,7 +80,9 @@ impl<'a> ValidatedFile<'a> {
                 != usize::try_from(footer.directory_len)
                     .map_err(|_| Error::RangeOutOfBounds("directory length"))?
         {
-            return Err(Error::DirectoryMismatch("footer location does not match framing"));
+            return Err(Error::DirectoryMismatch(
+                "footer location does not match framing",
+            ));
         }
 
         let digest = Sha256::digest(&bytes[..footer_offset]);
@@ -95,7 +103,8 @@ impl<'a> ValidatedFile<'a> {
         if manifest_record.kind != RecordKind::Manifest {
             return Err(Error::MissingManifest(footer.manifest_id));
         }
-        let manifest_value = decode_canonical(&bytes[manifest_record.payload_range.clone()], limits)?;
+        let manifest_value =
+            decode_canonical(&bytes[manifest_record.payload_range.clone()], limits)?;
         let manifest = parse_manifest(&manifest_value)?;
 
         let available: BTreeSet<u64> = records[..directory_index]
@@ -153,11 +162,7 @@ impl<'a> ValidatedFile<'a> {
         for record in &self.records {
             output.push_str(&format!(
                 "  id={} kind={:?} offset={} stored={} logical={}\n",
-                record.object_id,
-                record.kind,
-                record.offset,
-                record.stored_len,
-                record.logical_len
+                record.object_id, record.kind, record.offset, record.stored_len, record.logical_len
             ));
         }
         output
@@ -190,7 +195,10 @@ fn validate_header(bytes: &[u8]) -> Result<(), Error> {
     {
         return Err(Error::InvalidLength("file header"));
     }
-    if take(bytes, 20, 12, "file reserved bytes")?.iter().any(|byte| *byte != 0) {
+    if take(bytes, 20, 12, "file reserved bytes")?
+        .iter()
+        .any(|byte| *byte != 0)
+    {
         return Err(Error::InvalidReserved("file header"));
     }
     Ok(())
@@ -220,7 +228,11 @@ fn parse_footer(bytes: &[u8], offset: usize) -> Result<Footer, Error> {
     })
 }
 
-fn scan_records(bytes: &[u8], footer_offset: usize, limits: &Limits) -> Result<Vec<RecordInfo>, Error> {
+fn scan_records(
+    bytes: &[u8],
+    footer_offset: usize,
+    limits: &Limits,
+) -> Result<Vec<RecordInfo>, Error> {
     let mut records = Vec::new();
     let mut ids = BTreeSet::new();
     let mut offset = HEADER_LEN;
@@ -261,10 +273,14 @@ fn scan_records(bytes: &[u8], footer_offset: usize, limits: &Limits) -> Result<V
         }
         if kind == RecordKind::Directory {
             if object_id != 0 {
-                return Err(Error::InvalidRecordOrder("directory identifier must be zero"));
+                return Err(Error::InvalidRecordOrder(
+                    "directory identifier must be zero",
+                ));
             }
         } else if object_id == 0 {
-            return Err(Error::InvalidRecordOrder("non-directory identifier is zero"));
+            return Err(Error::InvalidRecordOrder(
+                "non-directory identifier is zero",
+            ));
         } else if !ids.insert(object_id) {
             return Err(Error::DuplicateObjectId(object_id));
         }
@@ -297,9 +313,13 @@ fn scan_records(bytes: &[u8], footer_offset: usize, limits: &Limits) -> Result<V
 
 fn parse_directory(value: &CborValue) -> Result<Vec<DirectoryEntry>, Error> {
     let map = exact_map(value, &["entries"], "directory")?;
-    let entries_value = map.get("entries").ok_or(Error::InvalidMetadataSchema("directory entries"))?;
+    let entries_value = map
+        .get("entries")
+        .ok_or(Error::InvalidMetadataSchema("directory entries"))?;
     let CborValue::Array(entries) = entries_value else {
-        return Err(Error::InvalidMetadataSchema("directory entries must be an array"));
+        return Err(Error::InvalidMetadataSchema(
+            "directory entries must be an array",
+        ));
     };
     entries.iter().map(parse_directory_entry).collect()
 }
@@ -370,7 +390,9 @@ fn exact_map<'a>(
     let mut map = BTreeMap::new();
     for (key, value) in entries {
         let CborValue::Text(key) = key else {
-            return Err(Error::InvalidMetadataSchema("metadata map key must be text"));
+            return Err(Error::InvalidMetadataSchema(
+                "metadata map key must be text",
+            ));
         };
         if !expected.contains(&key.as_str()) || map.insert(key.as_str(), value).is_some() {
             return Err(Error::InvalidMetadataSchema(context));

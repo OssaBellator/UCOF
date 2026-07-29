@@ -47,7 +47,10 @@ fn run() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn one_path(mut args: impl Iterator<Item = String>, command: &str) -> Result<std::path::PathBuf, Box<dyn Error>> {
+fn one_path(
+    mut args: impl Iterator<Item = String>,
+    command: &str,
+) -> Result<std::path::PathBuf, Box<dyn Error>> {
     let path = args
         .next()
         .ok_or_else(|| format!("{command} requires one file path"))?;

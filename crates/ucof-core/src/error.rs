@@ -61,9 +61,7 @@ impl Error {
             Self::InvalidMetadataSchema(_) => ErrorCategory::InvalidMetadataSchema,
             Self::DirectoryMismatch(_) => ErrorCategory::DirectoryMismatch,
             Self::MissingManifest(_) => ErrorCategory::MissingManifest,
-            Self::UnsupportedRequiredCapability(_) => {
-                ErrorCategory::UnsupportedRequiredCapability
-            }
+            Self::UnsupportedRequiredCapability(_) => ErrorCategory::UnsupportedRequiredCapability,
             Self::DigestMismatch => ErrorCategory::DigestMismatch,
             Self::LimitExceeded(_) => ErrorCategory::LimitExceeded,
         }

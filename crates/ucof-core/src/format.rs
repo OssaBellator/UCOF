@@ -20,17 +20,29 @@ pub(crate) fn push_u64_le(target: &mut Vec<u8>, value: u64) {
     target.extend_from_slice(&value.to_le_bytes());
 }
 
-pub(crate) fn read_u16_le(bytes: &[u8], offset: usize, context: &'static str) -> Result<u16, Error> {
+pub(crate) fn read_u16_le(
+    bytes: &[u8],
+    offset: usize,
+    context: &'static str,
+) -> Result<u16, Error> {
     let raw = take(bytes, offset, 2, context)?;
     Ok(u16::from_le_bytes([raw[0], raw[1]]))
 }
 
-pub(crate) fn read_u32_le(bytes: &[u8], offset: usize, context: &'static str) -> Result<u32, Error> {
+pub(crate) fn read_u32_le(
+    bytes: &[u8],
+    offset: usize,
+    context: &'static str,
+) -> Result<u32, Error> {
     let raw = take(bytes, offset, 4, context)?;
     Ok(u32::from_le_bytes([raw[0], raw[1], raw[2], raw[3]]))
 }
 
-pub(crate) fn read_u64_le(bytes: &[u8], offset: usize, context: &'static str) -> Result<u64, Error> {
+pub(crate) fn read_u64_le(
+    bytes: &[u8],
+    offset: usize,
+    context: &'static str,
+) -> Result<u64, Error> {
     let raw = take(bytes, offset, 8, context)?;
     Ok(u64::from_le_bytes([
         raw[0], raw[1], raw[2], raw[3], raw[4], raw[5], raw[6], raw[7],
