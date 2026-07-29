@@ -10,6 +10,7 @@ mod limits;
 mod model;
 mod reader;
 mod source;
+mod stream;
 mod writer;
 
 pub use cbor::{decode_canonical, encode_canonical, Value as CborValue};
@@ -20,6 +21,9 @@ pub use reader::{RecordInfo, ValidatedFile};
 pub use source::{
     InspectionReport, IntegrityStatus, MetadataInspector, ReadAt, ReadStats, SeekSource,
     SliceSource,
+};
+pub use stream::{
+    SequentialReader, StreamCommit, StreamEvent, StreamRecord, StreamStats,
 };
 pub use writer::Writer;
 
