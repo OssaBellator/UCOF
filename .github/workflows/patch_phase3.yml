@@ -24,23 +24,19 @@ jobs:
           from pathlib import Path
 
           directory_path = Path("crates/ucof-experiments/src/directory.rs")
-          directory = directory_path.read_text(encoding="utf-8")
-          old = '''        let root = directory.root;
-          let Page::Internal { children, .. } = &mut directory.pages[root] else {
-              panic!("expected internal root");
-          };
-          children[0].page_id = root;
-          children[0].range = directory.pages[root].range().expect("root range");'''
-          new = '''        let root = directory.root;
-          let root_range = directory.pages[root].range().expect("root range");
-          let Page::Internal { children, .. } = &mut directory.pages[root] else {
-              panic!("expected internal root");
-          };
-          children[0].page_id = root;
-          children[0].range = root_range;'''
-          if old in directory:
-              directory_path.write_text(directory.replace(old, new, 1), encoding="utf-8")
-          elif "children[0].range = root_range;" not in directory:
+          lines = directory_path.read_text(encoding="utf-8").splitlines()
+          assignment = '        children[0].range = directory.pages[root].range().expect("root range");'
+          if assignment in lines:
+              assignment_index = lines.index(assignment)
+              borrow_index = next(
+                  index for index in range(assignment_index - 8, assignment_index)
+                  if 'let Page::Internal { children, .. } = &mut directory.pages[root]' in lines[index]
+              )
+              lines.insert(borrow_index, '        let root_range = directory.pages[root].range().expect("root range");')
+              assignment_index += 1
+              lines[assignment_index] = '        children[0].range = root_range;'
+              directory_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+          elif '        children[0].range = root_range;' not in lines:
               raise SystemExit("borrow patch anchor not found")
 
           enumeration_path = Path("crates/ucof-experiments/src/enumeration.rs")
@@ -51,8 +47,19 @@ jobs:
               1,
           )
           enumeration_path.write_text(enumeration, encoding="utf-8")
+
+          fuzz_path = Path(".github/workflows/fuzz.yml")
+          fuzz = fuzz_path.read_text(encoding="utf-8")
+          if "            root_enumeration \\\n" not in fuzz:
+              fuzz = fuzz.replace(
+                  "            snapshot_selection \\\n            recovery_scan \\\n",
+                  "            snapshot_selection \\\n            root_enumeration \\\n            publication_model \\\n            recovery_scan \\\n",
+                  1,
+              )
+          fuzz_path.write_text(fuzz, encoding="utf-8")
           PY
           cargo fmt --all
+          cargo fmt --manifest-path fuzz/Cargo.toml
       - name: Commit patch
         run: |
           if git diff --quiet; then
@@ -60,6 +67,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/ucof-experiments
-          git commit -m "test: correct Phase 3 research model tests"
+          git add crates/ucof-experiments fuzz .github/workflows/fuzz.yml
+          git commit -m "test: correct and register Phase 3 research coverage"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
