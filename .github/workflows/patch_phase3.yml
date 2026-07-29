@@ -18,13 +18,13 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - name: Apply borrow-safe corruption setup
+      - name: Apply source corrections
         run: |
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("crates/ucof-experiments/src/directory.rs")
-          text = path.read_text(encoding="utf-8")
+          directory_path = Path("crates/ucof-experiments/src/directory.rs")
+          directory = directory_path.read_text(encoding="utf-8")
           old = '''        let root = directory.root;
           let Page::Internal { children, .. } = &mut directory.pages[root] else {
               panic!("expected internal root");
@@ -38,9 +38,19 @@ jobs:
           };
           children[0].page_id = root;
           children[0].range = root_range;'''
-          if old not in text:
+          if old in directory:
+              directory_path.write_text(directory.replace(old, new, 1), encoding="utf-8")
+          elif "children[0].range = root_range;" not in directory:
               raise SystemExit("borrow patch anchor not found")
-          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          enumeration_path = Path("crates/ucof-experiments/src/enumeration.rs")
+          enumeration = enumeration_path.read_text(encoding="utf-8")
+          enumeration = enumeration.replace(
+              "fn candidate_and_result_limits_apply_before enumeration_growth()",
+              "fn candidate_and_result_limits_apply_before_enumeration_growth()",
+              1,
+          )
+          enumeration_path.write_text(enumeration, encoding="utf-8")
           PY
           cargo fmt --all
       - name: Commit patch
@@ -50,6 +60,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/ucof-experiments/src/directory.rs
-          git commit -m "test: make directory cycle corruption setup borrow-safe"
+          git add crates/ucof-experiments
+          git commit -m "test: correct Phase 3 research model tests"
           git push origin HEAD:${{ github.event.pull_request.head.ref }}
