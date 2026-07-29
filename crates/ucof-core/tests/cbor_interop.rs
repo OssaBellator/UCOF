@@ -66,21 +66,12 @@ fn primitive_encodings_match_ciborium() {
 #[test]
 fn canonical_map_order_matches_when_external_order_is_explicit() {
     let ours = CborValue::Map(vec![
-        (
-            CborValue::Text("aa".to_owned()),
-            CborValue::Unsigned(2),
-        ),
-        (
-            CborValue::Text("z".to_owned()),
-            CborValue::Unsigned(1),
-        ),
+        (CborValue::Text("aa".to_owned()), CborValue::Unsigned(2)),
+        (CborValue::Text("z".to_owned()), CborValue::Unsigned(1)),
     ]);
     let external = ExternalValue::Map(vec![
         (ExternalValue::Text("z".to_owned()), external_unsigned(1)),
-        (
-            ExternalValue::Text("aa".to_owned()),
-            external_unsigned(2),
-        ),
+        (ExternalValue::Text("aa".to_owned()), external_unsigned(2)),
     ]);
 
     assert_eq!(
