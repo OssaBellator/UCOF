@@ -55,6 +55,7 @@ Convert the Phase 1 experiment into a maintainable, hostile-input-resistant core
 - the committed prefix is hashed as bytes are consumed;
 - no sequential commit event is emitted before directory, manifest, digest, and exact-end checks pass;
 - stream truncation, digest mismatch, trailing bytes, and logical-byte exhaustion have direct tests;
+- the logical-byte test asserts the underlying stream position so excess payload bytes cannot be consumed before rejection;
 - iterator errors are intended to be terminal rather than repeating indefinitely.
 
 ## Important limitations
