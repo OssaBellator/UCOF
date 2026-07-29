@@ -26,13 +26,13 @@ Create the smallest end-to-end format experiment that can encode, locate, inspec
 | Inspector and verifier CLI | Implemented | `ucof-cli` |
 | Independent vector generator | Implemented | `tools/generate_exp_0001_vectors.py` |
 | Independent second parser | Implemented | `tools/validate_exp_0001.py` |
-| Valid and invalid hexadecimal vectors | Initial set implemented | `tests/vectors/exp-0001/` |
+| Valid and invalid hexadecimal vectors | Implemented initial corpus | `tests/vectors/exp-0001/` |
 | Fixed-field and canonical-CBOR attacks | Implemented | `tools/test_exp_0001_adversarial.py` |
 | Framing-width experiment | Complete | `docs/experiments/0001-framing-widths.md` |
 | Footer-discovery experiment | Complete | `docs/experiments/0002-footer-discovery.md` |
 | UC-02 scale-limit model | Complete; design fails UC-02 | `docs/experiments/0003-scale-limits.md` |
 | Established CBOR comparison | Complete | `docs/experiments/0004-cbor-interoperability.md` |
-| Threat-model findings | Companion evidence published | `docs/security/EXP_0001_FINDINGS.md` |
+| Threat-model findings | Integrated into primary model | `docs/THREAT_MODEL.md` section 16 |
 | CI format, lint, Rust, Python, attacks, and experiments | Passing strict checks | `.github/workflows/rust.yml` |
 
 ## Current experiment decisions
@@ -65,26 +65,28 @@ These choices apply only to `UCOF-EXP-0001`:
 - A 64 KiB backward-search tail can expose 8,184 footer-magic candidates, supporting strict exact-end discovery for normal validation.
 - One million zero-byte objects require a lower-bound 40 MB of record headers and approximately 52 MB of directory payload. The flat materialized directory therefore fails UC-02 and must not be promoted as a massive-archive design.
 - FCP-0001’s evidence appendix explicitly separates strict exact-end validation from future checkpoint recovery and salvage modes.
+- The primary threat model now records the implementation evidence, validation-order result, footer-search result, scale failure, fuzzing evidence, portability evidence, and residual risk.
 
 ## Remaining exit work
 
 Phase 1 is not formally complete until:
 
-1. FCP-0001 completes its public review period and all material objections are dispositioned.
-2. The executable findings companion is integrated into the primary threat model through a reviewed repository change.
-3. Maintainers decide whether to accept EXP-0001 for continued experimentation, revise it, defer it, reject it, or supersede it with EXP-0002.
+1. FCP-0001 completes public review and all material objections are dispositioned.
+2. Maintainers record whether EXP-0001 is accepted for continued experimentation, revised, deferred, rejected, or superseded by EXP-0002.
 
-No remaining item requires expanding the experimental implementation itself unless review identifies a technical defect.
+The threat-model integration gate is complete. No remaining item requires expanding the Phase 1 implementation unless review identifies a technical defect.
+
+## Relationship to Phase 2
+
+The Phase 2 branch adds bounded random-access, sequential, diagnostic, salvage, and streaming-writer APIs around the same disposable bytes. Those APIs provide additional safety evidence but do not silently promote any EXP-0001 byte choice into a stable format rule.
 
 ## Explicit limitations
 
-The current Rust reader validates a complete in-memory byte slice. It demonstrates sequential framing and validated random lookup, but it is not yet a bounded-buffer streaming API over `Read` or a range-source API.
+The digest provides integrity relative to the stored footer, not authenticity, signer trust, freshness, or rollback protection.
 
-The current digest provides integrity relative to the stored footer, not authenticity.
+The flat directory does not satisfy UC-02-scale object counts. Raising limits does not resolve that architecture problem.
 
-The flat directory and in-memory inventory do not satisfy UC-02-scale object counts. Raising limits does not resolve that architecture problem.
-
-The experiment has one active root and no recovery from a missing footer. Append-only snapshots and checkpoint recovery belong to Phase 3 after framing experiments establish safe root-selection rules.
+The experiment has one active root and no recovery from a missing footer. Append-only snapshots and checkpoint recovery belong to Phase 3 after root-selection rules are proposed and tested.
 
 ## Promotion rule
 
