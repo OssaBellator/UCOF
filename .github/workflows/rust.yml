@@ -33,6 +33,8 @@ jobs:
         run: python3 tools/test_exp_0001_adversarial.py
       - name: Test independent Phase 3 models
         run: python3 tools/validate_phase3_models.py
+      - name: Test independent EXP-0002 codec
+        run: python3 tools/exp0002_codec.py --self-test
       - name: Reproduce framing experiments
         run: |
           python3 tools/experiment_framing_widths.py
