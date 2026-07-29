@@ -123,3 +123,10 @@ path = "fuzz_targets/exp0002_roundtrip.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "exp0002_lookup"
+path = "fuzz_targets/exp0002_lookup.rs"
+test = false
+doc = false
+bench = false
