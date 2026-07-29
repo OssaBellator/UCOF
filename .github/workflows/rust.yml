@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -32,39 +32,3 @@ jobs:
           python3 tools/experiment_framing_widths.py
           python3 tools/experiment_footer_discovery.py
           python3 tools/experiment_scale_limits.py
-      - name: Integrate Phase 1 threat findings
-        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("docs/THREAT_MODEL.md")
-          text = path.read_text(encoding="utf-8")
-          heading = "## Phase 1 executable findings"
-          if heading not in text:
-              insertion = """## Phase 1 executable findings
-
-The initial model is now supplemented by executable `UCOF-EXP-0001` evidence:
-
-- [EXP-0001 security findings](security/EXP_0001_FINDINGS.md) records confirmed controls, validation-order behavior, footer-search amplification, residual risks, and follow-up work.
-- [FCP-0001 evidence appendix](proposals/0001-exp-0001-evidence.md) records the framing, canonicalization, footer-discovery, and UC-02 scale results used during proposal review.
-
-The measured findings are part of this threat model. In particular, strict validation must not silently become backward-search recovery, and raising resource limits does not make the flat directory suitable for UC-02-scale object counts.
-
-"""
-              anchor = "## 1. Status and scope"
-              if anchor not in text:
-                  raise SystemExit("threat-model anchor not found")
-              path.write_text(text.replace(anchor, insertion + anchor, 1), encoding="utf-8")
-          PY
-      - name: Commit threat-model integration
-        if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
-        run: |
-          if git diff --quiet; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add docs/THREAT_MODEL.md
-          git commit -m "docs: integrate EXP-0001 threat findings"
-          git push origin HEAD:${{ github.ref_name }}
