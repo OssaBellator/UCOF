@@ -23,6 +23,8 @@ jobs:
         run: cargo clippy --workspace --all-targets -- -D warnings
       - name: Test Rust implementation
         run: cargo test --workspace --all-targets
+      - name: Test Rust documentation
+        run: cargo test --workspace --doc
       - name: Test independent Python parser
         run: python3 tools/validate_exp_0001.py --vectors tests/vectors/exp-0001
       - name: Test adversarial Python cases
@@ -32,3 +34,22 @@ jobs:
           python3 tools/experiment_framing_widths.py
           python3 tools/experiment_footer_discovery.py
           python3 tools/experiment_scale_limits.py
+
+  portability:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - i686-unknown-linux-gnu
+          - powerpc64-unknown-linux-gnu
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - name: Check core library for target
+        run: cargo check -p ucof-core --lib --target ${{ matrix.target }}
