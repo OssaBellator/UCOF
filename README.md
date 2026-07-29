@@ -1,369 +1,267 @@
 # UCOF — Universal Chunked Object Format
 
-> A language-neutral, self-describing, chunk-addressable container format for durable storage, partial access, streaming, verification, and extensible domain profiles.
+> A language-neutral, self-describing, chunk-addressable container format for durable storage, partial access, streaming, verification, recovery, and extensible domain profiles.
 
-## Status
+## Project status
 
-**UCOF is an early design and research project.** No released specification exists yet, and files produced during development must be treated as experimental and disposable.
+**UCOF is an early design and research project.** No stable specification, wire format, reference implementation, or production-compatible file exists yet.
 
-The initial objective is not to replace every existing format with one internal data model. UCOF instead aims to standardize a durable **container envelope** that can hold many kinds of data while preserving efficient, domain-specific representations.
+Current stage: **Phase 0 — Foundations and Governance, in progress**.
 
-See the [phased implementation plan](docs/IMPLEMENTATION_PLAN.md) for the proposed path from design work to a stable 1.0 specification and reference implementation.
+The project has published its initial governance, terminology, use-case corpus, threat model, versioning rules, and proposal process. Phase 0 is not considered complete until those materials receive substantive review.
 
-## Motivation
+- [Phase 0 status](docs/PHASE_0_STATUS.md)
+- [Detailed implementation plan](docs/IMPLEMENTATION_PLAN.md)
+- [Open design decisions](docs/OPEN_DECISIONS.md)
 
-Existing formats tend to optimize for one workload:
-
-- JSON is portable and inspectable, but inefficient for large binary payloads and random access.
-- SQLite provides transactions and indexed mutation, but is not a general media, document, or archival interchange format.
-- Parquet and Arrow support efficient analytical data access, but do not model every object type or mutable workload.
-- HDF5 provides rich scientific datasets and chunking, but has a comparatively large implementation surface.
-- ZIP is widely supported, but its metadata, indexing, integrity, schema, and update model are limited.
-- MKV and similar media containers stream well, but are specialized around timed media.
-- PDF is portable and feature-rich, but its object model, edit history, and security behavior are complex.
-
-UCOF explores whether these strengths can coexist in a smaller, layered architecture without pretending that their trade-offs can be eliminated.
+Do not use experimental UCOF files for durable storage. Pre-stable wire experiments will use explicit `UCOF-EXP-####` epochs and may become unreadable when an epoch is retired.
 
 ## Design thesis
 
 UCOF is a **universal container, not a universal representation**.
 
-The core format should define:
+The project does not attempt to force documents, media, analytical tables, databases, scientific arrays, and archives into one physical layout. It aims to standardize a small durable envelope that lets specialized profiles preserve their efficient representations while sharing common framing, discovery, integrity, compatibility, and safety rules.
 
-1. Stable framing and version negotiation.
-2. Deterministic metadata encoding.
-3. Independently readable typed chunks.
-4. Object discovery and random access.
-5. Integrity verification and content identity.
-6. Safe extension and capability rules.
-7. Append-only snapshots and recovery points.
-8. Optional compression, encryption, provenance, and secondary indexes.
-9. Profiles for documents, media, tabular data, databases, scientific data, and packages.
+A basic conforming reader should eventually be able to:
 
-A basic conforming reader should be able to inspect, verify, enumerate, copy, and extract objects it does not semantically understand. Profile-aware readers provide higher-level interpretation.
+- identify the core version or experimental epoch;
+- discover the active snapshot;
+- enumerate objects and required capabilities;
+- validate structural and integrity evidence;
+- skip and preserve unknown optional data;
+- extract opaque stored payloads where safe;
+- explain what it cannot interpret;
+- operate under explicit hostile-input resource limits.
+
+Profile-aware readers add domain semantics.
+
+## Why another container format?
+
+Existing formats make different trade-offs:
+
+- JSON is portable and inspectable but inefficient for large binary payloads and random access.
+- SQLite provides indexed mutation and transactions but is not a general interchange container.
+- Parquet and Arrow optimize analytical data access but do not model every object or mutable workload.
+- HDF5 provides rich chunked scientific datasets with a large implementation surface.
+- ZIP is widely supported but has limited schema, integrity, indexing, and update semantics.
+- media containers stream timed data well but specialize around tracks and timestamps.
+- PDF is portable and feature-rich but has a complex object, update, and security model.
+
+UCOF explores whether selected strengths can coexist in a smaller layered architecture. It explicitly documents trade-offs rather than claiming to eliminate them.
 
 ## Goals
 
 UCOF is intended to provide:
 
-- **Self-description:** schemas, logical types, codec identifiers, and profile declarations travel with the file.
-- **Partial access:** readers can locate and decode selected objects without loading the whole file.
-- **Streaming:** independently framed chunks and checkpoints support sequential production and consumption.
-- **Determinism:** canonical metadata enables stable hashing, signing, reproducible output, and deduplication.
-- **Extensibility:** unknown optional features remain safely skippable and preservable.
-- **Integrity:** per-chunk digests and a signed or unsigned root identity detect corruption and substitution.
-- **Recoverability:** append-only commits and checkpoint footers preserve the last valid snapshot after interrupted writes.
-- **Security:** parsers operate under explicit limits; data is never executable merely because it is embedded.
-- **Longevity:** the minimal core remains implementable without a large runtime or external schema registry.
-- **Multiple access patterns:** different profiles can select different physical layouts and index structures.
+- **Self-description** — schemas, logical types, encodings, and profile declarations can travel with the file.
+- **Partial access** — selected objects or ranges can be located without loading unrelated payloads.
+- **Streaming** — independently bounded chunks and checkpoints support sequential production and consumption.
+- **Determinism** — canonical representations support stable identity, signatures, reproducible output, and deduplication.
+- **Extensibility** — unknown optional features remain safely skippable and preservable.
+- **Integrity** — precisely scoped digests and roots detect corruption and substitution.
+- **Recoverability** — append-only publication preserves an earlier valid snapshot after interrupted writes.
+- **Security** — readers assume hostile input and enforce caller-controlled limits.
+- **Longevity** — the mandatory core remains implementable without a large runtime or online registry.
+- **Multiple access patterns** — profiles can select different layouts and secondary indexes.
 
 ## Non-goals
 
 UCOF does not attempt to:
 
-- Make every workload equally efficient under one layout.
-- Eliminate the need for codecs, schemas, or application-specific software.
-- Embed executable parsers or automatically run code supplied by a file.
-- Guarantee that every reader understands every object type.
-- Replace live network protocols, distributed databases, or source-control systems.
-- Hide unavoidable trade-offs among compression, mutation, encryption, deduplication, simplicity, and random access.
-- Standardize a single schema language for all domains.
+- make every workload equally efficient under one layout;
+- eliminate application-specific codecs, schemas, or software;
+- embed executable parsers or automatically run code supplied by a file;
+- guarantee that every reader understands every object type;
+- replace live network protocols, distributed databases, or source control;
+- make encryption, mutation, deduplication, compression, simplicity, and random access free of trade-offs;
+- standardize one schema language for every domain;
+- define one universal trust policy for signatures or provenance.
 
-## Proposed architecture
-
-The initial architecture is layered so that a minimal reader can remain small.
+## Proposed layered architecture
 
 | Layer | Responsibility |
 |---|---|
-| Core framing | Magic value, version, feature flags, file identity, chunk framing, footer discovery |
-| Canonical metadata | Deterministically encoded structured metadata, initially expected to use deterministic CBOR |
-| Object storage | Typed chunks with stable object identifiers and explicit dependencies |
-| Primary directory | Object-to-location mapping required for random access |
-| Secondary indexes | Optional B+tree, sorted, column/page, Bloom, spatial, temporal, or full-text indexes |
-| Schema system | Embedded or referenced versioned schemas and logical-type declarations |
-| Transform pipeline | Per-chunk compression, checksums, encryption, and domain encodings |
-| Snapshot model | Append-only manifests, commit records, checkpoints, and previous-root links |
-| Trust layer | Hash trees, digital signatures, authenticated claims, and provenance events |
-| Profiles | Interoperability constraints for documents, media, tables, databases, scientific data, and packages |
+| Bootstrap framing | Magic, version or experimental epoch, bounded discovery fields |
+| Canonical metadata | Deterministic structured metadata, with deterministic CBOR as a candidate |
+| Object storage | Logical objects represented by independently bounded chunks |
+| Primary directory | Object-to-location discovery for random-access files |
+| Secondary indexes | Optional profile-specific lookup and filtering accelerators |
+| Schema system | Versioned schemas, physical types, logical types, and compatibility metadata |
+| Transform pipeline | Compression, encryption, checks, and domain encodings applied in explicit order |
+| Snapshot model | Append-only manifests, roots, checkpoints, and previous-root relationships |
+| Trust layer | Digests, signatures, authenticated claims, and optional provenance |
+| Profiles | Interoperability constraints for concrete domains and access patterns |
 
-### Conceptual file layout
+### Conceptual file shape
 
 ```text
 +--------------------------------------------------+
-| Fixed header                                     |
-| magic | core version | feature flags | file ID   |
+| Small bootstrap header                           |
 +--------------------------------------------------+
-| Initial manifest or bootstrap metadata           |
+| Manifest, metadata, object, and payload chunks   |
+| ...                                              |
 +--------------------------------------------------+
-| Chunk: metadata                                  |
+| Primary directory and optional indexes           |
 +--------------------------------------------------+
-| Chunk: payload                                   |
+| Integrity, provenance, and signature objects     |
 +--------------------------------------------------+
-| Chunk: payload                                   |
-+--------------------------------------------------+
-| ... additional chunks and checkpoints ...        |
-+--------------------------------------------------+
-| Object directory and optional secondary indexes  |
-+--------------------------------------------------+
-| Provenance, integrity, and signature records      |
-+--------------------------------------------------+
-| Footer                                            |
-| root offset | root digest | previous root | magic |
+| Root or checkpoint discovery footer              |
 +--------------------------------------------------+
 ```
 
-The exact byte layout is deliberately not frozen yet. It will be finalized only after prototype implementations, corpus testing, parser-hardening work, and independent review.
+This is conceptual only. No byte layout, field width, byte order, magic value, footer strategy, digest, or metadata subset has been accepted.
 
-## Core concepts
+## Core distinctions
 
 ### Objects and chunks
 
 An **object** is a logical entity such as a manifest, schema, image, table, index, signature, or document node. A **chunk** is a physical storage unit containing all or part of an object.
 
-Objects may span chunks, but each chunk must be independently bounded and safely skippable. Chunk metadata is expected to include:
-
-- object identifier;
-- chunk sequence or logical range;
-- object and physical encoding type;
-- stored and logical lengths;
-- codec and transform identifiers;
-- integrity digest;
-- dependency references;
-- capability requirements.
-
-### Object identity
-
-UCOF is expected to support both:
-
-- **instance identifiers**, which distinguish objects within an evolving file; and
-- **content identifiers**, derived from canonical content for verification and deduplication.
-
-The design must avoid assuming that encrypted or mutable content always has a stable public content hash.
+Object boundaries and chunk boundaries are not assumed to be identical.
 
 ### Directory and indexes
 
-Every random-access UCOF file will contain a primary object directory. Workload-specific indexes are optional and profile-defined.
+The primary directory enables object discovery. Workload-specific indexes accelerate queries.
 
-No single index structure is suitable for all workloads:
+Indexes must not silently become sources of truth. A malicious or stale index must not be able to change authoritative meaning without validation.
 
-- B+trees suit point lookups and mutable key-value data.
-- Sorted block indexes suit immutable archives.
-- Page and column indexes suit analytical scans.
-- Bloom filters accelerate negative membership checks.
-- Spatial and temporal indexes support geometry and timed streams.
+### Instance and content identity
 
-Indexes are accelerators, not sources of truth. Readers must be able to validate or rebuild non-authoritative indexes from authoritative objects.
+UCOF distinguishes:
 
-### Schemas and evolution
+- **instance identity**, which refers to an evolving file or object lineage; and
+- **content identity**, which is derived from a defined canonical representation.
 
-Schemas may be embedded or referenced by stable identifier. The core will define compatibility metadata and preservation rules, while profiles may select schema languages.
+The design must account for encrypted, mutable, privacy-sensitive, or non-canonical data that cannot safely expose a stable public content hash.
 
-The format must support:
+### Integrity, authenticity, provenance, and confidentiality
 
-- versioned schemas;
-- unknown-field preservation where the selected schema system permits it;
-- optional and required fields;
-- logical types layered over physical primitives;
-- explicit migration declarations;
-- schema fingerprints and dependency identities.
+These are separate guarantees:
 
-### Binary and text forms
+- a digest compares content with an expected identity;
+- a signature binds an exact scope to a signing key;
+- a provenance claim asserts something about origin or transformation;
+- encryption protects selected data from unauthorized readers.
 
-The authoritative representation will be canonical binary. A deterministic textual projection will support diagnostics, review, fixtures, and tooling.
+A valid signature does not make a claim true, and encrypted payloads do not imply confidential metadata.
 
-The text form must be lossless for core values, including binary data, references, floating-point edge cases, tags, and unknown extensions. It must not become a second competing source of truth inside a file.
+### Capability model
 
-### Compression and transforms
+Features will be classified as:
 
-Transforms operate independently per chunk or chunk group. The design is expected to allow:
+- **Required** — safe interpretation is impossible without support.
+- **Optional** — may be skipped while preserving the surrounding scope according to defined rules.
+- **Advisory** — affects presentation, optimization, or diagnostics only.
 
-- no compression;
-- Zstandard as a likely general-purpose baseline codec;
-- shared compression dictionaries;
-- domain-specific media and column encodings;
-- checksums or authenticated encryption;
-- explicit transform ordering.
+Readers must fail closed for unknown required behavior.
 
-A conforming reader must reject unsafe pipelines, excessive expansion, invalid lengths, unsupported required transforms, and ambiguous transform ordering.
+## Initial profiles
 
-### Snapshots and mutation
+The current candidates are:
 
-The proposed mutation model is append-only and copy-on-write:
+- **Archive** — hierarchy, metadata, extraction, deduplication, and snapshots.
+- **Table** — columns, row groups, dictionaries, statistics, indexes, and schema evolution.
+- **Media** — timed tracks, cues, chapters, subtitles, and streaming indexes.
+- **Document** — structured content, resources, annotations, accessibility, and optional layout.
+- **Scientific** — multidimensional arrays, units, coordinates, and chunk transforms.
+- **Database** — logical records, transactional roots, indexes, and compaction.
+- **Package** — software artifacts, dependencies, signatures, and installation constraints.
 
-1. Append new or replacement objects.
-2. Append updated indexes.
-3. Append a new manifest describing the snapshot.
-4. Append a footer that atomically exposes the new root.
+Archive and Table are the provisional first profiles because they exercise materially different access patterns without requiring a full renderer or database engine.
 
-Older roots remain available until compaction. An interrupted write should leave the previous valid snapshot readable.
+## Security posture
 
-This model favors durability and verifiability over in-place mutation. A database profile may define additional page and concurrency rules while retaining recoverable root commits.
+Every input byte is assumed hostile.
 
-### Integrity, signatures, and provenance
+The design requires attention to:
 
-Integrity and authenticity are distinct:
+- checked offset and length arithmetic;
+- forged and overlapping ranges;
+- bounded metadata, recursion, allocation, and diagnostics;
+- decompression and transform expansion;
+- cyclic object, schema, and dictionary relationships;
+- malicious indexes and forged statistics;
+- parser differential behavior;
+- digest and algorithm confusion;
+- signature wrapping and ambiguous scope;
+- metadata leakage and encryption misuse;
+- stale-root and rollback confusion;
+- external references and unintended network access;
+- safe archive extraction and repair behavior.
 
-- A digest proves that bytes have not changed relative to an expected identity.
-- A signature binds an identity or claim to a signer.
-- Provenance records assert how content was created or transformed.
+See the [initial threat model](docs/THREAT_MODEL.md) and [security policy](SECURITY.md).
 
-UCOF should distinguish verified signed history, unsigned asserted history, incomplete history, and absent history. Provenance must remain optional because it can expose sensitive information.
+## Phase 0 foundation documents
 
-### Encryption
+| Document | Purpose |
+|---|---|
+| [Governance](docs/GOVERNANCE.md) | Roles, authority, consensus, review periods, and independent implementation requirement |
+| [Versioning](docs/VERSIONING.md) | Software versions, specification versions, experimental epochs, and retirement |
+| [Glossary](docs/GLOSSARY.md) | Shared technical vocabulary and important distinctions |
+| [Use-case corpus](docs/USE_CASES.md) | Ten concrete workloads with scale, access, trust, and failure criteria |
+| [Threat model](docs/THREAT_MODEL.md) | Adversaries, trust boundaries, threats, controls, and residual risks |
+| [Proposal process](docs/PROPOSAL_PROCESS.md) | Normative Format Change Proposal workflow |
+| [Registry policy](docs/REGISTRY_POLICY.md) | Permanent, experimental, private-use, and deprecated identifier rules |
+| [Open decisions](docs/OPEN_DECISIONS.md) | Explicitly resolved, provisional, blocked, and undecided items |
+| [ADR process](docs/decisions/README.md) | Implementation-local decision records |
+| [FCP index](docs/proposals/README.md) | Normative proposal records and template |
+| [Phase 0 status](docs/PHASE_0_STATUS.md) | Current deliverables and remaining exit gates |
 
-Encryption is planned at object or chunk granularity. This can permit public manifests with private payloads, separate recipients, and selective disclosure.
+## Decision process
 
-Metadata confidentiality must be explicit. A public directory can leak object names, types, sizes, relationships, and statistics even when payloads are encrypted.
+Implementation-local decisions use Architecture Decision Records.
 
-## Capability model
+Normative decisions use Format Change Proposals when they affect bytes, canonicalization, required behavior, compatibility, profiles, registries, security-critical interpretation, or permanent identifiers.
 
-Every extension or feature will be classified as:
+Permanent identifiers are not assigned before the defining FCP is accepted. A working prototype is evidence, not the specification.
 
-- **Required:** interpretation is unsafe or impossible without support.
-- **Optional:** a reader may skip the feature while preserving the surrounding file.
-- **Advisory:** the feature only improves presentation, performance, or diagnostics.
+## Versioning and compatibility
 
-Readers must fail closed when an unknown required capability is encountered. Writers must not mark a semantically required feature as optional merely to increase apparent compatibility.
+Reference software will use Semantic Versioning after releases begin. The core specification and each profile use separate `MAJOR.MINOR` versions.
 
-## Planned profiles
-
-Profiles constrain the base container for interoperability. Initial candidates are:
-
-- **UCOF Archive:** files, directories, metadata, deduplication, and extraction.
-- **UCOF Table:** column chunks, dictionaries, statistics, page indexes, and schema evolution.
-- **UCOF Media:** timestamped tracks, cues, subtitles, chapters, and streaming indexes.
-- **UCOF Document:** structured content, resources, annotations, accessibility, and optional page layout.
-- **UCOF Scientific:** multidimensional arrays, units, coordinates, chunk filters, and experiment metadata.
-- **UCOF Database:** mutable logical records, transactional roots, B+tree-style indexes, and compaction.
-- **UCOF Package:** dependency metadata, software artifacts, signatures, and installation constraints.
-
-The first implementation should validate the core with **Archive** and **Table** profiles before attempting more complex document, media, or database semantics.
-
-## Reference implementation direction
-
-The proposed reference implementation will use **Rust** because memory safety, explicit binary-layout handling, fuzzing support, and predictable performance are valuable for an untrusted file parser.
-
-This is not a requirement for other implementations. The specification must remain language-neutral and practical to implement in C, C++, Go, Java, JavaScript, Python, and other ecosystems.
-
-Expected workspace components:
+Pre-stable incompatible byte layouts use monotonic experimental epochs:
 
 ```text
-crates/
-  ucof-core/        Core types, framing, limits, and validation
-  ucof-codec/       Reader and writer APIs
-  ucof-schema/      Schema descriptors and compatibility checks
-  ucof-index/       Primary directory and optional index implementations
-  ucof-crypto/      Hashing, signatures, and encryption adapters
-  ucof-text/        Canonical diagnostic text projection
-  ucof-cli/         inspect, verify, pack, unpack, convert, and repair
-profiles/
-  archive/
-  table/
-spec/
-  core.md
-  registries.md
-  profiles/
-tests/
-  corpus/
-  conformance/
-  malformed/
+UCOF-EXP-0001
+UCOF-EXP-0002
 ```
 
-The repository structure will be introduced incrementally rather than created as empty scaffolding.
+An unknown epoch must be reported as unsupported rather than guessed. Experimental epochs never become stable specification version numbers.
 
-## CLI concept
+## Planned reference implementation
 
-The reference CLI is expected to expose commands similar to:
+Rust is the provisional language for the reference implementation because hostile-input parsing benefits from memory safety, checked binary handling, fuzzing support, and predictable performance.
 
-```console
-ucof inspect example.ucof
-ucof verify example.ucof
-ucof pack ./directory -o archive.ucof
-ucof unpack archive.ucof -o ./output
-ucof to-text example.ucof -o example.ucof.txt
-ucof from-text example.ucof.txt -o rebuilt.ucof
-ucof repair damaged.ucof -o recovered.ucof
-ucof compact history.ucof -o compacted.ucof
-```
+The specification must remain practical to implement independently in other languages. UCOF Core 1.0 requires at least one independent parser that does not merely wrap the reference library.
 
-Command names and behavior are provisional.
+Repository structure will be introduced incrementally as phases require it. Empty crates and directories will not be added simply to resemble a complete implementation.
 
-## Security principles
+## Roadmap
 
-UCOF readers must assume every input is hostile. The specification and reference implementation will require:
+| Phase | Outcome |
+|---|---|
+| 0 | Foundations, governance, terminology, use cases, and threat model |
+| 1 | Minimal disposable framing experiment |
+| 2 | Bounded safety-first core reader and writer |
+| 3 | Directory, snapshots, checkpoints, recovery, and compaction |
+| 4 | Transform pipeline and chunked compression |
+| 5 | Schemas and lossless diagnostic text projection |
+| 6 | Integrity, signatures, and provenance |
+| 7 | Encryption and selective disclosure |
+| 8 | Archive and Table profiles |
+| 9 | Independent implementation, conformance, benchmarks, and hardening |
+| 10 | Core 1.0 specification freeze and adoption package |
 
-- checked arithmetic for offsets and lengths;
-- maximum nesting, allocation, object, chunk, and expansion limits;
-- cycle detection for object references;
-- rejection of overlapping or contradictory ranges;
-- bounded decompression and transform execution;
-- no implicit network retrieval;
-- no automatic execution of embedded code;
-- cryptographic verification that does not trust unverified indexes;
-- distinguishable warnings for malformed, unverifiable, unsupported, and incomplete files;
-- fuzzing, property testing, malformed corpora, and differential testing.
-
-## Compatibility policy
-
-Until the 1.0 specification is published:
-
-- all byte layouts are unstable;
-- no backward compatibility is promised;
-- experimental files should carry an explicit pre-release marker;
-- prototype identifiers must not be registered as permanent values;
-- breaking changes should be documented in the repository.
-
-After 1.0, the project intends to preserve the core framing contract and use registries, profiles, and required/optional capabilities for evolution.
-
-## Development roadmap
-
-The project will progress through these broad stages:
-
-1. Define principles, threat model, terminology, and decision process.
-2. Specify and prototype minimal framing, canonical metadata, and footer discovery.
-3. Implement bounded readers, deterministic writers, and a conformance corpus.
-4. Add object directories, streaming checkpoints, recovery, and append-only snapshots.
-5. Add transform pipelines, schemas, and canonical text tooling.
-6. Add integrity trees, signatures, provenance, and optional encryption.
-7. Validate the model with Archive and Table profiles.
-8. Build independent implementations and interoperability tests.
-9. Freeze the 1.0 wire format only after security and performance review.
-
-Detailed deliverables and exit criteria are in [docs/IMPLEMENTATION_PLAN.md](docs/IMPLEMENTATION_PLAN.md).
+Detailed deliverables and exit criteria are in the [implementation plan](docs/IMPLEMENTATION_PLAN.md).
 
 ## Contributing
 
-The project is currently defining its foundations. High-value contributions include:
+Review, counterexamples, hostile test ideas, workload traces, format comparisons, and implementation experiments are welcome.
 
-- concrete use cases and workload traces;
-- adversarial format review;
-- comparisons with existing container designs;
-- minimal parser prototypes;
-- canonicalization test vectors;
-- corruption and recovery experiments;
-- benchmark corpora;
-- schema-evolution examples;
-- security and privacy threat analysis.
+Read [CONTRIBUTING.md](CONTRIBUTING.md) before opening substantial work. Use the issue forms for bugs, design questions, and proposal intake. Do not disclose unpatched vulnerabilities publicly.
 
-Large implementation changes should follow an accepted design proposal once the proposal process is established. Prematurely freezing identifiers or byte layouts should be avoided.
+## License
 
-## Design principles for contributors
+UCOF repository material is available under the [MIT License](LICENSE) unless a file states otherwise.
 
-1. Keep the mandatory core smaller than the optional ecosystem.
-2. Prefer explicit failure over ambiguous recovery.
-3. Make unknown optional data preservable.
-4. Treat indexes as rebuildable accelerators.
-5. Separate integrity, authenticity, provenance, and confidentiality.
-6. Require deterministic representations wherever identity depends on bytes.
-7. Benchmark realistic partial reads, not only full-file throughput.
-8. Design for hostile inputs before optimizing trusted ones.
-9. Document trade-offs instead of claiming to eliminate them.
-10. Freeze the wire format only after more than one implementation exists.
-
-## Licensing
-
-No license has been selected yet. Until a license file is added, normal copyright restrictions apply. A permissive license is recommended before accepting substantial external contributions.
-
-## Name and identifiers
-
-“UCOF,” the `.ucof` extension, media types, magic bytes, registry namespaces, and profile identifiers are provisional. Permanent registration should wait until the core format is technically mature and the project has completed a naming and collision review.
+“UCOF,” the `.ucof` extension, media types, magic bytes, registry namespaces, and profile identifiers remain provisional until their technical and naming reviews are complete.
