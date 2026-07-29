@@ -132,8 +132,8 @@ pub fn enumerate_previous_chain(
         if !seen.insert(previous_offset) {
             return Err(Exp0002Error::InvalidPreviousFooter);
         }
-        let offset = usize::try_from(previous_offset)
-            .map_err(|_| Exp0002Error::ArithmeticOverflow)?;
+        let offset =
+            usize::try_from(previous_offset).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
         let prefix_len = offset
             .checked_add(FOOTER_LEN)
             .ok_or(Exp0002Error::ArithmeticOverflow)?;
@@ -213,17 +213,15 @@ mod tests {
             ..Exp0002RecoveryLimits::default()
         };
         let genesis = build_genesis(header(), vec![object(1, b"one", true)]).expect("genesis");
-        let appended = build_append(
-            &genesis,
-            vec![object(2, b"two", false)],
-            vec![1],
-            &limits,
-        )
-        .expect("append");
+        let appended = build_append(&genesis, vec![object(2, b"two", false)], vec![1], &limits)
+            .expect("append");
         let genesis_footer = genesis.len() as u64 - FOOTER_LEN as u64;
         for cut in genesis.len() + 1..appended.len() {
             let report = scan_valid_prefixes(&appended[..cut], &limits, &recovery).expect("scan");
-            assert_eq!(report.latest().map(|value| value.footer_offset), Some(genesis_footer));
+            assert_eq!(
+                report.latest().map(|value| value.footer_offset),
+                Some(genesis_footer)
+            );
         }
     }
 
