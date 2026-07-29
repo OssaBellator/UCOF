@@ -30,6 +30,7 @@ Create the smallest end-to-end format experiment that can encode, locate, inspec
 | Framing-width experiment | Complete | `docs/experiments/0001-framing-widths.md` |
 | Footer-discovery experiment | Complete | `docs/experiments/0002-footer-discovery.md` |
 | UC-02 scale-limit model | Complete; design fails UC-02 | `docs/experiments/0003-scale-limits.md` |
+| Established CBOR comparison | Complete | `docs/experiments/0004-cbor-interoperability.md` |
 | Threat-model findings | Companion evidence published | `docs/security/EXP_0001_FINDINGS.md` |
 | CI format, lint, Rust, Python, attacks, and experiments | Passing strict checks | `.github/workflows/rust.yml` |
 
@@ -58,6 +59,7 @@ These choices apply only to `UCOF-EXP-0001`:
 - Caller limits fail before oversized file, record, payload, metadata, text, byte-string, depth, and item work.
 - Fixed file-header, record-header, and footer fields have targeted mutation coverage in the independent parser.
 - The restricted CBOR parser rejects non-shortest arguments, indefinite forms, duplicate or out-of-order map keys, invalid UTF-8, negative integers, and floating-point values.
+- Primitive encodings and explicitly ordered deterministic maps match pinned Ciborium 0.2.2 output; general CBOR forms accepted by Ciborium remain rejected by the UCOF subset.
 - A compact variable-width strawman saves 55–70% of record-header bytes, but the whole-file benefit is negligible for page- and media-sized payloads.
 - A 64 KiB backward-search tail can expose 8,184 footer-magic candidates, supporting strict exact-end discovery for normal validation.
 - One million zero-byte objects require a lower-bound 40 MB of record headers and approximately 52 MB of directory payload. The flat materialized directory therefore fails UC-02 and must not be promoted as a massive-archive design.
@@ -66,11 +68,10 @@ These choices apply only to `UCOF-EXP-0001`:
 
 Phase 1 is not complete until:
 
-1. The canonical CBOR subset is compared with another established implementation and disagreements are documented.
-2. FCP-0001 receives public review and all material objections are dispositioned.
-3. The executable findings companion is integrated into the primary threat model.
-4. The first framing proposal explicitly records the UC-02 failure and the exact-end versus recovery-mode distinction.
-5. Maintainers decide whether the evidence justifies accepting EXP-0001 for continued experimentation, revising it, or retiring it in favor of EXP-0002.
+1. FCP-0001 receives public review and all material objections are dispositioned.
+2. The executable findings companion is integrated into the primary threat model.
+3. The first framing proposal explicitly records the UC-02 failure and the exact-end versus recovery-mode distinction.
+4. Maintainers decide whether the evidence justifies accepting EXP-0001 for continued experimentation, revising it, or retiring it in favor of EXP-0002.
 
 ## Explicit limitations
 
