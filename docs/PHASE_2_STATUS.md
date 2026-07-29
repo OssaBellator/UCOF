@@ -1,6 +1,6 @@
 # Phase 2 Status — Safety-First Core Codec
 
-**Status:** In progress; bounded-source increment passing, sequential increment under validation  
+**Status:** In progress; metadata, sequential, and strict source-reader increments passing CI  
 **Started:** 2026-07-29  
 **Working branch:** `phase-2/safety-first-core`  
 **Stacked pull request:** #2  
@@ -28,15 +28,20 @@ Convert the Phase 1 experiment into a maintainable, hostile-input-resistant core
 | Slice/seek equivalence test | Passing | `tests/bounded_source.rs` |
 | Read-budget failure test | Passing | `tests/bounded_source.rs` |
 | Record-header corruption test | Passing | `tests/bounded_source.rs` |
-| Bounded sequential event reader | Implemented; CI validation in progress | `SequentialReader<R>` |
-| Owned payload chunk ceiling | Implemented | `max_stream_chunk_bytes` |
-| Incremental committed-prefix hashing | Implemented | `StreamStats::bytes_hashed` |
-| Verified sequential commit event | Implemented | `StreamEvent::Commit`, `IntegrityStatus::Verified` |
-| Exact-end stream validation | Implemented | trailing-byte probe after footer |
-| Sequential reader tests | Added; CI validation in progress | `tests/sequential_reader.rs` |
+| Bounded sequential event reader | Implemented and tested | `SequentialReader<R>` |
+| Owned payload chunk ceiling | Implemented and tested | `max_stream_chunk_bytes` |
+| Incremental committed-prefix hashing | Implemented and tested | `StreamStats::bytes_hashed` |
+| Verified sequential commit event | Implemented and tested | `StreamEvent::Commit`, `IntegrityStatus::Verified` |
+| Exact-end stream validation | Implemented and tested | trailing-byte probe after footer |
+| Sequential reader tests | Passing | `tests/sequential_reader.rs` |
+| Strict random-access source validator | Implemented and tested | `SourceValidator` |
+| Separate source read/hash accounting | Implemented and tested | `SourceValidationStats` |
+| Bounded source hashing | Implemented and tested | hash blocks capped by stream/allocation limits |
+| Combined inspection/hash budget | Implemented and tested | one `max_total_bytes_read` budget |
+| Stable-source validation contract | Accepted | `docs/decisions/0005-stable-source-validation.md` |
 | Random-access I/O decision | Accepted | `docs/decisions/0003-bounded-synchronous-read-at.md` |
 | Sequential event decision | Accepted | `docs/decisions/0004-bounded-sequential-events.md` |
-| Full inherited CI suite | Passing before sequential increment | formatting, clippy, Rust, Python, adversarial corpus, experiments |
+| Full inherited CI suite | Passing | formatting, clippy, Rust, Python, adversarial corpus, experiments |
 
 ## Safety properties demonstrated
 
@@ -56,13 +61,19 @@ Convert the Phase 1 experiment into a maintainable, hostile-input-resistant core
 - no sequential commit event is emitted before directory, manifest, digest, and exact-end checks pass;
 - stream truncation, digest mismatch, trailing bytes, and logical-byte exhaustion have direct tests;
 - the logical-byte test asserts the underlying stream position so excess payload bytes cannot be consumed before rejection;
-- iterator errors are intended to be terminal rather than repeating indefinitely.
+- iterator errors are terminal rather than repeating indefinitely;
+- strict source validation hashes every committed-prefix byte without allocating a complete payload;
+- source validation reports bytes read separately from bytes hashed;
+- metadata inspection and bulk hashing share one cumulative read budget;
+- footer manifest, count, directory offset, and directory length are rechecked against the inspection result;
+- payload tampering fails with `DigestMismatch` before verified output is returned.
 
 ## Important limitations
 
-- both source and sequential APIs are synchronous;
+- source and sequential APIs are synchronous;
+- strict random-access validation requires a stable source view for one operation;
 - random-access record headers are currently read individually rather than batched;
-- full random-access source integrity validation still needs to hash payload bodies;
+- source validation intentionally rereads some metadata and the footer;
 - the sequential reader currently owns one allocation per payload event;
 - diagnostic and salvage APIs have not yet been implemented;
 - streaming and seek-optimized writer APIs remain pending;
@@ -71,12 +82,11 @@ Convert the Phase 1 experiment into a maintainable, hostile-input-resistant core
 
 ## Next increments
 
-1. Complete CI validation and correction of the sequential event reader.
-2. Add strict source-backed validation with separate bytes-read and bytes-hashed accounting.
-3. Add bounded diagnostic reports that never upgrade damaged state to valid state.
-4. Add streaming and seekable writer finalization APIs.
-5. Add property tests, fuzz target compilation, corpus expansion, and documentation examples.
-6. Add a sparse-source test proving metadata inventory does not scale with payload length.
+1. Add bounded diagnostic reports that never upgrade damaged state to valid state.
+2. Add streaming and seekable writer finalization APIs.
+3. Add property tests, fuzz target compilation, corpus expansion, and documentation examples.
+4. Add a sparse-source test proving metadata inventory does not scale with payload length.
+5. Evaluate batched random-access header reads and reusable sequential payload buffers.
 
 ## Exit rule
 
