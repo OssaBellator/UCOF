@@ -361,6 +361,7 @@ impl<R: Read> SequentialReader<R> {
         let manifest = self
             .manifests
             .get(&footer.manifest_id)
+            .cloned()
             .ok_or(Error::MissingManifest(footer.manifest_id))?;
         let available: BTreeSet<u64> = self.inventory.iter().map(|entry| entry.id).collect();
         for root in &manifest.roots {
@@ -374,15 +375,14 @@ impl<R: Read> SequentialReader<R> {
         Ok(StreamEvent::Commit(StreamCommit {
             manifest_id: footer.manifest_id,
             record_count: footer.record_count,
-            roots: manifest.roots.clone(),
-            unsupported_required_capabilities: manifest.required_capabilities.clone(),
+            roots: manifest.roots,
+            unsupported_required_capabilities: manifest.required_capabilities,
             integrity: IntegrityStatus::Verified,
             stats: self.stats,
         }))
     }
 
     fn ensure_exact_end(&mut self) -> Result<(), Error> {
-        self.check_file_budget(1)?;
         let mut byte = [0_u8; 1];
         loop {
             self.stats.read_operations = self
@@ -481,7 +481,10 @@ impl<R: Read> Iterator for SequentialReader<R> {
         match self.next_event() {
             Ok(Some(event)) => Some(Ok(event)),
             Ok(None) => None,
-            Err(error) => Some(Err(error)),
+            Err(error) => {
+                self.state = State::Done;
+                Some(Err(error))
+            }
         }
     }
 }
