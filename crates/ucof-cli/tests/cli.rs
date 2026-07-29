@@ -1,5 +1,5 @@
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -83,6 +83,6 @@ fn temporary_path(suffix: &str) -> PathBuf {
     std::env::temp_dir().join(format!("ucof-cli-{}-{nanos}-{suffix}", std::process::id()))
 }
 
-fn path_str(path: &PathBuf) -> &str {
+fn path_str(path: &Path) -> &str {
     path.to_str().expect("temporary path is UTF-8")
 }
