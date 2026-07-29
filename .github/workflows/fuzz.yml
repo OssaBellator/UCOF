@@ -5,6 +5,7 @@ on:
     paths:
       - "fuzz/**"
       - "crates/ucof-core/**"
+      - "crates/ucof-experiments/**"
       - ".github/workflows/fuzz.yml"
   schedule:
     - cron: "17 3 * * 1"
@@ -35,7 +36,11 @@ jobs:
             metadata_inspect \
             prefix_salvage \
             sequential_reader \
-            writer_roundtrip
+            writer_roundtrip \
+            paged_directory \
+            snapshot_selection \
+            recovery_scan \
+            compaction_plan
           do
             if [[ "${{ github.event_name }}" == "schedule" ]]; then
               cargo fuzz run "$target" -- -max_total_time=30 -max_len=65536
