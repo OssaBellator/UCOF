@@ -1,0 +1,62 @@
+name: Design question or requirement
+description: Explore a use case, requirement, trade-off, or open design decision
+title: "design: "
+labels: []
+body:
+  - type: input
+    id: decision
+    attributes:
+      label: Decision or requirement
+      description: State the concrete question in one sentence.
+      placeholder: Example: How should a reader locate the latest valid root after truncation?
+    validations:
+      required: true
+  - type: textarea
+    id: scenario
+    attributes:
+      label: Concrete scenario
+      description: Include size, object count, access pattern, mutability, trust boundaries, and failure mode.
+    validations:
+      required: true
+  - type: textarea
+    id: current
+    attributes:
+      label: Current project position
+      description: Link relevant use cases, threat-model entries, glossary terms, open decisions, ADRs, or FCPs.
+    validations:
+      required: false
+  - type: textarea
+    id: options
+    attributes:
+      label: Options and trade-offs
+      description: Describe at least two options where possible, including what each makes worse.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence needed
+      description: Identify prototypes, vectors, benchmarks, corpus studies, or independent implementations that could resolve this.
+    validations:
+      required: false
+  - type: dropdown
+    id: likely_path
+    attributes:
+      label: Likely decision path
+      options:
+        - Discussion or research only
+        - Ordinary pull request
+        - Architecture Decision Record
+        - Format Change Proposal
+        - Unsure
+    validations:
+      required: true
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checks
+      options:
+        - label: I searched existing issues, open decisions, ADRs, and FCPs.
+          required: true
+        - label: I have not treated an implementation choice as an accepted format requirement.
+          required: true
