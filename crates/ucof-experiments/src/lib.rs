@@ -11,6 +11,7 @@ pub mod exp0002;
 pub mod exp0002_lookup;
 pub mod exp0002_recovery;
 pub mod exp0002_rewrite;
+pub mod exp0002_source;
 mod publication;
 mod recovery;
 mod repair;
