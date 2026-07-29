@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   test:
@@ -64,3 +64,30 @@ jobs:
           key: ${{ matrix.target }}
       - name: Check core library for target
         run: cargo check -p ucof-core --lib --target ${{ matrix.target }}
+
+  integrate:
+    if: github.event_name == 'pull_request' && github.actor != 'github-actions[bot]' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Generate deterministic repository state
+        run: |
+          cargo fmt --all
+          cargo fmt --manifest-path fuzz/Cargo.toml
+          cargo generate-lockfile
+          python3 tools/integrate_exp_0001_threat_findings.py
+      - name: Commit generated state
+        run: |
+          if [[ -z "$(git status --porcelain -- Cargo.lock crates fuzz docs/THREAT_MODEL.md)" ]]; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Cargo.lock crates fuzz docs/THREAT_MODEL.md
+          git commit -m "docs: integrate EXP-0001 threat findings and lock dependencies"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
