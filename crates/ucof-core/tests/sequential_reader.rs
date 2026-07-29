@@ -102,7 +102,7 @@ fn truncated_payload_is_categorized() {
 }
 
 #[test]
-fn logical_byte_budget_stops_streaming() {
+fn logical_byte_budget_stops_before_excess_read() {
     let bytes = demo_file(Vec::new());
     let limits = Limits {
         max_logical_decoded_bytes: 7,
@@ -112,6 +112,8 @@ fn logical_byte_budget_stops_streaming() {
 
     let error = drain_error(&mut reader);
     assert_eq!(error, Error::LimitExceeded("logical decoded bytes"));
+    let cursor = reader.into_inner();
+    assert_eq!(cursor.position(), 32 + 40 + 7);
 }
 
 #[test]
