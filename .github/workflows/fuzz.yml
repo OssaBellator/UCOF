@@ -19,13 +19,24 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@nightly
+        with:
+          components: rustfmt
       - name: Install cargo-fuzz
         run: cargo install cargo-fuzz --locked
+      - name: Check fuzz formatting
+        run: cargo fmt --manifest-path fuzz/Cargo.toml -- --check
       - name: Compile fuzz targets
         run: cargo fuzz build
       - name: Smoke fuzz targets
         run: |
-          for target in full_file canonical_metadata sequential_reader writer_roundtrip; do
+          for target in \
+            full_file \
+            canonical_metadata \
+            metadata_inspect \
+            prefix_salvage \
+            sequential_reader \
+            writer_roundtrip
+          do
             if [[ "${{ github.event_name }}" == "schedule" ]]; then
               cargo fuzz run "$target" -- -max_total_time=30 -max_len=65536
             else
