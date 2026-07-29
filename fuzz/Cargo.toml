@@ -10,6 +10,7 @@ cargo-fuzz = true
 [dependencies]
 libfuzzer-sys = "0.4"
 ucof-core = { path = "../crates/ucof-core" }
+ucof-experiments = { path = "../crates/ucof-experiments" }
 
 [[bin]]
 name = "full_file"
@@ -49,6 +50,34 @@ bench = false
 [[bin]]
 name = "writer_roundtrip"
 path = "fuzz_targets/writer_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "paged_directory"
+path = "fuzz_targets/paged_directory.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "snapshot_selection"
+path = "fuzz_targets/snapshot_selection.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "recovery_scan"
+path = "fuzz_targets/recovery_scan.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "compaction_plan"
+path = "fuzz_targets/compaction_plan.rs"
 test = false
 doc = false
 bench = false
