@@ -1,0 +1,40 @@
+[package]
+name = "ucof-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+ucof-core = { path = "../crates/ucof-core" }
+
+[[bin]]
+name = "full_file"
+path = "fuzz_targets/full_file.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "canonical_metadata"
+path = "fuzz_targets/canonical_metadata.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sequential_reader"
+path = "fuzz_targets/sequential_reader.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "writer_roundtrip"
+path = "fuzz_targets/writer_roundtrip.rs"
+test = false
+doc = false
+bench = false
