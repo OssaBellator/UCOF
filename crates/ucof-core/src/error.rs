@@ -99,7 +99,7 @@ impl fmt::Display for Error {
             }
             Self::DigestMismatch => write!(f, "committed-prefix digest mismatch"),
             Self::LimitExceeded(limit) => write!(f, "resource limit exceeded: {limit}"),
-            Self::Io(context) => write!(f, "I/O failure while reading {context}"),
+            Self::Io(context) => write!(f, "I/O failure during {context}"),
         }
     }
 }
