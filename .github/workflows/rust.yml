@@ -31,3 +31,4 @@ jobs:
         run: |
           python3 tools/experiment_framing_widths.py
           python3 tools/experiment_footer_discovery.py
+          python3 tools/experiment_scale_limits.py
