@@ -45,6 +45,7 @@ jobs:
           python3 tools/experiment_footer_discovery.py
           python3 tools/experiment_scale_limits.py
           python3 tools/experiment_directory_models.py
+          python3 tools/experiment_exp0002_page_sizes.py
 
   msrv:
     runs-on: ubuntu-latest
