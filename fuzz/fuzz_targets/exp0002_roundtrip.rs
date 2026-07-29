@@ -16,22 +16,23 @@ fuzz_target!(|data: &[u8]| {
     }
 
     let object_count = usize::from(data.get(32).copied().unwrap_or(0) % 16) + 1;
-    let mut cursor = 33_usize;
+    let mut cursor = 33_usize.min(data.len());
     let mut objects = Vec::with_capacity(object_count);
     for index in 0..object_count {
         let requested = usize::from(data.get(cursor).copied().unwrap_or(0) % 64);
-        cursor = cursor.saturating_add(1);
-        let available = data.len().saturating_sub(cursor);
+        cursor = cursor.saturating_add(1).min(data.len());
+        let available = data.len() - cursor;
         let payload_len = requested.min(available);
-        let payload = data[cursor..cursor + payload_len].to_vec();
-        cursor = cursor.saturating_add(payload_len);
+        let payload_end = cursor + payload_len;
+        let payload = data[cursor..payload_end].to_vec();
+        cursor = payload_end;
         objects.push(ObjectInput {
             object_id: u64::try_from(index + 1).expect("bounded object index"),
             kind: u16::from(data.get(cursor).copied().unwrap_or(0) % 31) + 1,
             payload,
             is_root: index == 0,
         });
-        cursor = cursor.saturating_add(1);
+        cursor = cursor.saturating_add(1).min(data.len());
     }
 
     let limits = ValidationLimits {
