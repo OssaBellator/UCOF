@@ -118,8 +118,8 @@ impl PagedDirectory {
             }
         }
 
-        let entry_count = u64::try_from(entries.len())
-            .map_err(|_| DirectoryBuildError::ArithmeticOverflow)?;
+        let entry_count =
+            u64::try_from(entries.len()).map_err(|_| DirectoryBuildError::ArithmeticOverflow)?;
         let mut pages = Vec::new();
         let mut current_level = Vec::new();
 
@@ -177,8 +177,8 @@ impl PagedDirectory {
         }
 
         let root = current_level[0];
-        let pages_count = u64::try_from(pages.len())
-            .map_err(|_| DirectoryBuildError::ArithmeticOverflow)?;
+        let pages_count =
+            u64::try_from(pages.len()).map_err(|_| DirectoryBuildError::ArithmeticOverflow)?;
         Ok(Self {
             pages,
             root,
@@ -260,11 +260,7 @@ impl PagedDirectory {
         Ok(())
     }
 
-    fn validate_reachable(
-        &self,
-        root: usize,
-        max_pages: u64,
-    ) -> Result<(), DirectoryLookupError> {
+    fn validate_reachable(&self, root: usize, max_pages: u64) -> Result<(), DirectoryLookupError> {
         let mut stack = vec![root];
         let mut visited = BTreeSet::new();
         while let Some(page_id) = stack.pop() {
@@ -480,8 +476,8 @@ mod tests {
 
     #[test]
     fn duplicate_keys_are_rejected_before_page_creation() {
-        let error = PagedDirectory::build(vec![locator(7), locator(7)], 8, 4)
-            .expect_err("duplicate key");
+        let error =
+            PagedDirectory::build(vec![locator(7), locator(7)], 8, 4).expect_err("duplicate key");
         assert_eq!(error, DirectoryBuildError::DuplicateObjectId(7));
     }
 
@@ -513,8 +509,7 @@ mod tests {
         let error = directory.validate(100).expect_err("forged child range");
         assert!(matches!(
             error,
-            DirectoryLookupError::ChildRangeMismatch
-                | DirectoryLookupError::OverlappingChildRange
+            DirectoryLookupError::ChildRangeMismatch | DirectoryLookupError::OverlappingChildRange
         ));
     }
 

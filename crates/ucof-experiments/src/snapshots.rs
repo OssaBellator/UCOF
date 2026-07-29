@@ -406,7 +406,10 @@ mod tests {
 
     #[test]
     fn candidate_limit_applies_before_map_allocation_growth() {
-        let candidates = [candidate("a", 0, None, true), candidate("b", 0, None, false)];
+        let candidates = [
+            candidate("a", 0, None, true),
+            candidate("b", 0, None, false),
+        ];
         let result = RootSelectionReport::select(
             &candidates,
             RootSelectionMode::Recovery,

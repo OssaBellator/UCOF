@@ -8,9 +8,7 @@ mod compaction;
 mod directory;
 mod snapshots;
 
-pub use compaction::{
-    CompactionError, CompactionLimits, CompactionPlan, ObjectGraph,
-};
+pub use compaction::{CompactionError, CompactionLimits, CompactionPlan, ObjectGraph};
 pub use directory::{
     DirectoryBuildError, DirectoryLookupError, DirectoryStats, LookupResult, ObjectLocator,
     PagedDirectory,
