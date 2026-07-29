@@ -81,3 +81,10 @@ path = "fuzz_targets/compaction_plan.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "repair_plan"
+path = "fuzz_targets/repair_plan.rs"
+test = false
+doc = false
+bench = false
