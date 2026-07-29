@@ -36,7 +36,7 @@ proptest! {
         payload in vec(any::<u8>(), 1..1025),
         selector in any::<u64>(),
     ) {
-        let mut bytes = build_in_memory(&[payload.clone()]);
+        let mut bytes = build_in_memory(std::slice::from_ref(&payload));
         let index = 32 + 40 + usize::try_from(
             selector % u64::try_from(payload.len()).expect("payload length")
         ).expect("payload index");
