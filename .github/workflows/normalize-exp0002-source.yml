@@ -1,0 +1,61 @@
+name: Normalize EXP-0002 Source Lookup
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  normalize:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Chunk bounded snapshot reads and format
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/ucof-experiments/src/exp0002_source.rs")
+          text = path.read_text(encoding="utf-8")
+          old = '''        let length = usize::try_from(length).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
+          if length > self.limits.max_read_request_bytes {
+              return Err(Exp0002Error::ResourceLimit("source read request").into());
+          }
+          let mut bytes = vec![0_u8; length];
+          self.read_exact(offset, &mut bytes, context)?;
+          Ok(bytes)'''
+          new = '''        let length = usize::try_from(length).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
+          let mut bytes = vec![0_u8; length];
+          let mut cursor = 0_usize;
+          while cursor < length {
+              let take = (length - cursor).min(self.limits.max_read_request_bytes);
+              let read_offset = offset
+                  .checked_add(u64::try_from(cursor).map_err(|_| Exp0002Error::ArithmeticOverflow)?)
+                  .ok_or(Exp0002Error::ArithmeticOverflow)?;
+              self.read_exact(read_offset, &mut bytes[cursor..cursor + take], context)?;
+              cursor += take;
+          }
+          Ok(bytes)'''
+          if old not in text:
+              raise SystemExit("source read_vec anchor not found")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+          cargo fmt --all
+      - name: Commit normalized source lookup
+        run: |
+          if git diff --quiet -- crates/ucof-experiments/src; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/ucof-experiments/src
+          git commit -m "fix: chunk bounded EXP-0002 source reads"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
