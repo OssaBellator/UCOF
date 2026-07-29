@@ -101,6 +101,8 @@ pub struct ReadStats {
 pub enum IntegrityStatus {
     /// Metadata-only inspection deliberately did not read and hash payload bodies.
     NotChecked,
+    /// The committed prefix digest was verified.
+    Verified,
 }
 
 /// Structurally validated metadata inventory that makes no payload-integrity claim.

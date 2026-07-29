@@ -2,7 +2,10 @@ use crate::format::{
     read_u16_le, read_u32_le, read_u64_le, FILE_MAGIC, FOOTER_LEN, FOOTER_MAGIC, HEADER_LEN,
     RECORD_HEADER_LEN, RECORD_MAGIC,
 };
-use crate::{decode_canonical, CborValue, DirectoryEntry, Error, IntegrityStatus, Limits, Manifest, RecordKind};
+use crate::{
+    decode_canonical, CborValue, DirectoryEntry, Error, IntegrityStatus, Limits, Manifest,
+    RecordKind,
+};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use std::io::{self, Read};
@@ -49,7 +52,9 @@ impl StreamCommit {
 /// Events returned by [`SequentialReader::next_event`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum StreamEvent {
-    FileHeader { epoch: u32 },
+    FileHeader {
+        epoch: u32,
+    },
     RecordStart(StreamRecord),
     PayloadChunk {
         kind: RecordKind,
@@ -57,7 +62,10 @@ pub enum StreamEvent {
         bytes: Vec<u8>,
         remaining: u64,
     },
-    RecordEnd { kind: RecordKind, object_id: u64 },
+    RecordEnd {
+        kind: RecordKind,
+        object_id: u64,
+    },
     Commit(StreamCommit),
 }
 
@@ -159,10 +167,14 @@ impl<R: Read> SequentialReader<R> {
 
         if header.kind == RecordKind::Directory {
             if header.object_id != 0 {
-                return Err(Error::InvalidRecordOrder("directory identifier must be zero"));
+                return Err(Error::InvalidRecordOrder(
+                    "directory identifier must be zero",
+                ));
             }
         } else if header.object_id == 0 {
-            return Err(Error::InvalidRecordOrder("non-directory identifier is zero"));
+            return Err(Error::InvalidRecordOrder(
+                "non-directory identifier is zero",
+            ));
         } else if !self.identifiers.insert(header.object_id) {
             return Err(Error::DuplicateObjectId(header.object_id));
         }
@@ -177,7 +189,8 @@ impl<R: Read> SequentialReader<R> {
                 }
                 let capacity = usize::try_from(header.stored_len)
                     .map_err(|_| Error::LimitExceeded("single allocation bytes"))?;
-                self.stats.largest_allocation = self.stats.largest_allocation.max(header.stored_len);
+                self.stats.largest_allocation =
+                    self.stats.largest_allocation.max(header.stored_len);
                 Some(Vec::with_capacity(capacity))
             }
             RecordKind::Opaque => None,
@@ -231,8 +244,8 @@ impl<R: Read> SequentialReader<R> {
             return Err(Error::LimitExceeded("stream chunk bytes"));
         }
         let chunk_len = active.remaining.min(chunk_limit);
-        let chunk_len_usize = usize::try_from(chunk_len)
-            .map_err(|_| Error::LimitExceeded("stream chunk bytes"))?;
+        let chunk_len_usize =
+            usize::try_from(chunk_len).map_err(|_| Error::LimitExceeded("stream chunk bytes"))?;
         let mut bytes = vec![0_u8; chunk_len_usize];
         self.stats.largest_allocation = self.stats.largest_allocation.max(chunk_len);
         self.read_exact_into(&mut bytes, "record payload", true)?;
@@ -301,7 +314,9 @@ impl<R: Read> SequentialReader<R> {
                 let value = decode_canonical(&metadata, &self.limits)?;
                 let entries = parse_directory(&value)?;
                 if entries != self.inventory {
-                    return Err(Error::DirectoryMismatch("entries do not match streamed records"));
+                    return Err(Error::DirectoryMismatch(
+                        "entries do not match streamed records",
+                    ));
                 }
                 let record_len = u64::try_from(RECORD_HEADER_LEN)
                     .expect("fixed record header length")
@@ -407,7 +422,8 @@ impl<R: Read> SequentialReader<R> {
         context: &'static str,
         hash: bool,
     ) -> Result<(), Error> {
-        let length = u64::try_from(bytes.len()).map_err(|_| Error::LimitExceeded("total bytes read"))?;
+        let length =
+            u64::try_from(bytes.len()).map_err(|_| Error::LimitExceeded("total bytes read"))?;
         self.check_file_budget(length)?;
         let next_total = self
             .stats

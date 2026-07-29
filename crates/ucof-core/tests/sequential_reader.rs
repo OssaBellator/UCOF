@@ -1,7 +1,5 @@
 use std::io::Cursor;
-use ucof_core::{
-    Error, IntegrityStatus, Limits, Manifest, SequentialReader, StreamEvent, Writer,
-};
+use ucof_core::{Error, IntegrityStatus, Limits, Manifest, SequentialReader, StreamEvent, Writer};
 
 #[test]
 fn sequential_reader_emits_bounded_chunks_and_verified_commit() {
@@ -45,7 +43,10 @@ fn sequential_reader_emits_bounded_chunks_and_verified_commit() {
     assert_eq!(commit.roots, vec![1, 2]);
     assert!(commit.is_fully_interpretable());
     assert_eq!(commit.integrity, IntegrityStatus::Verified);
-    assert_eq!(commit.stats.bytes_read, u64::try_from(bytes.len()).expect("file length"));
+    assert_eq!(
+        commit.stats.bytes_read,
+        u64::try_from(bytes.len()).expect("file length")
+    );
     assert_eq!(commit.stats.bytes_hashed + 80, commit.stats.bytes_read);
     assert!(commit.stats.payload_chunks > 2);
 }

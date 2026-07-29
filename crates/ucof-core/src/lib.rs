@@ -22,9 +22,7 @@ pub use source::{
     InspectionReport, IntegrityStatus, MetadataInspector, ReadAt, ReadStats, SeekSource,
     SliceSource,
 };
-pub use stream::{
-    SequentialReader, StreamCommit, StreamEvent, StreamRecord, StreamStats,
-};
+pub use stream::{SequentialReader, StreamCommit, StreamEvent, StreamRecord, StreamStats};
 pub use writer::Writer;
 
 pub const EXPERIMENTAL_EPOCH: u32 = 1;
