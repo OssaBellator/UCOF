@@ -1,585 +1,527 @@
-# FCP-0002: EXP-0002 paged directory, snapshots, and recovery
+# FCP-0002: Paged Directories, Snapshots, and Recovery
 
 - **Status:** Draft
-- **Authors:** UCOF maintainers
+- **Authors:** UCOF maintainers and contributors
 - **Created:** 2026-07-30
 - **Last updated:** 2026-07-30
-- **Target:** Core
-- **Experimental epoch impact:** New epoch required
-- **Related issues:** None yet
-- **Related ADRs:** ADR-0009
+- **Target:** Core experimental epoch
+- **Experimental epoch impact:** Defines disposable `UCOF-EXP-0002`
+- **Related issues:** Phase 3 review and implementation work
+- **Related ADRs:** ADR-0009, ADR-0010, ADR-0011
 - **Supersedes:** None
 - **Superseded by:** None
 
 ## Summary
 
-This proposal defines the research scope for `UCOF-EXP-0002`, a new disposable epoch that adds the access and durability properties intentionally absent from EXP-0001:
+This proposal introduces the first experimental UCOF layout with:
 
-- a mandatory paged primary directory whose single-object lookup does not require decoding every entry;
-- append-only snapshot publication with explicit parent relationships and monotonic sequence rules;
-- exact-end strict validation separated from bounded recovery candidate discovery;
-- independently readable checkpoints for long-running or interrupted production;
-- valid-root enumeration, orphan reporting, repair-to-new-file, and reachability-based compaction.
+- an authenticated paged primary directory;
+- append-only complete snapshots;
+- exact-end commit publication;
+- parent snapshot and previous-footer relationships;
+- bounded strict validation and separately requested recovery;
+- authenticated single-object lookup and absence results;
+- valid-root enumeration;
+- repair-to-new-file and compaction output.
 
-FCP-0002 does not yet fix final wire field widths or page sizes. It establishes invariants, candidate layouts, required experiments, security boundaries, and exit evidence. The proposal must not enter Review until an independent implementation can reproduce the selected layout and all unresolved byte choices are removed.
+The proposal requires a new disposable epoch because directory, snapshot, active-root, recovery, and identity semantics determine file validity and are incompatible with `UCOF-EXP-0001`.
+
+**Candidate 1 now has exact experimental bytes, two independent in-repository implementations, pinned vectors, hostile-input tests, range-source lookup, and continuous fuzzing.** Those results are evidence for this Draft. They do not make the bytes stable, accept this FCP, or assign permanent registry values.
+
+The independently implementable candidate is defined by `docs/spec/EXP_0002_BYTE_CANDIDATE.md`. This FCP records the motivation, compatibility and security requirements, evidence, rejected alternatives, and remaining decisions that must be resolved before Review.
 
 ## Motivation
 
-EXP-0001 demonstrates framing, deterministic metadata, exact-end publication, integrity checking, and a checked directory accelerator. It also produces a decisive negative result: one million zero-byte objects require approximately 40 MB of record headers and 52 MB of flat directory metadata before payloads. A reader must materialize every directory entry before one lookup. Raising limits cannot repair that architecture.
+EXP-0001 demonstrated safe framing but also established that a flat, fully materialized directory cannot satisfy UC-02-scale archives. One million zero-byte objects already impose approximately 40 MB of record headers and 52 MB of directory payload before application data. Raising parser limits does not solve the architectural problem.
 
-EXP-0001 also has one active root and no append history. An interrupted append produces trailing bytes after the previous footer. Strict exact-end validation correctly rejects the damaged tail, but the format has no normative way to enumerate the previous valid root, distinguish a stale root from a newer valid root, or compact a selected history.
+Phase 3 must also support failure and history semantics absent from EXP-0001:
 
-This proposal addresses Phase 0 use cases involving massive object counts, append-only capture, interrupted writes, bounded remote range access, historical snapshots, and repair without destructive mutation. It directly addresses threat-model items covering malicious directories, stale-root selection, rollback ambiguity, recovery candidate exhaustion, range confusion, and false validity.
+- publish a new root without invalidating an earlier complete root;
+- distinguish strict active-state validation from recovery scanning;
+- discover and authenticate one object without materializing every directory entry;
+- report every plausible historical root without silently resolving forks;
+- repair or compact into a new valid output without rewriting damaged input in place;
+- preserve explicit assurance boundaries under hostile input.
+
+The relevant Phase 0 cases include UC-02 large archives, UC-04 interrupted append capture, UC-07 damaged files with an earlier valid checkpoint, UC-08 unsupported-profile core readers, and UC-10 malicious resource-exhaustion inputs.
 
 ## Scope
 
-FCP-0002 defines or requires definition of:
+FCP-0002 defines or constrains:
 
-1. the EXP-0002 bootstrap and commit-discovery relationship;
-2. paged primary-directory invariants;
-3. leaf and internal page semantics;
-4. snapshot identity, sequence, parent, and active-root rules;
-5. strict exact-end validation;
-6. bounded backward and sequential recovery modes;
-7. complete and progress checkpoint semantics;
-8. commit completeness and publication order;
-9. valid-root enumeration and orphan reporting;
-10. repair into a new file;
-11. reachability-based compaction;
-12. required limits, diagnostics, vectors, experiments, and cross-language evidence.
+1. the relationship between `UCOF-EXP-0002` files, complete snapshots, directory roots, and commit footers;
+2. the first paged primary-directory representation;
+3. deterministic object, page, snapshot, and commit digest scopes;
+4. exact-end strict active-root selection;
+5. separately bounded recovery candidate discovery and previous-footer traversal;
+6. parent-chain and sequence validation;
+7. authenticated lookup and absence results;
+8. valid-root enumeration and fork ambiguity;
+9. repair and compaction publication rules;
+10. required cross-language vectors, hostile-input tests, fuzzing, portability, and scale evidence.
 
 ## Non-goals
 
 This proposal does not define:
 
-- compression or transform pipelines;
-- encryption, signatures, signer trust, or provenance claims;
-- schemas or profile semantics;
-- remote-reference retrieval;
-- concurrent multi-writer conflict resolution;
-- distributed consensus or globally monotonic freshness;
-- automatic in-place repair;
-- stable UCOF Core 1.0 bytes;
-- a promise to migrate EXP-0001 or EXP-0002 files.
+- stable Core 1.0 bytes;
+- permanent numeric registry allocations;
+- transforms, compression, schemas, encryption, signatures, provenance, or external references;
+- semantic dependency discovery for arbitrary objects;
+- distributed concurrency or multi-writer conflict resolution;
+- authenticity, trusted freshness, or protection against replaying an older valid whole file;
+- profile-specific secondary indexes;
+- general progress-checkpoint bytes in Candidate 1.
 
 ## Terminology
 
-**Commit** — a complete append publication consisting of new records, a directory root, a snapshot manifest, and a commit footer.
+This proposal uses the project glossary. Additional experimental terms are:
 
-**Snapshot** — the logical object graph selected by one complete commit.
-
-**Snapshot sequence** — a file-local unsigned integer that must increase along the selected parent chain. It is ordering evidence, not freshness proof against rollback.
-
-**Parent snapshot** — the immediately preceding snapshot identity declared by a snapshot, or absent for genesis.
-
-**Directory page** — a bounded node in the primary directory. A page is either internal or leaf.
-
-**Directory root** — the page locator and authenticated identity from which all primary-directory lookup paths begin.
-
-**Strict mode** — validation that accepts only a complete footer at the exact physical end of the source.
-
-**Recovery mode** — explicitly requested bounded discovery of earlier complete commit candidates. Recovery success is not equivalent to proof that no newer snapshot existed.
-
-**Complete checkpoint** — a fully independently readable snapshot published before a larger logical operation is finished.
-
-**Progress checkpoint** — a non-root progress marker that cannot be selected as an active snapshot.
-
-**Orphan record** — a physically complete record not reachable from a selected valid snapshot under the applicable graph rules.
+- **Complete snapshot:** a snapshot whose directory, roots, referenced objects, and publishing footer satisfy all Candidate 1 checks.
+- **Commit footer:** the exact-end structure that publishes one complete snapshot.
+- **Strict validation:** validation of the footer ending at exact file end, with no recovery fallback.
+- **Recovery candidate:** a prefix ending in a possible footer that must be strictly validated before it can be reported as verified.
+- **Structural snapshot identity:** the snapshot digest defined by ADR-0011.
+- **File-instance commit identity:** the commit digest defined by ADR-0011.
+- **Candidate 1:** the first disposable exact-byte realization of `UCOF-EXP-0002`.
 
 ## Detailed specification
 
-### 1. Experimental epoch
+### Experimental epoch
 
-The selected layout will use `UCOF-EXP-0002`. EXP-0001 readers must report the epoch as unsupported. EXP-0002 readers must not guess EXP-0001 semantics from similar magic or field positions.
+Candidate 1 uses the experimental epoch `UCOF-EXP-0002`. Unknown epochs are unsupported. Candidate bytes may be retired rather than migrated.
 
-The new epoch is required because snapshot and directory discovery change validity, not merely optional metadata.
+The complete field tables, offsets, byte order, magic values, padding rules, digest preimages, physical order, and strict validation order are defined in `docs/spec/EXP_0002_BYTE_CANDIDATE.md`.
 
-### 2. File and commit organization
+### Candidate 1 byte choices
 
-A file contains:
+Candidate 1 currently selects:
 
-1. one fixed bootstrap header;
-2. zero or more complete commits;
-3. optionally, an incomplete trailing append.
+- little-endian fixed-width integers;
+- a 64-byte bootstrap header;
+- a 48-byte object header followed by opaque payload bytes;
+- fixed 16 KiB authenticated directory pages;
+- 88-byte leaf entries;
+- 64-byte internal entries;
+- a 160-byte snapshot header followed by packed canonical `u64` arrays;
+- a 160-byte exact-end commit footer;
+- SHA-256 algorithm identifier `1`;
+- distinct object, page, snapshot, and commit domain prefixes;
+- `u64::MAX` as the absent-offset sentinel;
+- zero required flags, reserved bytes, and unused page padding.
 
-A complete commit is written in this logical order:
+These are experimental selections, not permanent registry assignments.
 
-1. new or replacement object records;
-2. primary-directory leaf pages;
-3. primary-directory internal pages, with the root written last among directory pages;
-4. a snapshot manifest record;
-5. a fixed-size commit footer written last.
+### Object records
 
-Publication occurs only when the complete footer write succeeds. No earlier record or checkpoint may be interpreted as publishing that commit unless it is itself a separately complete snapshot.
+Object records contain a fixed header and opaque payload. Candidate 1 requires:
 
-An interrupted append must not invalidate the bytes or identity of an earlier complete commit. Strict validation may reject the full damaged source because the exact end is not a footer; recovery mode may enumerate earlier candidates under explicit budgets.
+- non-zero object kind and identifier;
+- unique object identifiers in one snapshot directory;
+- payload and logical length equality;
+- zero flags and reserved bytes;
+- exact record-length agreement;
+- an object digest stored in the authenticating leaf entry.
 
-### 3. Snapshot manifest requirements
+The object digest covers the exact object header and payload under the object domain.
 
-A snapshot manifest must contain at least:
+### Paged primary directory
 
-- snapshot sequence;
-- optional parent snapshot identity;
-- root object identifiers;
-- primary-directory root locator and identity;
-- required and optional capabilities;
-- commit-scoped object or record count;
-- history-retention declaration where applicable;
-- checkpoint classification;
-- canonical snapshot identity inputs.
+Candidate 1 uses an ordered authenticated tree.
 
-A complete snapshot must not reference a progress checkpoint as its parent.
+Leaf pages contain sorted unique object identifiers and physical locators. Internal pages contain sorted non-overlapping child ranges, exact child levels, physical page locators, and child-page digests.
 
-Root object identifiers must resolve through the selected primary directory. The directory root and snapshot manifest must be mutually bound by the commit identity so an unauthenticated pointer cannot redirect one to unrelated pages.
+A reader must validate:
 
-### 4. Snapshot sequence and parent chain
+- page magic, kind, level, fixed entry size, count, range, sequence, and zero padding;
+- strict key ordering and non-overlapping ranges;
+- child level and range agreement;
+- exact 16 KiB page length;
+- page digest over all page bytes, including padding;
+- invalid references, repeated offsets, and cycles;
+- leaf locator agreement with referenced object headers;
+- physical non-overlap with objects, pages, snapshot, and footer as required by the active assurance level.
 
-For a non-genesis snapshot:
+The current deterministic writer rebuilds every directory page for each snapshot. Page reuse is not yet defined.
 
-- the parent identity must resolve to a complete valid snapshot when that history is retained;
-- the child sequence must be strictly greater than the parent sequence;
-- the initial experiment should require `child.sequence = parent.sequence + 1` unless evidence supports gaps;
-- cycles are invalid;
-- two distinct valid candidates with the same identity inputs but different bytes are invalid;
-- two unrelated highest-sequence candidates form an ambiguous fork and must not be selected silently.
+### Snapshot record
 
-Sequence is file-local ordering metadata. It does not establish freshness against replacement of the entire file with an older valid copy.
+A Candidate 1 snapshot authenticates:
 
-### 5. Primary directory
+- sequence number;
+- parent snapshot digest;
+- previous-footer offset;
+- directory-root locator, level, and digest;
+- canonical root object identifiers;
+- canonical required and optional capability arrays.
 
-The primary directory is authoritative for locating records within one snapshot but must be authenticated by the snapshot or commit identity. It is not trusted before that binding is validated.
+Genesis uses sequence zero, a zero parent digest, and the absent previous-footer sentinel. A child sequence is exactly its parent's sequence plus one.
 
-The directory is a canonical ordered search tree with bounded pages.
+Candidate 1 defines no non-zero capability allocation. Writers therefore emit empty capability arrays, while readers still enforce the structural representation.
 
-Each leaf entry must describe at least:
+### Commit publication
 
-- object identifier;
-- object kind or type reference;
-- physical record offset;
-- stored length;
-- logical length when known;
-- required capability summary or reference;
-- transform-pipeline reference where applicable in later epochs;
-- schema reference where applicable in later epochs;
-- integrity reference or binding where applicable.
+A complete 160-byte footer ending at exact file end publishes the active strict snapshot.
 
-Each internal entry must describe at least:
+The footer authenticates:
 
-- inclusive or exclusive key boundary with one unambiguous convention;
-- child page locator;
-- child page length;
-- child page identity or authenticated binding;
-- optional subtree entry count for diagnostics and planning, never trusted to alter semantic lookup results.
+- the current commit byte range;
+- snapshot locator and digest;
+- sequence;
+- previous-footer offset;
+- current-commit object-record count;
+- digest algorithm and reserved fields.
 
-Required invariants:
+The commit digest covers the exact current commit bytes and footer semantics under the commit domain. Genesis includes the file header. Append commits begin immediately after the previous footer.
 
-- object identifiers are strictly ordered in leaves;
-- child key ranges are non-overlapping and cover exactly their declared subtree ranges;
-- leaf and internal node types cannot be confused;
-- all page lengths are bounded before allocation;
-- page depth is bounded;
-- lookup rejects duplicate identifiers and contradictory ranges;
-- a single-object lookup reads only the root-to-leaf path plus required authentication material;
-- a full inventory can iterate leaves in canonical identifier order;
-- unknown optional per-entry metadata can be skipped or preserved according to declared encoding rules;
-- the directory cannot point inside its own headers or into unrelated footer bytes;
-- page graph cycles are invalid.
+Bytes appended before a complete new footer are unpublished tail state. Strict validation fails at the new end; explicit recovery may still find and strictly validate an earlier complete prefix.
 
-### 6. Page sizing and encoding
+### Historical references
 
-The final page size, fixed versus bounded-variable sizing, entry encoding, fanout, and page identity scope remain unresolved pending experiments.
+A new snapshot may reference historical object records. The current commit digest covers only bytes written by the current commit, while leaf entries authenticate historical object records individually.
 
-Candidate page sizes are 4 KiB, 16 KiB, and 64 KiB. The selected design must measure:
+Consequently:
 
-- lookup range requests;
-- directory overhead at one thousand, one million, and one hundred million objects;
-- page rewrite amplification between snapshots;
-- small-object overhead;
-- canonical encoding cost;
-- remote latency sensitivity;
-- corrupted-page isolation.
+- full strict validation rehashes every referenced object;
+- targeted lookup rehashes the selected object;
+- unrelated historical payloads need not be read for one authenticated lookup;
+- implementations must state which assurance level they provide.
 
-The proposal should prefer a page-local representation that can be validated without decoding unrelated pages. A general metadata decoder must not be required for every lookup if a smaller fixed or restricted page representation provides safer bounded access.
+### Identity scopes
 
-### 7. Commit footer
+ADR-0011 defines two scopes:
 
-The EXP-0002 footer must be fixed-size and independently recognizable. It must include or locate, with exact scopes:
+- snapshot digest identifies the exact authenticated snapshot structure;
+- commit digest identifies one file-instance publication.
 
-- footer version or epoch context;
-- footer length and flags;
-- commit start or commit byte range;
-- snapshot manifest offset and length;
-- directory root offset and length, directly or through the snapshot;
-- previous complete footer offset when retained, or an explicit genesis value;
-- snapshot sequence;
-- record or page count needed for bounded validation;
-- digest algorithm identifier;
-- commit or snapshot digest;
-- reserved bytes required to be zero.
+A deterministic genesis repair may preserve the structural snapshot digest while changing the commit digest because the new file header changes the genesis commit preimage. This is not file-instance equality.
 
-Every footer field outside the committed digest scope must receive explicit structural and semantic validation. Algorithm identity must never be inferred from digest length.
+No repair or compaction API may imply preservation of byte-scoped signatures when the signed commit bytes change.
 
-The exact footer size and digest scope remain unresolved until truncation, append, and cross-language experiments are complete.
+### Strict validation
 
-### 8. Strict active-root selection
+Strict validation must:
 
-Strict validation:
+1. apply file and resource limits before parsing;
+2. require one exact-end footer;
+3. validate footer structure and ranges;
+4. hash the exact commit range and footer semantics;
+5. authenticate and parse the referenced snapshot;
+6. cross-check sequence, parent, and previous-footer fields;
+7. authenticate the directory root and traverse pages under explicit limits;
+8. validate directory canonicality and physical claims;
+9. validate roots and capability arrays;
+10. validate referenced object records and digests under the selected assurance level;
+11. return a verified result only after every required check succeeds.
 
-1. obtains the physical source length;
-2. reads exactly one footer-sized range at the exact end;
-3. validates footer framing and reserved fields;
-4. validates all declared ranges with checked arithmetic;
-5. validates the snapshot manifest and directory root binding;
-6. validates the commit digest under the tagged algorithm and exact scope;
-7. validates required capabilities;
-8. returns the exact-end snapshot only if every required check succeeds.
+Strict mode must never silently invoke backward scanning.
 
-Strict mode must not silently scan backward when the exact-end footer is absent or invalid.
+### Authenticated lookup
 
-### 9. Recovery candidate discovery
+Candidate 1 supports a narrower authenticated lookup assurance level. It verifies:
 
-Recovery is a separate API and CLI mode. It may provide:
+- bootstrap header;
+- exact-end footer and current commit digest;
+- active snapshot and parent link;
+- one authenticated root-to-leaf page path;
+- the selected object header, range, and digest.
 
-- bounded backward footer search;
-- bounded forward commit enumeration from the bootstrap;
-- caller-supplied candidate offsets;
-- checkpoint-assisted discovery.
+It may return authenticated absence when the path proves no matching key. It does not claim unrelated historical objects were rehashed.
 
-Every recovery operation must accept explicit limits for:
+The current range-source implementation streams commit and selected-object hashes, enforces read-operation, read-byte, request-size, page, and hash budgets, and demonstrates that a one-megabyte unrelated historical payload is not read.
+
+### Root enumeration and fork handling
+
+Enumeration and selection are separate operations.
+
+A bounded enumerator may classify candidates as verified terminals, verified ancestors, fork terminals, progress checkpoints, integrity failures, unsupported-capability candidates, truncations, or chain failures.
+
+Equal-priority verified forks are ambiguous. A default reader must not silently select one.
+
+### Recovery
+
+Recovery is explicit and independently bounded. Candidate discovery must limit:
 
 - bytes scanned;
-- footer-magic candidates considered;
+- footer-magic matches;
 - candidate validations;
-- bytes read;
-- bytes hashed;
-- diagnostics;
-- parent depth;
-- total roots returned.
+- previous-chain depth;
+- returned results;
+- diagnostic output.
 
-A magic match is not a candidate until fixed fields and ranges pass cheap validation. A structurally plausible footer is not a valid root until its complete digest, snapshot, directory binding, and required capabilities are validated.
+Every candidate is validated as an exact-end prefix. Footer magic and previous-footer pointers are discovery aids, not authority.
 
-When multiple valid candidates are found:
+The current implementation validates every cut across an interrupted append and recovers the earlier complete genesis prefix when it remains within the configured scan window.
 
-1. build parent relationships by authenticated snapshot identity;
-2. reject cycles;
-3. reject non-increasing sequences;
-4. identify maximal valid chains;
-5. select a unique highest terminal snapshot only if policy permits and no equal-priority fork exists;
-6. otherwise report ambiguity and return candidates without silently choosing one.
+### Repair and compaction
 
-Recovery must state that a selected earlier root does not prove freshness or absence of a newer lost commit.
+Repair and compaction:
 
-### 10. Checkpoints
+- accept only a strictly verified complete source snapshot;
+- write a new file rather than mutating the damaged source;
+- copy only authenticated payload ranges;
+- bound object count, payload bytes, and output bytes;
+- require every output root to exist in the retained set;
+- publish and strictly validate a new genesis commit;
+- report source and output snapshot and commit digests separately;
+- never claim byte-scoped signature preservation.
 
-A complete checkpoint is serialized exactly as a complete snapshot and may be selected independently. It can later become the parent of another snapshot.
-
-A progress checkpoint:
-
-- has a distinct required kind or capability;
-- cannot be selected as an active snapshot;
-- may refer to incomplete operation state;
-- must state which earlier complete snapshot remains authoritative;
-- must not be accepted by generic extraction or compaction as a complete root.
-
-The initial reference implementation should support complete checkpoints first. Progress checkpoints remain experimental until a concrete long-running workload demonstrates their necessity.
-
-### 11. Valid-root enumeration
-
-A root enumerator returns a bounded sequence of candidates with explicit status:
-
-- verified complete snapshot;
-- structurally plausible but integrity-failed candidate;
-- unsupported required capability;
-- truncated candidate;
-- ambiguous fork member;
-- stale ancestor of another candidate;
-- progress checkpoint;
-- invalid candidate.
-
-Diagnostic status must not be conflated with active-root selection.
-
-### 12. Repair
-
-Repair creates a new output by default. It must not mutate the damaged source in place unless a later explicitly unsafe expert mode is defined.
-
-Repair requires an explicitly selected verified snapshot candidate. It then:
-
-1. copies or rewrites records reachable from that snapshot;
-2. rebuilds a canonical primary directory;
-3. writes a new snapshot and footer;
-4. records that physical bytes and commit identity changed;
-5. does not claim to preserve signatures whose scope changed;
-6. reports omitted or orphaned records.
-
-Salvaged but unverified records require a separate extraction operation and cannot be silently included in a verified repaired snapshot.
-
-### 13. Compaction
-
-Compaction accepts:
-
-- one selected verified snapshot;
-- an optional history-retention policy;
-- a destination writer;
-- resource limits.
-
-Default compaction copies only records reachable from the selected snapshot. History-preserving compaction copies the selected parent chain according to explicit policy.
-
-Compaction must:
-
-- traverse object and metadata dependencies with cycle detection and depth/count limits;
-- rebuild directory pages;
-- preserve logical object identity only where the identity scope permits physical rewriting;
-- invalidate, omit, or reissue byte-scoped signatures rather than falsely preserving them;
-- report orphan and unreachable records;
-- produce a new file and leave the source unchanged.
-
-### 14. Error conditions
-
-At minimum, implementations must distinguish:
-
-- exact-end footer absent;
-- malformed footer;
-- unsupported epoch or required capability;
-- candidate scan limit exceeded;
-- candidate count limit exceeded;
-- invalid snapshot range;
-- invalid directory page range;
-- duplicate or unordered directory key;
-- overlapping child key range;
-- directory page cycle;
-- missing root object;
-- missing parent snapshot;
-- non-increasing sequence;
-- ambiguous fork;
-- digest mismatch;
-- progress checkpoint selected as complete;
-- repair source not verified;
-- compaction dependency limit exceeded;
-- source I/O failure.
+Caller-directed object selection is not automatic semantic compaction. Without profile or schema dependency information, the core cannot infer every logical dependency.
 
 ## Compatibility impact
 
 ### Existing files with new readers
 
-EXP-0002 readers may support EXP-0001 through an explicit separate decoder. They must not parse EXP-0001 using EXP-0002 snapshot or directory rules.
+Candidate 1 readers may continue to report `UCOF-EXP-0001` separately. They must not reinterpret EXP-0001 bytes as EXP-0002.
 
 ### New files with old readers
 
-EXP-0001 readers must reject EXP-0002 as an unsupported epoch.
+EXP-0001 readers must report EXP-0002 as unsupported. There is no fallback interpretation.
 
 ### Unknown capabilities and data preservation
 
-Unknown required snapshot, directory, checkpoint, transform, or integrity behaviour fails closed. Unknown optional metadata may be skipped or preserved only when its encoding and scope make that safe.
+Candidate 1 defines no non-zero capability allocation. Future capability-bearing candidates must distinguish required, optional, and advisory behavior and define safe preservation rules before Review.
 
 ### Profile and schema compatibility
 
-No profile or schema semantics are defined. Future references carried by directory entries remain opaque until their proposals are accepted.
+Profiles and schemas are outside Candidate 1. Object kinds are experimental and must not be treated as permanent semantic identifiers.
 
 ### Canonical identity and signatures
 
-The experiment defines digest scope but no signatures. Snapshot and directory identity must be domain-separated. Future signature proposals must not inherit ambiguous experimental scopes.
+Object, page, snapshot, and commit digests have explicit domains. They provide integrity relative to stored values, not authenticity. Signature and provenance envelopes remain future proposals.
 
 ### Version or experimental epoch impact
 
-A new epoch is mandatory: `UCOF-EXP-0002`.
+This proposal creates `UCOF-EXP-0002`. Candidate 1 bytes may be retired if evidence invalidates the choices. A materially incompatible replacement must not silently reuse the same candidate bytes.
 
 ### Migration and coexistence
 
-No migration guarantee exists. A research converter may rewrite EXP-0001 objects into EXP-0002, but the result has a new commit identity and cannot claim byte-preserving continuity.
+There is no normative EXP-0001-to-EXP-0002 migration. Experimental tools may extract objects and rewrite a new file while reporting changed identity scopes.
 
 ## Security impact
 
-New attacker-controlled inputs include page boundaries, key ranges, child locators, page identities, snapshot sequence, parent identity, previous-footer pointers, candidate offsets, checkpoint kinds, and compaction graph edges.
+Candidate 1 adds attacker-controlled:
 
-Principal risks include:
+- page graphs and key ranges;
+- page and object locators;
+- parent and previous-footer relationships;
+- footer candidate storms;
+- large commit ranges and historical-object references;
+- root and capability arrays;
+- repair-selection inputs.
 
-- page cycles or fanout exhaustion;
-- forged subtree ranges;
-- candidate storms from repeated footer magic;
-- stale-root or rollback presentation;
-- fork ambiguity;
-- previous-footer cycles;
-- authenticated root redirected to unauthenticated pages;
-- repair upgrading salvage to validity;
-- compaction omitting security-relevant dependencies;
-- sequence treated as external freshness proof.
+Required controls include checked arithmetic, exact ranges, zero padding, domain-separated digests, cycle detection, stable-source assumptions, independent budgets, strict/recovery separation, fork ambiguity, and explicit assurance levels.
 
-The threat model must be updated with executable findings before the proposal can be accepted.
+Detailed executable findings are recorded in:
+
+- `docs/security/EXP_0002_MODEL_FINDINGS.md`;
+- `docs/security/EXP_0002_BYTE_FINDINGS.md`;
+- the primary threat model.
+
+SHA-256 does not provide signer trust, freshness, rollback resistance, or confidentiality. A valid older whole file can be replayed without external trusted state.
 
 ## Privacy impact
 
-A public primary directory may expose object identifiers, kinds, counts, sizes, physical clustering, update frequency, and snapshot relationships. Parent chains reveal history depth and may reveal that objects changed even when payloads are later encrypted.
+Candidate 1 leaves header identifiers, object identifiers, key ranges, root identifiers, directory shape, snapshot sequence, previous-footer relationships, object lengths, and equality through digests visible.
 
-EXP-0002 will document this leakage but will not solve protected directories. Encryption and selective disclosure belong to Phase 7. Applications must not assume that append history or compaction erases previously distributed data.
+Encryption and protected metadata discovery are outside scope. Profiles must not assume that Candidate 1 hides names, relationships, sizes, history, or access patterns.
 
 ## Resource-limit impact
 
-Readers must support limits for:
+Implementations must expose limits appropriate to their assurance level, including:
 
-- bootstrap and exact-end reads;
-- directory page size;
-- directory depth and page count;
-- keys per page;
-- lookup page reads;
-- full-inventory pages and entries;
-- commit bytes;
-- root candidates;
-- scan bytes and magic matches;
-- candidate validation bytes and hashes;
-- parent-chain depth;
-- checkpoint count;
-- orphan count;
-- graph traversal nodes and edges;
-- compaction output bytes;
+- file and commit bytes;
+- snapshot bytes and array counts;
+- page reads, page count, and tree depth;
+- objects and payload bytes;
+- bytes hashed;
+- source read operations, bytes read, and maximum request size;
+- recovery scan bytes, magic matches, validations, depth, and results;
+- rewrite objects, copied bytes, and output bytes;
 - diagnostics.
 
-Limits must apply before allocation, seek, range request, hash work, or recursive traversal where possible.
+The proposal does not yet prescribe universal numeric defaults. That remains a Review blocker.
 
 ## Streaming impact
 
-A non-seeking writer can append object records, directory pages, snapshot, and footer when all final locators can be computed from counted output. It may need to retain directory-building state or spill sorted runs to bounded temporary storage.
+Candidate 1 writers can append without seeking when object lengths are known before their headers are emitted. The current implementation writes to memory and rebuilds the directory.
 
-A sequential reader can consume records, but it cannot provide authenticated random lookup until the directory root and snapshot are reached. Complete checkpoints allow a long stream to publish intermediate independently readable states.
-
-The design must not require rewriting prior payload bytes for ordinary snapshot append.
+Large production writers will require bounded external sorting or another deterministic directory-construction strategy. This remains unresolved.
 
 ## Random-access impact
 
-A single-object lookup should require:
+Strict validation may require hashing the current commit and all referenced objects. Authenticated lookup requires the exact-end footer, snapshot, one page per tree level, and the selected object record.
 
-1. exact-end footer read;
-2. snapshot manifest read;
-3. directory root read;
-4. one page per directory level;
-5. target record header and requested payload range.
-
-The experiment must report range-request count and bytes read separately. Directory page authentication must not require reading all sibling pages.
+Candidate 1 now has a bounded synchronous range-source implementation. Its source view must remain stable for one operation; version tokens, retry rules, and remote mutation handling remain unresolved.
 
 ## Recovery, truncation, and compaction
 
-Strict mode remains exact-end. Recovery mode is explicit and bounded. Interrupted append leaves the earlier complete commit intact. Recovery may find it through a previous-footer chain, bounded scan, sequential enumeration, checkpoint, or caller-provided offset.
-
-A candidate found through recovery is valid only after complete validation. A valid earlier root remains potentially stale. Ambiguous forks are reported, not guessed.
-
-Repair and compaction write new files by default.
+- strict mode accepts only the exact-end footer;
+- every incomplete latest append is invalid in strict mode;
+- explicit recovery can validate earlier complete prefixes;
+- equal verified forks are reported as ambiguous;
+- repair and compaction publish a new output file;
+- old bytes remain until a separate rewrite discards them;
+- progress checkpoint bytes are not defined by Candidate 1.
 
 ## Canonicalization and identity
 
-The final proposal must define domain-separated canonical inputs for at least:
+Candidate 1 canonicalizes:
 
-- directory page identity;
-- directory root identity;
-- snapshot identity;
-- commit digest;
-- parent link.
+- physical write order;
+- fixed-width field encoding;
+- zero flags, reserved bytes, and padding;
+- ascending unique root and capability arrays;
+- ascending leaf keys and non-overlapping child ranges;
+- exact digest domains and preimages.
 
-Physical offsets may be included in commit integrity while excluded from logical object identity. The distinction must be explicit so compaction cannot falsely preserve a byte-scoped identity.
+Identity scopes follow ADR-0011. Snapshot identity is structural and includes physical locators. Commit identity is publication-specific.
 
 ## Alternatives considered
 
-### Flat canonical metadata directory
+### Flat directory
 
-Rejected for promotion because lookup requires decoding every entry and the measured metadata overhead fails the massive-object use case.
+Rejected for promotion because its scale failure is measured and architectural.
 
-### Hash table directory
+### Monolithic sorted array
 
-Offers expected constant lookup but complicates deterministic canonical layout, ordered iteration, adversarial collision handling, and range partitioning. It remains a benchmark alternative.
+Retained as a measured alternative but rejected as the primary candidate because one small update rewrites the complete array and recovery publication cannot localize page work.
 
-### Sorted monolithic fixed-entry array
+### Deterministic hash pages
 
-Enables binary search and simpler implementation but large remote ranges, rewrite amplification, and authentication granularity may remain poor. It must be included as a baseline experiment.
+Retained as a measured alternative. They can provide expected constant lookup but require unresolved collision, ordering, deterministic rebuild, and range-enumeration rules.
 
-### Front-of-file mutable superblock
+### 4 KiB pages
 
-Two alternating checksummed superblock slots can publish a new tail pointer atomically on many local filesystems, preserving the old pointer after interruption. This improves local recovery but requires seeking, relies on storage atomicity assumptions, and complicates streams and immutable object storage. It remains an optional deployment optimization, not the only normative discovery mechanism, unless evidence changes this decision.
+At 100 million objects, the concrete entry layout requires five page levels and approximately 9.25 GB of directory bytes, but only 20 KiB per authenticated path.
 
-### Silent backward scan in normal validation
+### 64 KiB pages
 
-Rejected. Attackers can fill a bounded tail with thousands of magic candidates, and fallback would blur strict validity with recovery.
+At 100 million objects, the layout requires three page levels and approximately 8.82 GB of directory bytes, but 192 KiB per authenticated path and ideal path-copy update.
 
-### Sequence-only active-root selection
+### 16 KiB pages
 
-Rejected. Sequence is attacker-controlled within a valid file and cannot resolve unrelated forks, rollback of the whole source, or missing parent evidence by itself.
+Candidate 1 uses four levels, approximately 8.89 GB, and 64 KiB per authenticated path at that scale. It is a provisional midpoint, not an accepted constant.
+
+### One identity digest
+
+Rejected by ADR-0011 because structural snapshot equality and file-instance publication equality are distinct useful scopes.
+
+### In-place root replacement
+
+Rejected because torn writes can destroy the only authoritative root and complicate recovery reasoning.
+
+### Implicit recovery fallback
+
+Rejected because it would let damage or attacker-selected candidates alter normal validation semantics.
 
 ## Unresolved questions
 
-Before Review, resolve:
+The following still block movement to Review:
 
-1. fixed versus bounded-variable page size;
-2. page size and maximum fanout;
-3. fixed entry layout versus restricted canonical metadata;
-4. B+ tree, sorted page array, or another canonical lookup structure;
-5. page identity algorithm and domain separation;
-6. commit footer size and exact digest scope;
-7. previous-footer locator representation;
-8. whether snapshot sequences permit gaps;
-9. whether full parent history is mandatory, optional, or profile controlled;
-10. maximum normative recovery scan and candidate limits, if any;
-11. complete-checkpoint cadence guidance;
-12. whether progress checkpoints remain in EXP-0002;
-13. logical versus physical object identity during compaction;
-14. how unknown optional directory-entry fields are preserved;
-15. whether streaming writers may use bounded external sort state.
+1. Are 88-byte leaf entries and 64-bit object identifiers acceptable, or should Candidate 2 test narrower locators and identity widths?
+2. Should 16 KiB pages remain the candidate after real local and HTTP-range benchmarks?
+3. What exact copy-on-write page-reuse algorithm preserves deterministic output and bounds append amplification?
+4. What bytes define a complete checkpoint, what cadence is recommended, and are progress checkpoints justified at all?
+5. What history-retention and compaction policy should profiles expose?
+6. Which resource limits become normative minima, and which remain caller policy?
+7. How are unknown optional fields and future capability allocations preserved?
+8. What bounded external-sort strategy is required for very large deterministic writers?
+9. What source-stability, version-token, retry, and remote-mutation contract is required for range readers?
+10. What evidence is required from an independently maintained implementation outside this repository?
+11. Should invalid vectors pin exact public error categories or only verified-invalid outcomes?
+12. How should external freshness state identify the latest acceptable commit without conflating integrity and trust?
 
 ## Implementation plan
 
-1. implement language-neutral in-memory models for paged lookup, snapshot chains, root selection, and compaction reachability;
-2. benchmark B+ tree, sorted page array, and hash-page alternatives;
-3. define an initial EXP-0002 byte layout in a separate experimental specification;
-4. implement Rust and independent Python writers/readers;
-5. publish valid, invalid, interrupted-append, fork, and compaction vectors;
-6. add bounded exact-end and recovery APIs;
-7. add append, checkpoint, repair, and compaction CLI experiments;
-8. fuzz pages, candidate discovery, chains, and graph traversal;
-9. integrate findings into the threat model;
-10. revise this FCP until independent implementation is possible without reading Rust code.
+### Completed evidence
+
+- non-normative paged-directory, selection, enumeration, publication, recovery, compaction, and repair models;
+- ordered-tree, sorted-array, hash-page, and page-size comparisons;
+- exact Candidate 1 byte specification;
+- deterministic Rust genesis and append writers;
+- strict Rust validator;
+- independent Python writer and validator;
+- pinned cross-language valid vectors;
+- every-cut append tests;
+- bounded recovery scanning and previous-chain traversal;
+- in-memory and bounded range-source authenticated lookup;
+- repair-to-new-file and caller-directed selection rewrite;
+- layer-targeted adversarial corpus;
+- stable, Rust 1.85, 32-bit, and big-endian checks;
+- continuous model and byte fuzz targets;
+- model and concrete-byte security findings.
+
+### Remaining implementation
+
+- copy-on-write page reuse;
+- complete-checkpoint bytes and experiments;
+- pinned invalid/interrupted vectors and expected outcomes;
+- realistic local and HTTP-range benchmarks;
+- narrower entry candidates;
+- bounded external-sort writer prototype;
+- CLI inspection, root enumeration, recovery, repair, and compaction commands;
+- independently maintained implementation and interoperability report.
 
 ## Evidence and validation
 
-Required before acceptance:
+### Achieved
 
-- directory overhead at 1,000, 1,000,000, and 100,000,000 entries;
-- root-to-leaf lookup reads and bytes for local and remote models;
-- append amplification across small and large snapshots;
-- interrupted writes at every byte boundary around snapshot and footer publication;
-- old-root recovery after partial appends of increasing size;
-- candidate-storm and previous-pointer-cycle attacks;
-- fork and sequence ambiguity vectors;
-- page overlap, duplicate key, cycle, and forged-range vectors;
-- deterministic Rust/Python byte reproduction;
-- fuzzing of page parsing, lookup, footer discovery, chain construction, repair, and compaction;
-- 32-bit and big-endian portability checks;
-- a generated massive-object test that does not materialize all entries for one lookup;
-- threat-model update and public objection disposition.
+- Rust and Python agree byte-for-byte on genesis, append, and multi-leaf valid vectors;
+- both implementations validate the stored corpus;
+- 21 layer-targeted concrete adversarial cases fail closed;
+- outer digests are recomputed where necessary to reach deeper checks;
+- every tested interrupted append cut preserves recovery of the earlier complete root;
+- candidate storms and scan windows are bounded;
+- authenticated lookup proves selected-object integrity and absence without reading unrelated historical payloads;
+- repair rejects damaged sources and validates new output;
+- page alternatives are measured through 100 million objects;
+- the implementation compiles at the provisional MSRV, on 32-bit little-endian, and on 64-bit big-endian targets;
+- continuous fuzzing covers strict parsing, recovery, writers, lookup, range-source lookup, and rewrite output in addition to inherited and model targets.
+
+### Still required before Review
+
+- pinned invalid-vector corpus with independent expected outcomes;
+- copy-on-write append vectors and amplification measurements;
+- checkpoint vectors;
+- remote-range benchmarks and stable-view experiments;
+- second independently maintained implementation or review;
+- resolution of all questions above that prevent independent implementation.
 
 ## Registry allocations requested
 
-No permanent allocations are requested while the proposal is Draft. Symbolic experimental names may be used inside EXP-0002 fixtures.
+No permanent allocations are requested while the FCP is Draft. Candidate values are experimental and local to `UCOF-EXP-0002`.
 
 ## Rollout plan
 
-- keep all bytes under `UCOF-EXP-0002`;
-- keep writers opt-in and clearly experimental;
-- retain EXP-0001 test vectors as separate interoperability evidence;
-- add CLI commands under explicit experimental naming;
-- publish benchmark and recovery results with every material layout revision;
-- do not enable automatic conversion or production storage claims.
+1. Keep Candidate 1 implementation in unpublished `ucof-experiments`.
+2. Continue publishing exact vectors, rejected alternatives, and security findings.
+3. Do not describe generated files as durable or stable.
+4. Retire or revise the candidate when evidence invalidates a byte choice.
+5. Move this FCP to Review only when unresolved implementation-blocking questions are closed and independent evidence exists.
 
 ## Rejection or rollback strategy
 
-If the selected directory or snapshot layout fails scale, safety, recovery, or interoperability gates, retire EXP-0002 and move to a new experimental epoch. Produced files remain disposable research artifacts with no migration guarantee.
+If Candidate 1 fails, stop emitting its bytes, preserve the corpus for regression and historical analysis, mark the candidate retired, and introduce a new explicit experimental candidate or epoch. Do not silently reinterpret existing files.
 
 ## References
 
-- `docs/IMPLEMENTATION_PLAN.md`
+- `docs/spec/EXP_0002_BYTE_CANDIDATE.md`
+- `docs/decisions/0009-isolate-phase3-research-models.md`
+- `docs/decisions/0010-exp0002-first-byte-candidate.md`
+- `docs/decisions/0011-exp0002-snapshot-and-commit-identity.md`
+- `docs/experiments/0005-directory-model-comparison.md`
+- `docs/experiments/0006-exp0002-page-size-comparison.md`
+- `docs/security/EXP_0002_MODEL_FINDINGS.md`
+- `docs/security/EXP_0002_BYTE_FINDINGS.md`
 - `docs/THREAT_MODEL.md`
 - `docs/USE_CASES.md`
-- `docs/experiments/0002-footer-discovery.md`
-- `docs/experiments/0003-scale-limits.md`
-- `docs/security/EXP_0001_FINDINGS.md`
-- FCP-0001 and its evidence appendix
+- `docs/PHASE_3_STATUS.md`
+- `tests/vectors/exp-0002/manifest.json`
 
 ## Decision record
+
+Completed by maintainers when the proposal is decided.
 
 - **Decision:** Pending
 - **Decision date:**
