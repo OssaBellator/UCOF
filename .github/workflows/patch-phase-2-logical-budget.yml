@@ -1,0 +1,57 @@
+name: Patch Phase 2 Logical Budget
+
+on:
+  push:
+    branches: ["phase-2/safety-first-core"]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Enforce logical budget before payload read
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/ucof-core/src/stream.rs")
+          text = path.read_text(encoding="utf-8")
+          old = """        let chunk_len = active.remaining.min(chunk_limit);
+        let chunk_len_usize =
+            usize::try_from(chunk_len).map_err(|_| Error::LimitExceeded(\"stream chunk bytes\"))?;"""
+          new = """        let logical_remaining = self
+            .limits
+            .max_logical_decoded_bytes
+            .checked_sub(self.stats.logical_bytes)
+            .ok_or(Error::LimitExceeded(\"logical decoded bytes\"))?;
+        if logical_remaining == 0 {
+            return Err(Error::LimitExceeded(\"logical decoded bytes\"));
+        }
+        let chunk_len = active.remaining.min(chunk_limit).min(logical_remaining);
+        let chunk_len_usize =
+            usize::try_from(chunk_len).map_err(|_| Error::LimitExceeded(\"stream chunk bytes\"))?;"""
+          if old not in text:
+              raise SystemExit("logical budget anchor not found")
+          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+      - name: Format sources
+        run: cargo fmt --all
+      - name: Commit fix
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/ucof-core/src/stream.rs crates/ucof-core/tests/sequential_reader.rs
+          git commit -m "fix: enforce logical stream budget before reads"
+          git push origin HEAD:${{ github.ref_name }}
