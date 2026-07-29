@@ -4,7 +4,7 @@
 //! Its bytes are disposable and must not be treated as a stable format.
 
 use sha2::{Digest, Sha256};
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeSet;
 use std::fmt;
 
 pub const FILE_HEADER_LEN: usize = 64;
