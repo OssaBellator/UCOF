@@ -224,8 +224,8 @@ mod tests {
             vec![object(1, b"one", true), object(2, b"two", false)],
         )
         .expect("source");
-        let report = repair_all_to_new_file(&source, header(9), &RewriteLimits::default())
-            .expect("repair");
+        let report =
+            repair_all_to_new_file(&source, header(9), &RewriteLimits::default()).expect("repair");
         assert!(report.snapshot_digest_preserved);
         assert!(!report.commit_digest_preserved);
         assert!(!report.byte_scoped_signatures_preserved);
@@ -244,8 +244,8 @@ mod tests {
             &ValidationLimits::default(),
         )
         .expect("append");
-        let report = repair_all_to_new_file(&source, header(7), &RewriteLimits::default())
-            .expect("repair");
+        let report =
+            repair_all_to_new_file(&source, header(7), &RewriteLimits::default()).expect("repair");
         assert!(!report.snapshot_digest_preserved);
         assert!(!report.commit_digest_preserved);
         let output = validate_strict(&report.output, &ValidationLimits::default()).expect("output");
@@ -295,21 +295,14 @@ mod tests {
         )
         .expect("source");
         assert_eq!(
-            rewrite_selected_to_new_file(
-                &source,
-                header(2),
-                &[2],
-                &[1],
-                &RewriteLimits::default()
-            ),
+            rewrite_selected_to_new_file(&source, header(2), &[2], &[1], &RewriteLimits::default()),
             Err(Exp0002Error::InvalidRoot)
         );
     }
 
     #[test]
     fn damaged_source_cannot_be_repaired() {
-        let mut source =
-            build_genesis(header(1), vec![object(1, b"one", true)]).expect("source");
+        let mut source = build_genesis(header(1), vec![object(1, b"one", true)]).expect("source");
         source[64 + OBJECT_HEADER_LEN] ^= 1;
         assert!(repair_all_to_new_file(&source, header(2), &RewriteLimits::default()).is_err());
     }
