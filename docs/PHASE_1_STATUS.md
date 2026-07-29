@@ -24,8 +24,9 @@ Create the smallest end-to-end format experiment that can encode, locate, inspec
 | Object lookup | Implemented | validated directory entries |
 | Inspector and verifier CLI | Implemented | `ucof-cli` |
 | Independent vector generator | Implemented | `tools/generate_exp_0001_vectors.py` |
+| Independent second parser | Implemented | `tools/validate_exp_0001.py` |
 | Valid and invalid hexadecimal vectors | Initial set implemented | `tests/vectors/exp-0001/` |
-| CI format, lint, and tests | Implemented | `.github/workflows/rust.yml` |
+| CI format, lint, Rust tests, and independent validation | Passing prototype checks | `.github/workflows/rust.yml` |
 
 ## Current experiment decisions
 
@@ -41,24 +42,33 @@ These choices apply only to `UCOF-EXP-0001`:
 - directory as a checked accelerator rather than authority;
 - no padding, transforms, encryption, signatures, external references, or append history.
 
+## Evidence collected
+
+- Rust and Python independently reproduce the valid file structure.
+- The Rust deterministic writer matches the independently generated minimal vector byte for byte.
+- Both parsers enforce exact-end footer discovery and classify a shortened footer as an invalid shifted footer magic rather than searching backward.
+- Payload mutation that preserves framing reaches the digest check and produces `digest_mismatch`.
+- Required capabilities fail closed.
+- Every byte-boundary truncation of the Rust demo fails without a parser panic.
+- Caller file-size limits fail before structural parsing.
+
 ## Remaining exit work
 
 Phase 1 is not complete until:
 
-1. CI confirms the workspace builds, formats, lints, and tests on stable Rust.
-2. Every-byte truncation tests are added for all valid vectors.
-3. Mutation tests cover each fixed header and footer field.
-4. A second parser reproduces structure and errors for the initial vector corpus.
-5. Fixed-width and variable-width framing alternatives are measured.
-6. Exact-end footer discovery is compared with bounded backward search.
-7. Canonical CBOR subset behavior is compared across at least two independent implementations.
-8. Resource limits are stress-tested against UC-02 and UC-10 scales.
-9. FCP-0001 receives public review and disposition of objections.
-10. The threat model is updated with findings from executable tests.
+1. Source files are committed in rustfmt-normalized form so CI can restore `cargo fmt --check` rather than formatting the runner workspace.
+2. Mutation tests cover every fixed header and footer field.
+3. The Python parser receives direct limit and canonical-CBOR adversarial tests beyond the shared vector corpus.
+4. Fixed-width and variable-width framing alternatives are measured.
+5. Exact-end footer discovery is compared with bounded backward search.
+6. Canonical CBOR subset behavior is compared with another established CBOR implementation.
+7. Resource limits are stress-tested against UC-02 and UC-10 scales.
+8. FCP-0001 receives public review and disposition of objections.
+9. The threat model is updated with findings from executable tests.
 
 ## Explicit limitations
 
-The current reader validates a complete in-memory byte slice. It demonstrates sequential framing and validated random lookup, but it is not yet a bounded-buffer streaming API over `Read` or a range-source API.
+The current Rust reader validates a complete in-memory byte slice. It demonstrates sequential framing and validated random lookup, but it is not yet a bounded-buffer streaming API over `Read` or a range-source API.
 
 The current digest provides integrity relative to the stored footer, not authenticity.
 

@@ -196,7 +196,8 @@ def main() -> None:
     )
 
     digest_mismatch = bytearray(two_objects.data)
-    digest_mismatch[40] ^= 1
+    # File header (32 bytes) plus first record header (40 bytes).
+    digest_mismatch[72] ^= 1
     write_vector(
         output,
         "digest-mismatch",
@@ -208,7 +209,7 @@ def main() -> None:
         output,
         "truncated-footer",
         two_objects.data[:-13],
-        {"expected_error": "truncated"},
+        {"expected_error": "invalid_magic"},
     )
 
     invalid_offset = bytearray(two_objects.data)

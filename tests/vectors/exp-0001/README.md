@@ -12,6 +12,12 @@ Generate binary copies with:
 python3 tools/generate_exp_0001_vectors.py
 ```
 
+Validate the entire corpus with the independent stdlib parser:
+
+```console
+python3 tools/validate_exp_0001.py --vectors tests/vectors/exp-0001
+```
+
 ## Valid vectors
 
 | Vector | Purpose |
@@ -25,7 +31,7 @@ python3 tools/generate_exp_0001_vectors.py
 |---|---|
 | `unknown-required-capability` | `unsupported_required_capability` |
 | `digest-mismatch` | `digest_mismatch` |
-| `truncated-footer` | structural truncation or footer-magic failure |
+| `truncated-footer` | `invalid_magic` because exact-end discovery reads a shifted footer candidate |
 | `invalid-directory-offset` | `range_out_of_bounds` |
 
-The exact error variant may become more specific during Phase 1, but it must retain a stable mapping to the conceptual category in the experimental specification.
+The error category is part of this experimental corpus. A later epoch may choose different footer discovery and therefore classify the same physical truncation differently.

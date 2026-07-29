@@ -21,5 +21,7 @@ jobs:
         run: cargo fmt --all
       - name: Lint
         run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Test
+      - name: Test Rust implementation
         run: cargo test --workspace --all-targets
+      - name: Test independent Python parser
+        run: python3 tools/validate_exp_0001.py --vectors tests/vectors/exp-0001
