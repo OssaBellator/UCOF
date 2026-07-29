@@ -1,8 +1,6 @@
 use proptest::collection::vec;
 use proptest::prelude::*;
-use ucof_core::{
-    Manifest, SliceSource, SourceValidator, StreamingWriter, Writer,
-};
+use ucof_core::{Manifest, SliceSource, SourceValidator, StreamingWriter, Writer};
 
 proptest! {
     #![proptest_config(ProptestConfig::with_cases(128))]

@@ -1,7 +1,5 @@
 use std::io;
-use ucof_core::{
-    encode_canonical, CborValue, Limits, MetadataInspector, ReadAt, RecordKind,
-};
+use ucof_core::{encode_canonical, CborValue, Limits, MetadataInspector, ReadAt, RecordKind};
 
 const HEADER_LEN: u64 = 32;
 const RECORD_HEADER_LEN: u64 = 40;
@@ -106,12 +104,7 @@ fn virtual_file(payload_len: u64) -> VirtualSparseSource {
         "entries",
         CborValue::Array(vec![
             directory_entry(1, RecordKind::Opaque, opaque_offset, payload_len),
-            directory_entry(
-                2,
-                RecordKind::Manifest,
-                manifest_offset,
-                manifest_len,
-            ),
+            directory_entry(2, RecordKind::Manifest, manifest_offset, manifest_len),
         ]),
     )]))
     .expect("directory encoding");
@@ -137,12 +130,7 @@ fn virtual_file(payload_len: u64) -> VirtualSparseSource {
         (directory_offset + RECORD_HEADER_LEN, directory_payload),
         (
             footer_offset,
-            footer(
-                directory_offset,
-                RECORD_HEADER_LEN + directory_len,
-                2,
-                3,
-            ),
+            footer(directory_offset, RECORD_HEADER_LEN + directory_len, 2, 3),
         ),
     ];
 

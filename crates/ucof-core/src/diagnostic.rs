@@ -66,11 +66,7 @@ impl DiagnosticValidator {
             Err(error) => {
                 return Ok(DiagnosticReport {
                     status: DiagnosticStatus::Invalid,
-                    diagnostics: vec![diagnostic(
-                        DiagnosticStage::Structure,
-                        None,
-                        &error,
-                    )],
+                    diagnostics: vec![diagnostic(DiagnosticStage::Structure, None, &error)],
                     inspection: None,
                     validation: None,
                 });
@@ -142,7 +138,9 @@ impl PrefixSalvager {
             return Err(Error::LimitExceeded("diagnostics"));
         }
 
-        let file_len = source.len().map_err(|_| Error::Io("salvage source length"))?;
+        let file_len = source
+            .len()
+            .map_err(|_| Error::Io("salvage source length"))?;
         if file_len > self.limits.max_file_bytes {
             return Err(Error::LimitExceeded("file bytes"));
         }
@@ -191,7 +189,8 @@ impl PrefixSalvager {
         let mut offset = header_len;
         let mut identifiers = BTreeSet::new();
         while offset < file_len {
-            if u64::try_from(report.records.len()).map_or(true, |count| count >= self.limits.max_records)
+            if u64::try_from(report.records.len())
+                .map_or(true, |count| count >= self.limits.max_records)
             {
                 push_diagnostic(
                     &mut report.diagnostics,
@@ -203,9 +202,9 @@ impl PrefixSalvager {
                 break;
             }
 
-            let header_end = match offset.checked_add(
-                u64::try_from(RECORD_HEADER_LEN).expect("fixed record header length"),
-            ) {
+            let header_end = match offset
+                .checked_add(u64::try_from(RECORD_HEADER_LEN).expect("fixed record header length"))
+            {
                 Some(end) => end,
                 None => {
                     push_diagnostic(
@@ -381,7 +380,8 @@ fn read_bounded<S: ReadAt>(
     limits: &Limits,
     context: &'static str,
 ) -> Result<(), Error> {
-    let length = u64::try_from(bytes.len()).map_err(|_| Error::LimitExceeded("total bytes read"))?;
+    let length =
+        u64::try_from(bytes.len()).map_err(|_| Error::LimitExceeded("total bytes read"))?;
     let next = bytes_read
         .checked_add(length)
         .ok_or(Error::LimitExceeded("total bytes read"))?;

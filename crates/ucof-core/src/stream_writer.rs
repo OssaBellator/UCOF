@@ -69,8 +69,8 @@ impl<W: Write> StreamingWriter<W> {
     }
 
     pub fn add_opaque(&mut self, object_id: u64, payload: &[u8]) -> Result<(), Error> {
-        let length = u64::try_from(payload.len())
-            .map_err(|_| Error::InvalidLength("record payload"))?;
+        let length =
+            u64::try_from(payload.len()).map_err(|_| Error::InvalidLength("record payload"))?;
         self.begin_record(RecordKind::Opaque, object_id, length)?;
         if let Err(error) = self.write_hashed(payload, "opaque payload") {
             self.failed = true;
@@ -94,14 +94,14 @@ impl<W: Write> StreamingWriter<W> {
             self.failed = true;
             return Err(Error::LimitExceeded("stream chunk bytes"));
         }
-        let capacity = usize::try_from(chunk_limit)
-            .map_err(|_| Error::LimitExceeded("stream chunk bytes"))?;
+        let capacity =
+            usize::try_from(chunk_limit).map_err(|_| Error::LimitExceeded("stream chunk bytes"))?;
         let mut buffer = vec![0_u8; capacity];
         let mut remaining = length;
         while remaining > 0 {
             let amount = remaining.min(chunk_limit);
-            let amount = usize::try_from(amount)
-                .map_err(|_| Error::LimitExceeded("stream chunk bytes"))?;
+            let amount =
+                usize::try_from(amount).map_err(|_| Error::LimitExceeded("stream chunk bytes"))?;
             if let Err(error) = source.read_exact(&mut buffer[..amount]) {
                 self.failed = true;
                 return Err(if error.kind() == std::io::ErrorKind::UnexpectedEof {
@@ -124,8 +124,8 @@ impl<W: Write> StreamingWriter<W> {
     pub fn add_manifest(&mut self, object_id: u64, manifest: &Manifest) -> Result<(), Error> {
         manifest.validate_shape()?;
         let payload = encode_canonical(&manifest.to_cbor())?;
-        let length = u64::try_from(payload.len())
-            .map_err(|_| Error::InvalidLength("manifest payload"))?;
+        let length =
+            u64::try_from(payload.len()).map_err(|_| Error::InvalidLength("manifest payload"))?;
         self.begin_record(RecordKind::Manifest, object_id, length)?;
         if let Err(error) = self.write_hashed(&payload, "manifest payload") {
             self.failed = true;
@@ -211,8 +211,7 @@ impl<W: Write> StreamingWriter<W> {
         if payload_len > self.limits.max_payload_bytes {
             return Err(Error::LimitExceeded("record payload bytes"));
         }
-        if u64::try_from(self.entries.len())
-            .map_err(|_| Error::LimitExceeded("record count"))?
+        if u64::try_from(self.entries.len()).map_err(|_| Error::LimitExceeded("record count"))?
             >= self.limits.max_records.saturating_sub(1)
         {
             return Err(Error::LimitExceeded("record count"));
@@ -275,8 +274,8 @@ impl<W: Write> StreamingWriter<W> {
     }
 
     fn write_checked(&mut self, bytes: &[u8], context: &'static str) -> Result<(), Error> {
-        let length = u64::try_from(bytes.len())
-            .map_err(|_| Error::RangeOutOfBounds("writer length"))?;
+        let length =
+            u64::try_from(bytes.len()).map_err(|_| Error::RangeOutOfBounds("writer length"))?;
         let next = self
             .offset
             .checked_add(length)
@@ -327,8 +326,7 @@ impl<W: Write + Seek> SeekableWriter<W> {
         length: u64,
         source: &mut R,
     ) -> Result<(), Error> {
-        self.inner
-            .add_opaque_from_reader(object_id, length, source)
+        self.inner.add_opaque_from_reader(object_id, length, source)
     }
 
     pub fn add_manifest(&mut self, object_id: u64, manifest: &Manifest) -> Result<(), Error> {

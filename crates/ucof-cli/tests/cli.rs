@@ -6,22 +6,41 @@ use std::time::{SystemTime, UNIX_EPOCH};
 #[test]
 fn demo_inspect_verify_diagnose_and_salvage_have_distinct_semantics() {
     let path = temporary_path("valid.ucof");
-    let make = command().args(["make-demo", path_str(&path)]).output().expect("make demo");
-    assert!(make.status.success(), "{}", String::from_utf8_lossy(&make.stderr));
+    let make = command()
+        .args(["make-demo", path_str(&path)])
+        .output()
+        .expect("make demo");
+    assert!(
+        make.status.success(),
+        "{}",
+        String::from_utf8_lossy(&make.stderr)
+    );
 
-    let inspect = command().args(["inspect", path_str(&path)]).output().expect("inspect");
+    let inspect = command()
+        .args(["inspect", path_str(&path)])
+        .output()
+        .expect("inspect");
     assert!(inspect.status.success());
     assert!(String::from_utf8_lossy(&inspect.stdout).contains("integrity not checked"));
 
-    let verify = command().args(["verify", path_str(&path)]).output().expect("verify");
+    let verify = command()
+        .args(["verify", path_str(&path)])
+        .output()
+        .expect("verify");
     assert!(verify.status.success());
     assert!(String::from_utf8_lossy(&verify.stdout).contains("verified UCOF-EXP-0001"));
 
-    let diagnose = command().args(["diagnose", path_str(&path)]).output().expect("diagnose");
+    let diagnose = command()
+        .args(["diagnose", path_str(&path)])
+        .output()
+        .expect("diagnose");
     assert!(diagnose.status.success());
     assert!(String::from_utf8_lossy(&diagnose.stdout).contains("Verified"));
 
-    let salvage = command().args(["salvage", path_str(&path)]).output().expect("salvage");
+    let salvage = command()
+        .args(["salvage", path_str(&path)])
+        .output()
+        .expect("salvage");
     assert!(salvage.status.success());
     assert!(String::from_utf8_lossy(&salvage.stdout).contains("UNVERIFIED"));
 
@@ -31,14 +50,20 @@ fn demo_inspect_verify_diagnose_and_salvage_have_distinct_semantics() {
 #[test]
 fn diagnose_returns_failure_for_digest_tampering() {
     let path = temporary_path("tampered.ucof");
-    let make = command().args(["make-demo", path_str(&path)]).output().expect("make demo");
+    let make = command()
+        .args(["make-demo", path_str(&path)])
+        .output()
+        .expect("make demo");
     assert!(make.status.success());
 
     let mut bytes = fs::read(&path).expect("read demo");
     bytes[32 + 40] ^= 1;
     fs::write(&path, bytes).expect("write tampered demo");
 
-    let output = command().args(["diagnose", path_str(&path)]).output().expect("diagnose");
+    let output = command()
+        .args(["diagnose", path_str(&path)])
+        .output()
+        .expect("diagnose");
     assert!(!output.status.success());
     assert!(String::from_utf8_lossy(&output.stdout).contains("DigestMismatch"));
     assert!(String::from_utf8_lossy(&output.stderr).contains("input is invalid"));

@@ -30,7 +30,10 @@ fn digest_failure_retains_structural_report_without_upgrading_validity() {
     assert!(report.inspection.is_some());
     assert!(report.validation.is_none());
     assert_eq!(report.diagnostics.len(), 1);
-    assert_eq!(report.diagnostics[0].category, ErrorCategory::DigestMismatch);
+    assert_eq!(
+        report.diagnostics[0].category,
+        ErrorCategory::DigestMismatch
+    );
 }
 
 #[test]
@@ -98,9 +101,7 @@ fn zero_diagnostic_budget_fails_before_work() {
 fn demo_file() -> Vec<u8> {
     let mut writer = Writer::new();
     writer.add_opaque(1, b"abc").expect("object one");
-    writer
-        .add_opaque(2, &[0x5a; 20])
-        .expect("object two");
+    writer.add_opaque(2, &[0x5a; 20]).expect("object two");
     writer
         .add_manifest(3, &Manifest::new(vec![1, 2]))
         .expect("manifest");

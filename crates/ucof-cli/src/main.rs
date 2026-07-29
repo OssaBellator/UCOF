@@ -65,10 +65,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             for diagnostic in &report.diagnostics {
                 println!(
                     "stage={:?} category={:?} offset={:?}: {}",
-                    diagnostic.stage,
-                    diagnostic.category,
-                    diagnostic.offset,
-                    diagnostic.message
+                    diagnostic.stage, diagnostic.category, diagnostic.offset, diagnostic.message
                 );
             }
             if report.status == DiagnosticStatus::Invalid {
@@ -82,7 +79,8 @@ fn run() -> Result<(), Box<dyn Error>> {
             let report = PrefixSalvager::new(Limits::default()).scan(&mut source)?;
             println!(
                 "UNVERIFIED prefix salvage: {} complete records, reached_directory={}",
-                report.records.len(), report.reached_directory
+                report.records.len(),
+                report.reached_directory
             );
             for record in report.records {
                 println!(
@@ -93,10 +91,7 @@ fn run() -> Result<(), Box<dyn Error>> {
             for diagnostic in report.diagnostics {
                 println!(
                     "stage={:?} category={:?} offset={:?}: {}",
-                    diagnostic.stage,
-                    diagnostic.category,
-                    diagnostic.offset,
-                    diagnostic.message
+                    diagnostic.stage, diagnostic.category, diagnostic.offset, diagnostic.message
                 );
             }
         }

@@ -30,7 +30,10 @@ fuzz_target!(|data: &[u8]| {
         .expect("streaming manifest");
 
     let expected = in_memory.finish(manifest_id).expect("in-memory finish");
-    let actual = streaming.finish(manifest_id).expect("streaming finish").inner;
+    let actual = streaming
+        .finish(manifest_id)
+        .expect("streaming finish")
+        .inner;
     assert_eq!(actual, expected);
     ValidatedFile::parse(&actual, &Limits::default()).expect("round-trip validation");
 });
