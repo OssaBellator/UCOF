@@ -25,28 +25,35 @@ jobs:
 
           path = Path("crates/ucof-experiments/src/exp0002_source.rs")
           text = path.read_text(encoding="utf-8")
-          old = '''        let length = usize::try_from(length).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
-          if length > self.limits.max_read_request_bytes {
-              return Err(Exp0002Error::ResourceLimit("source read request").into());
+          start_marker = "    fn read_vec("
+          end_marker = "\n    fn read_exact("
+          start = text.find(start_marker)
+          end = text.find(end_marker, start)
+          if start < 0 or end < 0:
+              raise SystemExit("source read_vec boundaries not found")
+          replacement = '''    fn read_vec(
+              &mut self,
+              offset: u64,
+              length: u64,
+              context: &'static str,
+          ) -> Result<Vec<u8>, Exp0002SourceError> {
+              let length = usize::try_from(length).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
+              let mut bytes = vec![0_u8; length];
+              let mut cursor = 0_usize;
+              while cursor < length {
+                  let take = (length - cursor).min(self.limits.max_read_request_bytes);
+                  let read_offset = offset
+                      .checked_add(
+                          u64::try_from(cursor).map_err(|_| Exp0002Error::ArithmeticOverflow)?,
+                      )
+                      .ok_or(Exp0002Error::ArithmeticOverflow)?;
+                  self.read_exact(read_offset, &mut bytes[cursor..cursor + take], context)?;
+                  cursor += take;
+              }
+              Ok(bytes)
           }
-          let mut bytes = vec![0_u8; length];
-          self.read_exact(offset, &mut bytes, context)?;
-          Ok(bytes)'''
-          new = '''        let length = usize::try_from(length).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
-          let mut bytes = vec![0_u8; length];
-          let mut cursor = 0_usize;
-          while cursor < length {
-              let take = (length - cursor).min(self.limits.max_read_request_bytes);
-              let read_offset = offset
-                  .checked_add(u64::try_from(cursor).map_err(|_| Exp0002Error::ArithmeticOverflow)?)
-                  .ok_or(Exp0002Error::ArithmeticOverflow)?;
-              self.read_exact(read_offset, &mut bytes[cursor..cursor + take], context)?;
-              cursor += take;
-          }
-          Ok(bytes)'''
-          if old not in text:
-              raise SystemExit("source read_vec anchor not found")
-          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          '''
+          path.write_text(text[:start] + replacement + text[end:], encoding="utf-8")
           PY
           cargo fmt --all
       - name: Commit normalized source lookup
