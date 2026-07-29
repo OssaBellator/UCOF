@@ -1,8 +1,9 @@
 # Phase 2 Status — Safety-First Core Codec
 
-**Status:** In progress  
+**Status:** In progress; first bounded-source increment passing CI  
 **Started:** 2026-07-29  
 **Working branch:** `phase-2/safety-first-core`  
+**Stacked pull request:** #2  
 **Depends on:** Phase 1 pull request #1
 
 ## Objective
@@ -13,20 +14,22 @@ Convert the Phase 1 experiment into a maintainable, hostile-input-resistant core
 
 | Deliverable | Status | Evidence |
 |---|---|---|
-| Synchronous random-access source contract | Implemented | `ReadAt` in `ucof-core::source` |
-| Borrowed slice adapter | Implemented | `SliceSource` |
-| Seekable source adapter | Implemented | `SeekSource<R>` |
-| Cumulative read accounting | Implemented | `ReadStats` and `max_total_bytes_read` |
+| Synchronous random-access source contract | Implemented and tested | `ReadAt` in `ucof-core::source` |
+| Borrowed slice adapter | Implemented and tested | `SliceSource` |
+| Seekable source adapter | Implemented and tested | `SeekSource<R>` |
+| Cumulative read accounting | Implemented and tested | `ReadStats` and `max_total_bytes_read` |
 | Single-allocation bound | Implemented | `max_allocation_bytes` |
 | Future-work limit fields | Added | logical bytes, dependencies, diagnostics, transform expansion |
-| Metadata-only inspection | Implemented | `MetadataInspector` |
+| Metadata-only inspection | Implemented and tested | `MetadataInspector` |
 | Explicit integrity status | Implemented | `IntegrityStatus::NotChecked` |
-| Directory-to-header cross-check | Implemented | source-backed inventory validation |
+| Directory-to-header cross-check | Implemented and tested | source-backed inventory validation |
 | Unsupported required capability reporting | Implemented without false conformance claim | `InspectionReport` |
-| Payload-skip test | Implemented | `tests/bounded_source.rs` |
-| Slice/seek equivalence test | Implemented | `tests/bounded_source.rs` |
-| Read-budget failure test | Implemented | `tests/bounded_source.rs` |
+| Payload-skip test | Passing | `tests/bounded_source.rs` |
+| Slice/seek equivalence test | Passing | `tests/bounded_source.rs` |
+| Read-budget failure test | Passing | `tests/bounded_source.rs` |
+| Record-header corruption test | Passing | `tests/bounded_source.rs` |
 | I/O architecture decision | Accepted | `docs/decisions/0003-bounded-synchronous-read-at.md` |
+| Full inherited CI suite | Passing | formatting, clippy, Rust, Python, adversarial corpus, experiments |
 
 ## Safety properties demonstrated
 
@@ -37,7 +40,9 @@ Convert the Phase 1 experiment into a maintainable, hostile-input-resistant core
 - opaque payload bodies are not read during metadata-only inspection;
 - physical record headers are cross-checked against directory claims;
 - metadata-only reports explicitly state that payload integrity was not checked;
-- unknown required capabilities are visible and prevent a fully-interpretable status without blocking structural inventory.
+- unknown required capabilities are visible and prevent a fully-interpretable status without blocking structural inventory;
+- slice-backed and seek-backed sources produce equivalent reports;
+- a malformed physical record identity cannot be hidden by unchanged directory metadata.
 
 ## Important limitations
 
