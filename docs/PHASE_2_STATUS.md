@@ -1,6 +1,6 @@
 # Phase 2 Status — Safety-First Core Codec
 
-**Status:** In progress; first bounded-source increment passing CI  
+**Status:** In progress; bounded-source increment passing, sequential increment under validation  
 **Started:** 2026-07-29  
 **Working branch:** `phase-2/safety-first-core`  
 **Stacked pull request:** #2  
@@ -10,7 +10,7 @@
 
 Convert the Phase 1 experiment into a maintainable, hostile-input-resistant core library without freezing `UCOF-EXP-0001` bytes.
 
-## Implemented in the first increment
+## Implemented increments
 
 | Deliverable | Status | Evidence |
 |---|---|---|
@@ -21,15 +21,22 @@ Convert the Phase 1 experiment into a maintainable, hostile-input-resistant core
 | Single-allocation bound | Implemented | `max_allocation_bytes` |
 | Future-work limit fields | Added | logical bytes, dependencies, diagnostics, transform expansion |
 | Metadata-only inspection | Implemented and tested | `MetadataInspector` |
-| Explicit integrity status | Implemented | `IntegrityStatus::NotChecked` |
+| Explicit metadata integrity status | Implemented | `IntegrityStatus::NotChecked` |
 | Directory-to-header cross-check | Implemented and tested | source-backed inventory validation |
 | Unsupported required capability reporting | Implemented without false conformance claim | `InspectionReport` |
 | Payload-skip test | Passing | `tests/bounded_source.rs` |
 | Slice/seek equivalence test | Passing | `tests/bounded_source.rs` |
 | Read-budget failure test | Passing | `tests/bounded_source.rs` |
 | Record-header corruption test | Passing | `tests/bounded_source.rs` |
-| I/O architecture decision | Accepted | `docs/decisions/0003-bounded-synchronous-read-at.md` |
-| Full inherited CI suite | Passing | formatting, clippy, Rust, Python, adversarial corpus, experiments |
+| Bounded sequential event reader | Implemented; CI validation in progress | `SequentialReader<R>` |
+| Owned payload chunk ceiling | Implemented | `max_stream_chunk_bytes` |
+| Incremental committed-prefix hashing | Implemented | `StreamStats::bytes_hashed` |
+| Verified sequential commit event | Implemented | `StreamEvent::Commit`, `IntegrityStatus::Verified` |
+| Exact-end stream validation | Implemented | trailing-byte probe after footer |
+| Sequential reader tests | Added; CI validation in progress | `tests/sequential_reader.rs` |
+| Random-access I/O decision | Accepted | `docs/decisions/0003-bounded-synchronous-read-at.md` |
+| Sequential event decision | Accepted | `docs/decisions/0004-bounded-sequential-events.md` |
+| Full inherited CI suite | Passing before sequential increment | formatting, clippy, Rust, Python, adversarial corpus, experiments |
 
 ## Safety properties demonstrated
 
@@ -42,14 +49,20 @@ Convert the Phase 1 experiment into a maintainable, hostile-input-resistant core
 - metadata-only reports explicitly state that payload integrity was not checked;
 - unknown required capabilities are visible and prevent a fully-interpretable status without blocking structural inventory;
 - slice-backed and seek-backed sources produce equivalent reports;
-- a malformed physical record identity cannot be hidden by unchanged directory metadata.
+- a malformed physical record identity cannot be hidden by unchanged directory metadata;
+- sequential opaque payloads are emitted in caller-bounded chunks rather than accumulated;
+- manifest and directory payloads are retained only after metadata and allocation checks;
+- the committed prefix is hashed as bytes are consumed;
+- no sequential commit event is emitted before directory, manifest, digest, and exact-end checks pass;
+- stream truncation, digest mismatch, trailing bytes, and logical-byte exhaustion have direct tests;
+- iterator errors are intended to be terminal rather than repeating indefinitely.
 
 ## Important limitations
 
-- the source API is synchronous;
-- record headers are currently read individually rather than batched;
-- full source-backed integrity validation still needs to hash payload bodies;
-- sequential event reading has not yet been implemented;
+- both source and sequential APIs are synchronous;
+- random-access record headers are currently read individually rather than batched;
+- full random-access source integrity validation still needs to hash payload bodies;
+- the sequential reader currently owns one allocation per payload event;
 - diagnostic and salvage APIs have not yet been implemented;
 - streaming and seek-optimized writer APIs remain pending;
 - property testing, fuzz targets, and sparse-file fixtures remain pending;
@@ -57,7 +70,7 @@ Convert the Phase 1 experiment into a maintainable, hostile-input-resistant core
 
 ## Next increments
 
-1. Add a sequential event reader with bounded payload handling.
+1. Complete CI validation and correction of the sequential event reader.
 2. Add strict source-backed validation with separate bytes-read and bytes-hashed accounting.
 3. Add bounded diagnostic reports that never upgrade damaged state to valid state.
 4. Add streaming and seekable writer finalization APIs.
