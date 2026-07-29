@@ -196,11 +196,7 @@ mod tests {
         for cut in 1..=append.len() {
             let mut interrupted = committed.clone();
             interrupted.extend_from_slice(&append[..cut]);
-            assert!(!has_exact_end_candidate(
-                &interrupted,
-                MAGIC,
-                CANDIDATE_LEN
-            ));
+            assert!(!has_exact_end_candidate(&interrupted, MAGIC, CANDIDATE_LEN));
             let report = scan_backwards(
                 &interrupted,
                 MAGIC,
