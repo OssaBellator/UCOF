@@ -1,6 +1,6 @@
 # Phase 1 Status — Minimal Wire-Format Experiment
 
-**Status:** In progress  
+**Status:** Technical implementation complete; proposal review in progress  
 **Started:** 2026-07-29  
 **Experimental epoch:** `UCOF-EXP-0001`  
 **Working branch:** `phase-1/minimal-wire-experiment`
@@ -15,6 +15,7 @@ Create the smallest end-to-end format experiment that can encode, locate, inspec
 |---|---|---|
 | Workspace decision | Complete | `docs/decisions/0002-rust-workspace-and-toolchain.md` |
 | First normative proposal | In review | `docs/proposals/0001-exp-0001-framing.md` |
+| Proposal evidence appendix | Complete | `docs/proposals/0001-exp-0001-evidence.md` |
 | Experimental wire specification | Draft implemented | `spec/experimental/UCOF-EXP-0001.md` |
 | Rust workspace | Implemented on phase branch | `Cargo.toml`, `crates/` |
 | Fixed header, records, and footer | Implemented | `ucof-core` |
@@ -63,15 +64,17 @@ These choices apply only to `UCOF-EXP-0001`:
 - A compact variable-width strawman saves 55–70% of record-header bytes, but the whole-file benefit is negligible for page- and media-sized payloads.
 - A 64 KiB backward-search tail can expose 8,184 footer-magic candidates, supporting strict exact-end discovery for normal validation.
 - One million zero-byte objects require a lower-bound 40 MB of record headers and approximately 52 MB of directory payload. The flat materialized directory therefore fails UC-02 and must not be promoted as a massive-archive design.
+- FCP-0001’s evidence appendix explicitly separates strict exact-end validation from future checkpoint recovery and salvage modes.
 
 ## Remaining exit work
 
-Phase 1 is not complete until:
+Phase 1 is not formally complete until:
 
-1. FCP-0001 receives public review and all material objections are dispositioned.
-2. The executable findings companion is integrated into the primary threat model.
-3. The first framing proposal explicitly records the UC-02 failure and the exact-end versus recovery-mode distinction.
-4. Maintainers decide whether the evidence justifies accepting EXP-0001 for continued experimentation, revising it, or retiring it in favor of EXP-0002.
+1. FCP-0001 completes its public review period and all material objections are dispositioned.
+2. The executable findings companion is integrated into the primary threat model through a reviewed repository change.
+3. Maintainers decide whether to accept EXP-0001 for continued experimentation, revise it, defer it, reject it, or supersede it with EXP-0002.
+
+No remaining item requires expanding the experimental implementation itself unless review identifies a technical defect.
 
 ## Explicit limitations
 
