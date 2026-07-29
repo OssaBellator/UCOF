@@ -46,7 +46,8 @@ jobs:
             repair_plan \
             exp0002_strict \
             exp0002_recovery \
-            exp0002_roundtrip
+            exp0002_roundtrip \
+            exp0002_lookup
           do
             if [[ "${{ github.event_name }}" == "schedule" ]]; then
               cargo fuzz run "$target" -- -max_total_time=30 -max_len=65536
