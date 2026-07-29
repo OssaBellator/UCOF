@@ -480,12 +480,12 @@ impl Snapshot {
             return Err(Exp0002Error::InvalidLength("directory root"));
         }
         require_zero(&bytes[116..160], "snapshot")?;
-        let root_count = usize::try_from(read_u32(bytes, 104)?)
-            .map_err(|_| Exp0002Error::ArithmeticOverflow)?;
-        let required_count = usize::try_from(read_u32(bytes, 108)?)
-            .map_err(|_| Exp0002Error::ArithmeticOverflow)?;
-        let optional_count = usize::try_from(read_u32(bytes, 112)?)
-            .map_err(|_| Exp0002Error::ArithmeticOverflow)?;
+        let root_count =
+            usize::try_from(read_u32(bytes, 104)?).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
+        let required_count =
+            usize::try_from(read_u32(bytes, 108)?).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
+        let optional_count =
+            usize::try_from(read_u32(bytes, 112)?).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
         if root_count > limits.max_roots {
             return Err(Exp0002Error::ResourceLimit("snapshot roots"));
         }
@@ -520,14 +520,8 @@ impl Snapshot {
         let required_capabilities = read_u64_array(bytes, &mut cursor, required_count)?;
         let optional_capabilities = read_u64_array(bytes, &mut cursor, optional_count)?;
         validate_sorted_unique(&roots, Exp0002Error::InvalidRoot)?;
-        validate_sorted_unique(
-            &required_capabilities,
-            Exp0002Error::InvalidCapabilitySet,
-        )?;
-        validate_sorted_unique(
-            &optional_capabilities,
-            Exp0002Error::InvalidCapabilitySet,
-        )?;
+        validate_sorted_unique(&required_capabilities, Exp0002Error::InvalidCapabilitySet)?;
+        validate_sorted_unique(&optional_capabilities, Exp0002Error::InvalidCapabilitySet)?;
         if required_capabilities
             .iter()
             .any(|value| optional_capabilities.binary_search(value).is_ok())
@@ -880,10 +874,7 @@ fn write_directory(
     level.pop().ok_or(Exp0002Error::EmptyObjectSet)
 }
 
-fn encode_leaf_page(
-    entries: &[LeafEntry],
-    sequence: u64,
-) -> Result<[u8; PAGE_SIZE], Exp0002Error> {
+fn encode_leaf_page(entries: &[LeafEntry], sequence: u64) -> Result<[u8; PAGE_SIZE], Exp0002Error> {
     if entries.is_empty() || entries.len() > LEAF_CAPACITY {
         return Err(Exp0002Error::InvalidEntryCount);
     }
@@ -1066,10 +1057,7 @@ fn parse_page(bytes: &[u8]) -> Result<ParsedPage, Exp0002Error> {
     }
 }
 
-fn validate_leaf_order(
-    header: &PageHeader,
-    entries: &[LeafEntry],
-) -> Result<(), Exp0002Error> {
+fn validate_leaf_order(header: &PageHeader, entries: &[LeafEntry]) -> Result<(), Exp0002Error> {
     if entries.first().map(|entry| entry.object_id) != Some(header.min_key)
         || entries.last().map(|entry| entry.object_id) != Some(header.max_key)
     {
@@ -1139,11 +1127,7 @@ pub fn validate_strict(
     if footer.snapshot_offset < footer.commit_start {
         return Err(Exp0002Error::InvalidCommitRange);
     }
-    let snapshot_range = checked_range(
-        footer.snapshot_offset,
-        footer.snapshot_len,
-        bytes.len(),
-    )?;
+    let snapshot_range = checked_range(footer.snapshot_offset, footer.snapshot_len, bytes.len())?;
     if snapshot_range.end > footer_offset_usize {
         return Err(Exp0002Error::InvalidCommitRange);
     }
@@ -1423,10 +1407,7 @@ fn digest_commit(commit_bytes: &[u8], footer: &Footer) -> [u8; 32] {
     hasher.finalize().into()
 }
 
-fn canonical_values(
-    mut values: Vec<u64>,
-    error: Exp0002Error,
-) -> Result<Vec<u64>, Exp0002Error> {
+fn canonical_values(mut values: Vec<u64>, error: Exp0002Error) -> Result<Vec<u64>, Exp0002Error> {
     values.sort_unstable();
     if values.first() == Some(&0) || values.windows(2).any(|pair| pair[0] == pair[1]) {
         return Err(error);
@@ -1472,17 +1453,11 @@ fn checked_range(
     Ok(start..end)
 }
 
-fn overlaps_any(
-    range: &std::ops::Range<usize>,
-    ranges: &[std::ops::Range<usize>],
-) -> bool {
+fn overlaps_any(range: &std::ops::Range<usize>, ranges: &[std::ops::Range<usize>]) -> bool {
     ranges.iter().any(|other| ranges_overlap(range, other))
 }
 
-fn ranges_overlap(
-    left: &std::ops::Range<usize>,
-    right: &std::ops::Range<usize>,
-) -> bool {
+fn ranges_overlap(left: &std::ops::Range<usize>, right: &std::ops::Range<usize>) -> bool {
     left.start < right.end && right.start < left.end
 }
 
@@ -1609,7 +1584,10 @@ mod tests {
         assert_eq!(report.snapshot.sequence, 1);
         assert_eq!(report.snapshot.roots, vec![1, 3]);
         assert_eq!(report.objects.len(), 3);
-        assert_eq!(report.footer.previous_footer_offset, genesis.len() as u64 - FOOTER_LEN as u64);
+        assert_eq!(
+            report.footer.previous_footer_offset,
+            genesis.len() as u64 - FOOTER_LEN as u64
+        );
         assert_eq!(report.footer.commit_start, genesis.len() as u64);
     }
 
