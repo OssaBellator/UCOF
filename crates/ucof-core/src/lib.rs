@@ -10,6 +10,7 @@ mod limits;
 mod model;
 mod reader;
 mod source;
+mod source_validate;
 mod stream;
 mod writer;
 
@@ -21,6 +22,9 @@ pub use reader::{RecordInfo, ValidatedFile};
 pub use source::{
     InspectionReport, IntegrityStatus, MetadataInspector, ReadAt, ReadStats, SeekSource,
     SliceSource,
+};
+pub use source_validate::{
+    SourceValidationReport, SourceValidationStats, SourceValidator,
 };
 pub use stream::{SequentialReader, StreamCommit, StreamEvent, StreamRecord, StreamStats};
 pub use writer::Writer;
