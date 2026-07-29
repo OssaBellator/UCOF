@@ -40,7 +40,8 @@ jobs:
             paged_directory \
             snapshot_selection \
             recovery_scan \
-            compaction_plan
+            compaction_plan \
+            repair_plan
           do
             if [[ "${{ github.event_name }}" == "schedule" ]]; then
               cargo fuzz run "$target" -- -max_total_time=30 -max_len=65536
