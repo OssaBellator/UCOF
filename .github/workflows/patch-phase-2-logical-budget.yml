@@ -24,24 +24,27 @@ jobs:
           from pathlib import Path
 
           path = Path("crates/ucof-core/src/stream.rs")
-          text = path.read_text(encoding="utf-8")
-          old = """        let chunk_len = active.remaining.min(chunk_limit);
-        let chunk_len_usize =
-            usize::try_from(chunk_len).map_err(|_| Error::LimitExceeded(\"stream chunk bytes\"))?;"""
-          new = """        let logical_remaining = self
-            .limits
-            .max_logical_decoded_bytes
-            .checked_sub(self.stats.logical_bytes)
-            .ok_or(Error::LimitExceeded(\"logical decoded bytes\"))?;
-        if logical_remaining == 0 {
-            return Err(Error::LimitExceeded(\"logical decoded bytes\"));
-        }
-        let chunk_len = active.remaining.min(chunk_limit).min(logical_remaining);
-        let chunk_len_usize =
-            usize::try_from(chunk_len).map_err(|_| Error::LimitExceeded(\"stream chunk bytes\"))?;"""
-          if old not in text:
-              raise SystemExit("logical budget anchor not found")
-          path.write_text(text.replace(old, new, 1), encoding="utf-8")
+          lines = path.read_text(encoding="utf-8").splitlines()
+          anchor = "        let chunk_len = active.remaining.min(chunk_limit);"
+          if any("let logical_remaining = self" in line for line in lines):
+              raise SystemExit(0)
+          try:
+              index = lines.index(anchor)
+          except ValueError as error:
+              raise SystemExit("logical budget anchor not found") from error
+          replacement = [
+              "        let logical_remaining = self",
+              "            .limits",
+              "            .max_logical_decoded_bytes",
+              "            .checked_sub(self.stats.logical_bytes)",
+              "            .ok_or(Error::LimitExceeded(\"logical decoded bytes\"))?;",
+              "        if logical_remaining == 0 {",
+              "            return Err(Error::LimitExceeded(\"logical decoded bytes\"));",
+              "        }",
+              "        let chunk_len = active.remaining.min(chunk_limit).min(logical_remaining);",
+          ]
+          lines[index:index + 1] = replacement
+          path.write_text("\n".join(lines) + "\n", encoding="utf-8")
           PY
       - name: Format sources
         run: cargo fmt --all
