@@ -26,6 +26,20 @@ doc = false
 bench = false
 
 [[bin]]
+name = "metadata_inspect"
+path = "fuzz_targets/metadata_inspect.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "prefix_salvage"
+path = "fuzz_targets/prefix_salvage.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
 name = "sequential_reader"
 path = "fuzz_targets/sequential_reader.rs"
 test = false
