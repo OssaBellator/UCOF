@@ -35,6 +35,17 @@ jobs:
           python3 tools/experiment_footer_discovery.py
           python3 tools/experiment_scale_limits.py
 
+  msrv:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: msrv-1.85.0
+      - name: Check workspace at MSRV
+        run: cargo check --workspace --all-targets
+
   portability:
     runs-on: ubuntu-latest
     strategy:
