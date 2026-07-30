@@ -84,7 +84,7 @@ For every valid vector:
 | Pinned-vector lookup tests | Implemented | multi-leaf and append integration tests |
 | Random-access source without full slice | Implemented and tested | `lookup_authenticated_at` |
 
-The targeted lookup verifies the active commit, snapshot, one page path, and selected object. It does not claim that unrelated historical object records were rehashed. The range-source implementation streams commit and object hashing under read-operation, byte, request-size, page, and hash budgets; a test proves that lookup of a small historical root does not read an unrelated one-megabyte historical payload.
+The targeted lookup verifies the active commit, snapshot, one page path, and selected object. It does not claim that unrelated historical object records were rehashed. The range-source implementation streams commit and object hashing under read-operation, byte, request-size, page, and hash budgets; a test proves that lookup of a small historical root does not read an unrelated one-megabyte historical payload. The range-source implementation streams commit and object hashing under read-operation, byte, request-size, page, and hash budgets; a test proves that lookup of a small historical root does not read an unrelated one-megabyte historical payload.
 
 ### Concrete append and recovery
 
