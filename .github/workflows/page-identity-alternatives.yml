@@ -1,0 +1,26 @@
+name: Page Identity Alternatives
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_page_identity_alternatives.py"
+      - "docs/experiments/0014-exp0002-page-identity-alternatives.md"
+      - ".github/workflows/page-identity-alternatives.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_page_identity_alternatives.py"
+      - "docs/experiments/0014-exp0002-page-identity-alternatives.md"
+      - ".github/workflows/page-identity-alternatives.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare page identity semantics
+        run: python3 tools/experiment_exp0002_page_identity_alternatives.py
