@@ -29,169 +29,122 @@ jobs:
           path = Path("crates/ucof-experiments/src/exp0002_source_strict.rs")
           text = path.read_text(encoding="utf-8")
 
-          replacements = [
-              (
-                  """    pub max_scan_bytes: u64,
-              pub max_magic_matches: usize,""",
-                  """    pub max_scan_bytes: u64,
-              pub max_scan_read_operations: u64,
-              pub max_magic_matches: usize,""",
-              ),
-              (
-                  """            max_scan_bytes: 16 * 1024 * 1024,
-                  max_magic_matches: 4096,""",
-                  """            max_scan_bytes: 16 * 1024 * 1024,
-                  max_scan_read_operations: 4096,
-                  max_magic_matches: 4096,""",
-              ),
-              (
-                  """    pub scan_bytes_read: u64,
-              pub magic_matches: usize,""",
-                  """    pub scan_bytes_read: u64,
-              pub scan_read_operations: u64,
-              pub magic_matches: usize,""",
-              ),
-              (
-                  """    let scan_len_usize = usize::try_from(scan_len).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
-              let mut scan = vec![0_u8; scan_len_usize];
-              source
-                  .read_exact_at(scan_start, &mut scan)
-                  .map_err(|_| Exp0002SourceError::Io(\"recovery scan\"))?;
-
-              let mut report = Exp0002RecoveryReport {
-                  file_len,
-                  scan_start,
-                  scan_bytes_read: scan_len,
-                  magic_matches: 0,""",
-                  """    let scan_len_usize = usize::try_from(scan_len).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
-              let mut scan = vec![0_u8; scan_len_usize];
-              let mut scan_cursor = 0_usize;
-              let mut scan_read_operations = 0_u64;
-              while scan_cursor < scan.len() {
-                  let take = (scan.len() - scan_cursor).min(limits.candidate.max_read_request_bytes);
-                  let read_offset = scan_start
-                      .checked_add(
-                          u64::try_from(scan_cursor)
-                              .map_err(|_| Exp0002Error::ArithmeticOverflow)?,
-                      )
-                      .ok_or(Exp0002Error::ArithmeticOverflow)?;
-                  source
-                      .read_exact_at(read_offset, &mut scan[scan_cursor..scan_cursor + take])
-                      .map_err(|_| Exp0002SourceError::Io(\"recovery scan\"))?;
-                  scan_cursor += take;
-                  scan_read_operations = scan_read_operations
-                      .checked_add(1)
-                      .ok_or(Exp0002Error::ArithmeticOverflow)?;
-                  if scan_read_operations > limits.max_scan_read_operations {
-                      return Err(Exp0002Error::ResourceLimit(\"recovery scan reads\").into());
-                  }
-              }
-
-              let mut report = Exp0002RecoveryReport {
-                  file_len,
-                  scan_start,
-                  scan_bytes_read: scan_len,
-                  scan_read_operations,
-                  magic_matches: 0,""",
-              ),
-              (
-                  """        let mut prefix = PrefixSource {
-                  source: &mut *source,
-                  len: prefix_len,
-              };
-              if let Ok(verified) = validate_strict_at(&mut prefix, &limits.candidate) {
-                  report.total_candidate_bytes_read = report
-                      .total_candidate_bytes_read
-                      .checked_add(verified.stats.bytes_read)
-                      .ok_or(Exp0002Error::ArithmeticOverflow)?;
-                  if report.total_candidate_bytes_read > limits.max_total_candidate_bytes_read {
-                      return Err(Exp0002Error::ResourceLimit(\"recovery validation bytes\").into());
-                  }
-                  report.results.push(RecoveredExp0002Prefix {""",
-                  """        let mut prefix = PrefixSource {
-                  source: &mut *source,
-                  len: prefix_len,
-                  bytes_read: 0,
-              };
-              let validation = validate_strict_at(&mut prefix, &limits.candidate);
-              report.total_candidate_bytes_read = report
-                  .total_candidate_bytes_read
-                  .checked_add(prefix.bytes_read)
-                  .ok_or(Exp0002Error::ArithmeticOverflow)?;
-              if report.total_candidate_bytes_read > limits.max_total_candidate_bytes_read {
-                  return Err(Exp0002Error::ResourceLimit(\"recovery validation bytes\").into());
-              }
-              if let Ok(verified) = validation {
-                  report.results.push(RecoveredExp0002Prefix {""",
-              ),
-              (
-                  """struct PrefixSource<'a, S> {
-              source: &'a mut S,
-              len: u64,
-          }""",
-                  """struct PrefixSource<'a, S> {
-              source: &'a mut S,
-              len: u64,
-              bytes_read: u64,
-          }""",
-              ),
-              (
-                  """        if end > self.len {
-                  return Err(io::Error::new(
-                      io::ErrorKind::UnexpectedEof,
-                      \"prefix range is truncated\",
-                  ));
-              }
-              self.source.read_exact_at(offset, buffer)""",
-                  """        if end > self.len {
-                  return Err(io::Error::new(
-                      io::ErrorKind::UnexpectedEof,
-                      \"prefix range is truncated\",
-                  ));
-              }
-              self.bytes_read = self
-                  .bytes_read
-                  .checked_add(length)
-                  .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, \"read counter overflow\"))?;
-              self.source.read_exact_at(offset, buffer)""",
-              ),
-          ]
-
-          for old, new in replacements:
+          def replace_once(old: str, new: str) -> None:
+              global text
+              if new in text:
+                  return
               if old not in text:
-                  if new in text:
-                      continue
                   raise SystemExit(f"patch anchor not found: {old[:100]!r}")
               text = text.replace(old, new, 1)
 
-          marker = """    #[test]
-              fn strict_source_enforces_cumulative_read_budget() {"""
-          test = """    #[test]
-              fn recovery_counts_failed_candidate_reads() {
-                  let mut bytes = build_genesis(header(), vec![object(1, b\"root\", true)])
-                      .expect(\"genesis\");
-                  let mut fake_footer = [0_u8; FOOTER_LEN];
-                  fake_footer[..FOOTER_MAGIC.len()].copy_from_slice(FOOTER_MAGIC);
-                  bytes.extend_from_slice(&fake_footer);
-                  let mut source = Exp0002SliceSource::new(&bytes);
-                  let error = scan_valid_prefixes_at(
-                      &mut source,
-                      &Exp0002RecoveryLimits {
-                          max_total_candidate_bytes_read: 1,
-                          ..Exp0002RecoveryLimits::default()
-                      },
-                  )
-                  .expect_err(\"failed candidate work must be charged\");
-                  assert_eq!(
-                      error,
-                      Exp0002SourceError::Format(Exp0002Error::ResourceLimit(
-                          \"recovery validation bytes\"
-                      ))
-                  );
-              }
+          replace_once(
+              "    pub max_scan_bytes: u64,\n",
+              "    pub max_scan_bytes: u64,\n    pub max_scan_read_operations: u64,\n",
+          )
+          replace_once(
+              "            max_scan_bytes: 16 * 1024 * 1024,\n",
+              "            max_scan_bytes: 16 * 1024 * 1024,\n            max_scan_read_operations: 4096,\n",
+          )
+          replace_once(
+              "    pub scan_bytes_read: u64,\n",
+              "    pub scan_bytes_read: u64,\n    pub scan_read_operations: u64,\n",
+          )
 
-          """
-          if test not in text:
+          scan_start = text.index("    let scan_len_usize =")
+          scan_end = text.index("    let mut report = Exp0002RecoveryReport {", scan_start)
+          scan_replacement = '''    let scan_len_usize =
+              usize::try_from(scan_len).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
+          let mut scan = vec![0_u8; scan_len_usize];
+          let mut scan_cursor = 0_usize;
+          let mut scan_read_operations = 0_u64;
+          while scan_cursor < scan.len() {
+              let take = (scan.len() - scan_cursor).min(limits.candidate.max_read_request_bytes);
+              let read_offset = scan_start
+                  .checked_add(
+                      u64::try_from(scan_cursor)
+                          .map_err(|_| Exp0002Error::ArithmeticOverflow)?,
+                  )
+                  .ok_or(Exp0002Error::ArithmeticOverflow)?;
+              source
+                  .read_exact_at(read_offset, &mut scan[scan_cursor..scan_cursor + take])
+                  .map_err(|_| Exp0002SourceError::Io("recovery scan"))?;
+              scan_cursor += take;
+              scan_read_operations = scan_read_operations
+                  .checked_add(1)
+                  .ok_or(Exp0002Error::ArithmeticOverflow)?;
+              if scan_read_operations > limits.max_scan_read_operations {
+                  return Err(Exp0002Error::ResourceLimit("recovery scan reads").into());
+              }
+          }
+
+          '''
+          text = text[:scan_start] + scan_replacement + text[scan_end:]
+          replace_once(
+              "        scan_bytes_read: scan_len,\n",
+              "        scan_bytes_read: scan_len,\n        scan_read_operations,\n",
+          )
+
+          candidate_start = text.index("        let mut prefix = PrefixSource {")
+          push_marker = "            report.results.push(RecoveredExp0002Prefix {"
+          candidate_end = text.index(push_marker, candidate_start)
+          candidate_replacement = '''        let mut prefix = PrefixSource {
+              source: &mut *source,
+              len: prefix_len,
+              bytes_read: 0,
+          };
+          let validation = validate_strict_at(&mut prefix, &limits.candidate);
+          report.total_candidate_bytes_read = report
+              .total_candidate_bytes_read
+              .checked_add(prefix.bytes_read)
+              .ok_or(Exp0002Error::ArithmeticOverflow)?;
+          if report.total_candidate_bytes_read > limits.max_total_candidate_bytes_read {
+              return Err(Exp0002Error::ResourceLimit("recovery validation bytes").into());
+          }
+          if let Ok(verified) = validation {
+'''
+          text = text[:candidate_start] + candidate_replacement + text[candidate_end:]
+
+          replace_once(
+              "struct PrefixSource<'a, S> {\n    source: &'a mut S,\n    len: u64,\n}",
+              "struct PrefixSource<'a, S> {\n    source: &'a mut S,\n    len: u64,\n    bytes_read: u64,\n}",
+          )
+          replace_once(
+              "        self.source.read_exact_at(offset, buffer)\n",
+              '''        self.bytes_read = self
+              .bytes_read
+              .checked_add(length)
+              .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "read counter overflow"))?;
+          self.source.read_exact_at(offset, buffer)
+''',
+          )
+
+          marker = "    #[test]\n    fn strict_source_enforces_cumulative_read_budget() {"
+          test = '''    #[test]
+          fn recovery_counts_failed_candidate_reads() {
+              let mut bytes = build_genesis(header(), vec![object(1, b"root", true)])
+                  .expect("genesis");
+              let mut fake_footer = [0_u8; FOOTER_LEN];
+              fake_footer[..FOOTER_MAGIC.len()].copy_from_slice(FOOTER_MAGIC);
+              bytes.extend_from_slice(&fake_footer);
+              let mut source = Exp0002SliceSource::new(&bytes);
+              let error = scan_valid_prefixes_at(
+                  &mut source,
+                  &Exp0002RecoveryLimits {
+                      max_total_candidate_bytes_read: 1,
+                      ..Exp0002RecoveryLimits::default()
+                  },
+              )
+              .expect_err("failed candidate work must be charged");
+              assert_eq!(
+                  error,
+                  Exp0002SourceError::Format(Exp0002Error::ResourceLimit(
+                      "recovery validation bytes"
+                  ))
+              );
+          }
+
+'''
+          if "fn recovery_counts_failed_candidate_reads()" not in text:
               if marker not in text:
                   raise SystemExit("test insertion marker not found")
               text = text.replace(marker, test + marker, 1)
