@@ -65,7 +65,9 @@ fuzz_target!(|data: &[u8]| {
     let mut raw_recovery = SliceSource { data };
     let _ = scan_source_recovery(&mut raw_recovery, source_limits);
 
-    let desired = data.first().map_or(1_usize, |byte| 1 + usize::from(*byte % 8));
+    let desired = data
+        .first()
+        .map_or(1_usize, |byte| 1 + usize::from(*byte % 8));
     let source = data.get(1..).unwrap_or_default();
     let mut objects = Vec::with_capacity(desired);
     for index in 0..desired {
@@ -80,21 +82,20 @@ fuzz_target!(|data: &[u8]| {
     }
 
     let genesis = build_genesis(&objects, source_limits.format).expect("bounded genesis");
-    let selected = data.first().map_or(0_usize, |byte| usize::from(*byte) % objects.len());
+    let selected = data
+        .first()
+        .map_or(0_usize, |byte| usize::from(*byte) % objects.len());
     let mut payload = objects[selected].payload.clone();
     payload.reverse();
     payload.extend_from_slice(b":source-history");
-    let replacement = ImmutableObjectInput::new(
-        objects[selected].object_id,
-        objects[selected].kind,
-        payload,
-    );
-    let appended = append_replacement(&genesis, &replacement, source_limits.format)
-        .expect("bounded append");
+    let replacement =
+        ImmutableObjectInput::new(objects[selected].object_id, objects[selected].kind, payload);
+    let appended =
+        append_replacement(&genesis, &replacement, source_limits.format).expect("bounded append");
 
     let mut strict_source = SliceSource { data: &appended };
-    let strict = validate_source_at(&mut strict_source, source_limits)
-        .expect("generated source validates");
+    let strict =
+        validate_source_at(&mut strict_source, source_limits).expect("generated source validates");
     assert_eq!(strict.report.sequence, 1);
     assert_eq!(strict.report.object_count, objects.len());
 
