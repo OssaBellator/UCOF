@@ -31,6 +31,30 @@ fn sha256_hex(bytes: &[u8]) -> String {
     output
 }
 
+fn assert_bytes_equal(actual: &[u8], expected: &[u8], label: &str) {
+    if actual == expected {
+        return;
+    }
+    let first = actual
+        .iter()
+        .zip(expected)
+        .position(|(left, right)| left != right)
+        .unwrap_or_else(|| actual.len().min(expected.len()));
+    let start = first.saturating_sub(16);
+    let actual_end = actual.len().min(first.saturating_add(17));
+    let expected_end = expected.len().min(first.saturating_add(17));
+    panic!(
+        "{label} differs: actual_len={} expected_len={} first_offset={} actual_sha256={} expected_sha256={} actual_window={:02x?} expected_window={:02x?}",
+        actual.len(),
+        expected.len(),
+        first,
+        sha256_hex(actual),
+        sha256_hex(expected),
+        &actual[start..actual_end],
+        &expected[start..expected_end],
+    );
+}
+
 fn four_objects() -> Vec<ImmutableObjectInput> {
     vec![
         ImmutableObjectInput::new(1, 1, b"alpha".to_vec()),
@@ -53,7 +77,7 @@ fn validates_and_reproduces_the_pinned_genesis() {
 
     let generated = build_genesis(&four_objects(), ImmutableLimits::default())
         .expect("genesis generation succeeds");
-    assert_eq!(generated, pinned);
+    assert_bytes_equal(&generated, &pinned, "generated genesis");
     assert_eq!(
         sha256_hex(&generated),
         "94f9441339fb49ffef5b8c7b54307c20488bf2e09958fd805fd2addae65c2a23"
@@ -111,16 +135,20 @@ fn reproduces_pinned_append_and_multi_level_recipes() {
 
 #[test]
 fn enforces_writer_and_validator_limits_before_success() {
-    let mut limits = ImmutableLimits::default();
-    limits.max_output_bytes = 64;
+    let limits = ImmutableLimits {
+        max_output_bytes: 64,
+        ..ImmutableLimits::default()
+    };
     assert_eq!(
         build_genesis(&four_objects(), limits),
         Err(ImmutableError::Limit("output"))
     );
 
     let genesis = build_genesis(&four_objects(), ImmutableLimits::default()).expect("genesis");
-    let mut limits = ImmutableLimits::default();
-    limits.max_pages = 0;
+    let limits = ImmutableLimits {
+        max_pages: 0,
+        ..ImmutableLimits::default()
+    };
     assert_eq!(
         validate(&genesis, limits),
         Err(ImmutableError::Limit("page count"))
