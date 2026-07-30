@@ -4,7 +4,11 @@ on:
   pull_request:
     paths:
       - "tests/vectors/exp-0002-immutable/**"
+      - "crates/ucof-experiments/src/immutable_successor.rs"
+      - "crates/ucof-experiments/src/lib.rs"
+      - "crates/ucof-experiments/tests/immutable_successor_api.rs"
       - "crates/ucof-experiments/tests/exp0002_immutable_vector.rs"
+      - "tools/prepare_immutable_successor_source.py"
       - "tools/experiment_exp0002_immutable_page_cow.py"
       - "tools/experiment_exp0002_immutable_page_objects.py"
       - ".github/workflows/verify-exp0002-immutable-vector.yml"
@@ -12,7 +16,11 @@ on:
     branches: ["phase-3/**"]
     paths:
       - "tests/vectors/exp-0002-immutable/**"
+      - "crates/ucof-experiments/src/immutable_successor.rs"
+      - "crates/ucof-experiments/src/lib.rs"
+      - "crates/ucof-experiments/tests/immutable_successor_api.rs"
       - "crates/ucof-experiments/tests/exp0002_immutable_vector.rs"
+      - "tools/prepare_immutable_successor_source.py"
       - "tools/experiment_exp0002_immutable_page_cow.py"
       - "tools/experiment_exp0002_immutable_page_objects.py"
       - ".github/workflows/verify-exp0002-immutable-vector.yml"
@@ -61,9 +69,24 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-      - name: Lint independent vector parser
-        run: cargo clippy --locked -p ucof-experiments --test exp0002_immutable_vector -- -D warnings
-      - name: Parse and hash pinned vector independently
-        run: cargo test --locked -p ucof-experiments --test exp0002_immutable_vector -- --nocapture
+      - name: Normalize reusable immutable successor API
+        run: |
+          python3 tools/prepare_immutable_successor_source.py
+          cargo fmt --all
+          cargo fmt --all -- --check
+      - name: Export normalized reusable API
+        uses: actions/upload-artifact@v4
+        with:
+          name: formatted-immutable-successor
+          path: |
+            crates/ucof-experiments/src/immutable_successor.rs
+            crates/ucof-experiments/src/lib.rs
+            crates/ucof-experiments/tests/immutable_successor_api.rs
+          if-no-files-found: error
+      - name: Lint successor parser and reusable API
+        run: cargo clippy --locked -p ucof-experiments --test exp0002_immutable_vector --test immutable_successor_api -- -D warnings
+      - name: Parse, generate, and validate successor vectors
+        run: |
+          cargo test --locked -p ucof-experiments --test exp0002_immutable_vector -- --nocapture
+          cargo test --locked -p ucof-experiments --test immutable_successor_api -- --nocapture
+          cargo test --locked -p ucof-experiments --test exp0002_immutable_generated_vectors -- --nocapture
