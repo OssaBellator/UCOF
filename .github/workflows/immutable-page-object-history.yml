@@ -17,7 +17,7 @@ on:
       - "tools/experiment_exp0002_immutable_page_objects.py"
       - "tools/experiment_exp0002_immutable_page_splits.py"
       - "tools/experiment_exp0002_immutable_page_recursive_delete.py"
-      - "tools/experiment_exp0002_immutable_page_object-history.py"
+      - "tools/experiment_exp0002_immutable_page_object_history.py"
       - "docs/experiments/0032-exp0002-immutable-page-object-history.md"
       - ".github/workflows/immutable-page-object-history.yml"
   workflow_dispatch:
