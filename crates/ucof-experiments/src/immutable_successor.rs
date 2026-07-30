@@ -10,4 +10,22 @@ include!("immutable_successor/history.rs");
 include!("immutable_successor/part4.rs");
 include!("immutable_successor/part5.rs");
 include!("immutable_successor/rewrite.rs");
-include!("immutable_successor/source.rs");
+
+#[allow(clippy::len_without_is_empty)]
+mod source_api {
+    use super::*;
+
+    include!("immutable_successor/source.rs");
+}
+
+pub use source_api::*;
+
+/// Convenience methods completing the synchronous random-access source contract.
+pub trait ImmutableReadAtExt: ImmutableReadAt {
+    /// Returns whether the current stable source view has zero bytes.
+    fn is_empty(&mut self) -> Result<bool, ImmutableSourceError> {
+        Ok(self.len()? == 0)
+    }
+}
+
+impl<T: ImmutableReadAt + ?Sized> ImmutableReadAtExt for T {}
