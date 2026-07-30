@@ -1,66 +1,31 @@
-name: Normalize Phase 3 History Sources
+name: Verify Phase 3 Integration
 
 on:
-  push:
-    branches: ["phase-3/**"]
   pull_request:
     paths:
       - "crates/ucof-experiments/**"
+      - "tests/vectors/exp-0002-invalid/**"
+      - "tools/exp0002_invalid_vectors.py"
       - ".github/workflows/integrate-phase3-evidence.yml"
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  normalize:
-    if: github.actor != 'github-actions[bot]' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Apply focused history fixes
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          chain = Path("crates/ucof-experiments/src/exp0002_source_chain.rs")
-          text = chain.read_text(encoding="utf-8")
-          text = text.replace(
-              "Exp0002Error::PreviousFooterCycle",
-              "Exp0002Error::InvalidPreviousFooter",
-          )
-          text = text.replace(
-              "let mut commits = Vec::new();",
-              "let mut commits: Vec<RecoveredExp0002SourcePrefix> = Vec::new();",
-          )
-          chain.write_text(text, encoding="utf-8")
-
-          cli = Path("crates/ucof-experiments/src/bin/ucof-exp0002.rs")
-          text = cli.read_text(encoding="utf-8")
-          text = text.replace(
-              "use ucof_experiments::exp0002::{FileHeader, ValidationLimits};",
-              "use ucof_experiments::exp0002::FileHeader;",
-          )
-          cli.write_text(text, encoding="utf-8")
-          PY
-      - name: Normalize Rust sources
-        run: cargo fmt --all
-      - name: Lint and test experiment crate
-        run: |
-          cargo clippy --locked -p ucof-experiments --all-targets -- -D warnings
-          cargo test --locked -p ucof-experiments --all-targets
-      - name: Commit normalized sources
-        run: |
-          if git diff --quiet -- crates/ucof-experiments; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/ucof-experiments
-          git commit -m "fix: finalize EXP-0002 history and CLI sources"
-          git push origin HEAD:${{ github.head_ref || github.ref_name }}
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint Phase 3 experiment crate
+        run: cargo clippy --locked -p ucof-experiments --all-targets -- -D warnings
+      - name: Test Phase 3 experiment crate
+        run: cargo test --locked -p ucof-experiments --all-targets
+      - name: Verify invalid vector reproducibility
+        run: python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
