@@ -49,7 +49,7 @@
       "suffix": "read-operations-minus-one",
       "mutation": "max_read_operations=required-1",
       "expected": "reject",
-      "error_contains": "read operations"
+      "error_contains": "reads"
     },
     {
       "suffix": "read-bytes-minus-one",
@@ -77,5 +77,5 @@
     }
   ],
   "expanded_case_count": 18,
-  "expanded_cases_sha256": "c0974ff6ce7d128f8edd41fc0ee837ce8d3dd6604890f0e7d98642a3a1b69a92"
+  "expanded_cases_sha256": "a10ce5c96dbbe49206c67a67a240a7e7b5caebbc5e3e88476b259a2c4d0406e1"
 }
