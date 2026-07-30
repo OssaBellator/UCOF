@@ -68,10 +68,13 @@ def encode_catalog(
     if len(capabilities) > MAX_CAPABILITIES:
         raise CatalogError("capability count")
     identifiers = [capability.identifier for capability in capabilities]
-    if identifiers != sorted(identifiers) or any(
-        identifier == 0
-        or left >= right
-        for left, right in zip(identifiers, identifiers[1:])
+    if (
+        identifiers != sorted(identifiers)
+        or any(identifier == 0 for identifier in identifiers)
+        or any(
+            left >= right
+            for left, right in zip(identifiers, identifiers[1:])
+        )
     ):
         raise CatalogError("capability order")
     extensions.parse_extensions(extension_bytes)
@@ -142,9 +145,11 @@ def parse_catalog(payload: bytes) -> Catalog:
         for index in range(root_count)
     )
     cursor += roots_bytes
-    if any(
-        root == 0 or left >= right for left, right in zip(roots, roots[1:])
-    ) or CATALOG_OBJECT_ID in roots:
+    if (
+        any(root == 0 for root in roots)
+        or any(left >= right for left, right in zip(roots, roots[1:]))
+        or CATALOG_OBJECT_ID in roots
+    ):
         raise CatalogError("root order")
 
     capabilities: list[Capability] = []
