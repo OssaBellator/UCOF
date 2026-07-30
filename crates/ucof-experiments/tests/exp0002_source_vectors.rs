@@ -1,9 +1,7 @@
 use std::fs;
 use std::path::{Path, PathBuf};
 use ucof_experiments::exp0002_source::{Exp0002SliceSource, Exp0002SourceLimits};
-use ucof_experiments::{
-    scan_valid_prefixes_at, validate_strict_at, Exp0002SourceRecoveryLimits,
-};
+use ucof_experiments::{scan_valid_prefixes_at, validate_strict_at, Exp0002SourceRecoveryLimits};
 
 fn decode_hex(text: &str) -> Vec<u8> {
     let text = text.trim();
@@ -27,9 +25,10 @@ fn repository_root() -> PathBuf {
 
 fn read_hex(path: impl AsRef<Path>) -> Vec<u8> {
     let path = path.as_ref();
-    decode_hex(&fs::read_to_string(path).unwrap_or_else(|error| {
-        panic!("failed to read {}: {error}", path.display())
-    }))
+    decode_hex(
+        &fs::read_to_string(path)
+            .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display())),
+    )
 }
 
 #[test]
@@ -86,11 +85,8 @@ fn interrupted_append_vectors_recover_only_the_previous_complete_commit() {
     ] {
         let bytes = read_hex(invalid.join(name));
         let mut source = Exp0002SliceSource::new(&bytes);
-        let report = scan_valid_prefixes_at(
-            &mut source,
-            &Exp0002SourceRecoveryLimits::default(),
-        )
-        .unwrap_or_else(|error| panic!("{name} recovery failed: {error}"));
+        let report = scan_valid_prefixes_at(&mut source, &Exp0002SourceRecoveryLimits::default())
+            .unwrap_or_else(|error| panic!("{name} recovery failed: {error}"));
         assert!(
             report
                 .results
@@ -99,7 +95,10 @@ fn interrupted_append_vectors_recover_only_the_previous_complete_commit() {
             "{name} did not recover the pinned genesis prefix"
         );
         assert!(
-            report.results.iter().all(|candidate| candidate.sequence == 0),
+            report
+                .results
+                .iter()
+                .all(|candidate| candidate.sequence == 0),
             "{name} reported an incomplete append as a valid newer commit"
         );
     }
