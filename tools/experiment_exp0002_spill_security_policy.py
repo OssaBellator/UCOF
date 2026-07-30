@@ -98,6 +98,14 @@ class PrivateSpillWorkspace:
         return len(regular_files)
 
 
+def sync_directory(path: Path) -> None:
+    directory = os.open(path, os.O_RDONLY)
+    try:
+        os.fsync(directory)
+    finally:
+        os.close(directory)
+
+
 def publish_no_overwrite(staged: Path, destination: Path) -> None:
     descriptor = os.open(staged, os.O_RDONLY)
     try:
@@ -105,11 +113,9 @@ def publish_no_overwrite(staged: Path, destination: Path) -> None:
     finally:
         os.close(descriptor)
     os.link(staged, destination, follow_symlinks=False)
-    directory = os.open(destination.parent, os.O_RDONLY)
-    try:
-        os.fsync(directory)
-    finally:
-        os.close(directory)
+    sync_directory(destination.parent)
+    staged.unlink()
+    sync_directory(staged.parent)
 
 
 def assert_private(path: Path, expected_type: int) -> None:
@@ -150,14 +156,17 @@ def main() -> None:
         workspace.open_files = 0
 
         published = base / "published.ucof"
+        first_payload = first.read_bytes()
         publish_no_overwrite(first, published)
-        assert published.read_bytes() == first.read_bytes()
+        assert not first.exists()
+        assert published.read_bytes() == first_payload
         try:
             publish_no_overwrite(second, published)
         except FileExistsError:
             pass
         else:
             raise AssertionError("publication overwrote an existing destination")
+        assert second.exists()
 
         external = base / "external-secret"
         external.write_bytes(b"must survive")
@@ -182,7 +191,7 @@ def main() -> None:
         else:
             raise AssertionError("cleanup ignored ownership mismatch")
         marker.write_text(original_marker, encoding="ascii")
-        assert workspace.cleanup() == 3
+        assert workspace.cleanup() == 2
 
         inode_workspace = PrivateSpillWorkspace(
             base / "inode-stage",
@@ -216,6 +225,7 @@ def main() -> None:
     print("symlink_safe_cleanup=pass")
     print("external_target_survives=pass")
     print("no_overwrite_publication=pass")
+    print("published_inode_retires_staged_name=pass")
     print("file_and_directory_sync_order=pass")
     print("secure_deletion_claim=none")
     print("finding=cleanup authority requires an unforgeable caller-held ownership token")
