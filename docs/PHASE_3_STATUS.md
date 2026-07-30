@@ -134,11 +134,13 @@ The general mixed planner is executable evidence but is not yet integrated into 
 - `build_genesis`;
 - `append_replacement`;
 - exact-end `validate`;
-- `validate_history`;
-- `scan_recovery_candidates`;
+- slice-based `validate_history`;
+- slice-based `scan_recovery_candidates`;
 - `rewrite_all`;
 - `rewrite_selected`;
 - bounded source full validation;
+- bounded source linked history;
+- bounded source suffix recovery;
 - bounded source lookup and authenticated absence.
 
 The module keeps exact-end validity, linked-history validity, report-only recovery, rewrite, and targeted lookup as separate APIs and report types.
@@ -153,25 +155,30 @@ The reusable Rust writer reproduces the Python recipe identities:
 
 ### History and recovery assurance
 
-`validate_history`:
+Both slice and random-access source APIs now exist.
+
+Linked history:
 
 - revalidates every linked strict prefix;
 - checks physical footer ordering;
 - checks exact sequence decrements;
 - checks parent snapshot identity;
 - enforces history depth limits;
+- carries one cumulative source budget across ancestors;
 - rejects ancestor corruption even when the newest active commit remains valid.
 
-`scan_recovery_candidates`:
+Recovery:
 
 - scans only a bounded suffix;
+- handles suffixes shorter than footer magic without indexing failure;
 - caps attempts and returned candidates independently;
 - treats magic as a hint without authority;
+- charges successful and failed candidate reads to one cumulative budget;
 - returns only exact strictly validated prefixes;
 - orders candidates by physical recency;
 - never selects an active replacement.
 
-Source-based active validation and targeted lookup are implemented. Source-based linked-history and suffix-recovery traversal remain a separate pending optimization; the current reusable history/recovery APIs operate on slices.
+A 400-object, four-page source validates under 4 KiB maximum read requests. An interrupted append reports both complete sequence-1 and sequence-0 prefixes.
 
 ### Rewrite and compaction inputs
 
@@ -212,7 +219,7 @@ Current successor evidence includes:
 - layer-targeted mutations that recompute outer authentication;
 - independent Rust parsing and generation checks;
 - jointly satisfiable research support profiles;
-- 24 cargo-fuzz targets, including successor strict validation, writer roundtrip, and linked history/recovery.
+- 25 cargo-fuzz targets, including successor strict validation, writer roundtrip, slice history/recovery, source lookup, and source history/recovery.
 
 The current locked matrix passes:
 
@@ -222,7 +229,7 @@ The current locked matrix passes:
 - i686 and powerpc64 compilation;
 - Candidate 1 Rust/Python corpora and experiments;
 - successor vectors, invalid recipes, algorithms, source, metadata, recovery, and spill policy;
-- all 24 fuzz builds and bounded smoke campaigns.
+- all 25 fuzz builds and bounded smoke campaigns.
 
 Permanent workflows use read-only repository permissions.
 
@@ -233,15 +240,14 @@ Before an immutable-page successor can be proposed as an independently implement
 1. an explicit Candidate 2 proposal or other new epoch allocation based on the current non-epoch byte draft;
 2. normative identifier width, locator layout, occupancy, split, redistribution, and deletion policies;
 3. integration of arbitrary-depth mixed batching into the reusable Rust byte writer;
-4. source-based linked-history and recovery APIs without whole-file materialization;
-5. production repair/compaction implementation with profile dependency semantics and preservation policy;
-6. compaction vectors and boundary vectors for selected support profiles;
-7. concrete HTTP/cloud conditional adapters and asynchronous cancellation tests;
-8. production spill confidentiality, durability, cleanup, and portable publication requirements;
-9. broader hostile-source and arbitrary-depth selected-implementation fuzzing;
-10. independently maintained implementation or external independent review;
-11. application freshness policy where rollback resistance is required;
-12. maintainer disposition of Candidate 1 and FCP-0002 objections.
+4. production repair/compaction implementation with profile dependency semantics and preservation policy;
+5. compaction vectors and boundary vectors for selected support profiles;
+6. concrete HTTP/cloud conditional adapters and asynchronous cancellation tests;
+7. production spill confidentiality, durability, cleanup, and portable publication requirements;
+8. broader hostile-source and arbitrary-depth selected-implementation fuzzing;
+9. independently maintained implementation or external independent review;
+10. application freshness policy where rollback resistance is required;
+11. maintainer disposition of Candidate 1 and FCP-0002 objections.
 
 ## Exit rule
 
