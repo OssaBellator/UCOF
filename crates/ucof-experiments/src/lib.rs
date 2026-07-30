@@ -14,7 +14,8 @@ pub mod exp0002_lookup;
 pub mod exp0002_recovery;
 pub mod exp0002_rewrite;
 pub mod exp0002_source;
-pub mod exp0002_source_strict;
+pub mod exp0002_source_recovery;
+mod exp0002_source_strict;
 mod publication;
 mod recovery;
 mod repair;
@@ -29,6 +30,11 @@ pub use enumeration::{
     EnumeratedRoot, EnumeratedRootStatus, EnumerationLimits, RootEnumerationError,
     RootEnumerationReport,
 };
+pub use exp0002_source_recovery::{
+    scan_valid_prefixes_at, Exp0002SourceRecoveryLimits, Exp0002SourceRecoveryReport,
+    RecoveredExp0002SourcePrefix,
+};
+pub use exp0002_source_strict::{validate_strict_at, VerifiedExp0002Source};
 pub use publication::{
     PublicationError, PublicationLimits, PublicationModel, PublicationReport, PublicationStage,
     PublishedCheckpoint,
