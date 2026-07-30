@@ -123,7 +123,7 @@ def main() -> None:
         base = Path(temporary)
         workspace = PrivateSpillWorkspace(
             base / "private-stage",
-            SpillLimits(max_bytes=64, max_files=4, max_open_files=1),
+            SpillLimits(max_bytes=96, max_files=4, max_open_files=1),
         )
         assert_private(workspace.root, stat.S_IFDIR)
         assert_private(workspace.root / ".ucof-owner", stat.S_IFREG)
