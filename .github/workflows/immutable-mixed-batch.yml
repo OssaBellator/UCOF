@@ -1,0 +1,31 @@
+name: Immutable Mixed Batch
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_objects.py"
+      - "tools/experiment_exp0002_immutable_mixed_batch.py"
+      - "docs/experiments/0042-exp0002-immutable-mixed-batch.md"
+      - ".github/workflows/immutable-mixed-batch.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_objects.py"
+      - "tools/experiment_exp0002_immutable_mixed_batch.py"
+      - "docs/experiments/0042-exp0002-immutable-mixed-batch.md"
+      - ".github/workflows/immutable-mixed-batch.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise arbitrary-depth mixed-operation planner
+        run: python3 tools/experiment_exp0002_immutable_mixed_batch.py

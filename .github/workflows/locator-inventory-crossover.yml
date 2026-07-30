@@ -1,0 +1,26 @@
+name: Locator Inventory Crossover
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_locator_inventory_crossover.py"
+      - "docs/experiments/0017-exp0002-locator-inventory-crossover.md"
+      - ".github/workflows/locator-inventory-crossover.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_locator_inventory_crossover.py"
+      - "docs/experiments/0017-exp0002-locator-inventory-crossover.md"
+      - ".github/workflows/locator-inventory-crossover.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Measure locator metadata inventory crossover
+        run: python3 tools/experiment_exp0002_locator_inventory_crossover.py

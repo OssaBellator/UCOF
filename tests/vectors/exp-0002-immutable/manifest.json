@@ -1,0 +1,15 @@
+{
+  "status": "non-normative successor microformat evidence",
+  "epoch": "immutable-page-successor-prototype",
+  "vectors": [
+    {
+      "file": "genesis-four.hex",
+      "decoded_bytes": 16886,
+      "sha256": "94f9441339fb49ffef5b8c7b54307c20488bf2e09958fd805fd2addae65c2a23",
+      "sequence": 0,
+      "object_ids": [1, 2, 3, 4],
+      "payloads_utf8": ["alpha", "bravo", "charlie", "delta"],
+      "purpose": "exact-end immutable-page genesis independently parsed and hashed by Rust"
+    }
+  ]
+}

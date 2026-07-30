@@ -2,7 +2,7 @@ name: Rust
 
 on:
   push:
-    branches: [main, "phase-1/**", "phase-2/**"]
+    branches: [main, "phase-1/**", "phase-2/**", "phase-3/**"]
   pull_request:
 
 permissions:
@@ -31,11 +31,29 @@ jobs:
         run: python3 tools/validate_exp_0001.py --vectors tests/vectors/exp-0001
       - name: Test adversarial Python cases
         run: python3 tools/test_exp_0001_adversarial.py
+      - name: Test independent Phase 3 models
+        run: python3 tools/validate_phase3_models.py
+      - name: Test independent EXP-0002 codec
+        run: |
+          python3 tools/exp0002_codec.py --self-test
+          python3 tools/exp0002_codec.py --verify-vectors tests/vectors/exp-0002
+      - name: Test EXP-0002 adversarial corpus
+        run: python3 tools/test_exp0002_adversarial.py
+      - name: Verify pinned EXP-0002 invalid corpus
+        run: python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
+      - name: Verify immutable successor invalid recipes
+        run: python3 tools/verify_exp0002_immutable_invalid_recipes.py
+      - name: Regenerate immutable successor vector recipes
+        run: python3 tools/verify_exp0002_immutable_generated_recipes.py
       - name: Reproduce framing experiments
         run: |
           python3 tools/experiment_framing_widths.py
           python3 tools/experiment_footer_discovery.py
           python3 tools/experiment_scale_limits.py
+          python3 tools/experiment_directory_models.py
+          python3 tools/experiment_exp0002_page_sizes.py
+          python3 tools/experiment_exp0002_cow_reuse.py
+          python3 tools/experiment_exp0002_checkpoint_cadence.py
 
   msrv:
     runs-on: ubuntu-latest
@@ -44,8 +62,8 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.85.0
       - uses: Swatinem/rust-cache@v2
         with:
-          key: msrv-1.85.0
-      - name: Check workspace at MSRV
+          shared-key: msrv-1.85.0
+      - name: Check MSRV
         run: cargo check --locked --workspace --all-targets
 
   portability:
@@ -63,6 +81,9 @@ jobs:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
-      - name: Check core library for target
-        run: cargo check --locked -p ucof-core --lib --target ${{ matrix.target }}
+          shared-key: ${{ matrix.target }}
+      - name: Install 32-bit linker support
+        if: matrix.target == 'i686-unknown-linux-gnu'
+        run: sudo apt-get update && sudo apt-get install -y gcc-multilib
+      - name: Check portability target
+        run: cargo check --locked --workspace --all-targets --target ${{ matrix.target }}

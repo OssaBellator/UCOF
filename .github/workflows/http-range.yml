@@ -1,0 +1,28 @@
+name: HTTP Range Evidence
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_http_range.py"
+      - "tools/exp0002_codec.py"
+      - "docs/experiments/0012-exp0002-http-range.md"
+      - ".github/workflows/http-range.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_http_range.py"
+      - "tools/exp0002_codec.py"
+      - "docs/experiments/0012-exp0002-http-range.md"
+      - ".github/workflows/http-range.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Measure cold-cache localhost range access
+        run: python3 tools/experiment_exp0002_http_range.py

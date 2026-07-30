@@ -1,0 +1,28 @@
+name: Page Reuse Evidence
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_page_sequence_reuse.py"
+      - "tools/exp0002_codec.py"
+      - "docs/experiments/0011-exp0002-page-sequence-reuse.md"
+      - ".github/workflows/page-reuse.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_page_sequence_reuse.py"
+      - "tools/exp0002_codec.py"
+      - "docs/experiments/0011-exp0002-page-sequence-reuse.md"
+      - ".github/workflows/page-reuse.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Prove current page bytes block historical reuse
+        run: python3 tools/experiment_exp0002_page_sequence_reuse.py

@@ -1,0 +1,20 @@
+name: Verify EXP-0002 Invalid Vectors
+
+on:
+  pull_request:
+    paths:
+      - "tools/exp0002_invalid_vectors.py"
+      - "tests/vectors/exp-0002-invalid/**"
+      - ".github/workflows/generate-exp0002-invalid.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Regenerate and compare invalid corpus
+        run: python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid

@@ -1,0 +1,24 @@
+{
+  "candidate": 1,
+  "epoch": "UCOF-EXP-0002",
+  "vectors": {
+    "append-add-third": {
+      "footer_offset": 33496,
+      "hex_file": "append-add-third.hex",
+      "length": 33656,
+      "sha256": "d96dbdf8e282ce17e862706fcf3fb70ebbbea8deb93e56816435a3832c02463f"
+    },
+    "genesis-two-object": {
+      "footer_offset": 16723,
+      "hex_file": "genesis-two-object.hex",
+      "length": 16883,
+      "sha256": "ac7fd74deb822e0b15b948f999722bd09c063d85c04dc845f970e592f27b912c"
+    },
+    "multi-leaf-400": {
+      "footer_offset": 85368,
+      "hex_file": "multi-leaf-400.hex",
+      "length": 85528,
+      "sha256": "a1c1bd4242634e2b8fc26f9b952d2cfce4a82daf3f1090275f281b0ff433edc8"
+    }
+  }
+}

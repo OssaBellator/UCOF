@@ -1,0 +1,28 @@
+name: Staged Spill Merge
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_spill_page_emission.py"
+      - "tools/experiment_exp0002_staged_spill_merge.py"
+      - "docs/experiments/0028-exp0002-staged-spill-merge.md"
+      - ".github/workflows/staged-spill-merge.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_spill_page_emission.py"
+      - "tools/experiment_exp0002_staged_spill_merge.py"
+      - "docs/experiments/0028-exp0002-staged-spill-merge.md"
+      - ".github/workflows/staged-spill-merge.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stage locator merges under open-file limits
+        run: python3 tools/experiment_exp0002_staged_spill_merge.py

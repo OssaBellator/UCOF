@@ -1,0 +1,35 @@
+name: Verify Immutable Successor Invalid Recipes
+
+on:
+  pull_request:
+    paths:
+      - "tests/vectors/exp-0002-immutable/**"
+      - "tests/vectors/exp-0002-immutable-invalid/**"
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_objects.py"
+      - "tools/verify_exp0002_immutable_invalid_recipes.py"
+      - "docs/experiments/0038-exp0002-immutable-invalid-recipes.md"
+      - ".github/workflows/verify-exp0002-immutable-invalid.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tests/vectors/exp-0002-immutable/**"
+      - "tests/vectors/exp-0002-immutable-invalid/**"
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_objects.py"
+      - "tools/verify_exp0002_immutable_invalid_recipes.py"
+      - "docs/experiments/0038-exp0002-immutable-invalid-recipes.md"
+      - ".github/workflows/verify-exp0002-immutable-invalid.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Materialize and reject every invalid recipe
+        run: python3 tools/verify_exp0002_immutable_invalid_recipes.py

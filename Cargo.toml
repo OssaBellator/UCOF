@@ -2,6 +2,7 @@
 members = [
     "crates/ucof-core",
     "crates/ucof-cli",
+    "crates/ucof-experiments",
 ]
 exclude = ["fuzz"]
 resolver = "2"

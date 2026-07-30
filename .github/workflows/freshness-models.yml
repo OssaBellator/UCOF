@@ -1,0 +1,26 @@
+name: Freshness Models
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_freshness_models.py"
+      - "docs/experiments/0022-exp0002-freshness-models.md"
+      - ".github/workflows/freshness-models.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_freshness_models.py"
+      - "docs/experiments/0022-exp0002-freshness-models.md"
+      - ".github/workflows/freshness-models.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compare rollback and fork detection models
+        run: python3 tools/experiment_exp0002_freshness_models.py
