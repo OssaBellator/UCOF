@@ -145,7 +145,11 @@ fn encode_leaf(entries: &[Locator]) -> Vec<u8> {
     put_u32(&mut page, 12, u32_from_usize(entries.len()));
     put_u32(&mut page, 16, u32_from_usize(LEAF_ENTRY_LEN));
     put_u64(&mut page, 20, entries[0].object_id);
-    put_u64(&mut page, 28, entries.last().expect("last leaf entry").object_id);
+    put_u64(
+        &mut page,
+        28,
+        entries.last().expect("last leaf entry").object_id,
+    );
 
     for (index, entry) in entries.iter().enumerate() {
         let offset = PAGE_HEADER_LEN + index * LEAF_ENTRY_LEN;
@@ -173,11 +177,7 @@ fn encode_internal(children: &[PageRef], level: u8) -> Vec<u8> {
     put_u32(&mut page, 12, u32_from_usize(children.len()));
     put_u32(&mut page, 16, u32_from_usize(INTERNAL_ENTRY_LEN));
     put_u64(&mut page, 20, children[0].minimum);
-    put_u64(
-        &mut page,
-        28,
-        children.last().expect("last child").maximum,
-    );
+    put_u64(&mut page, 28, children.last().expect("last child").maximum);
 
     for (index, child) in children.iter().enumerate() {
         let offset = PAGE_HEADER_LEN + index * INTERNAL_ENTRY_LEN;
