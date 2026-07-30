@@ -61,7 +61,9 @@ const CASES: &[(&str, &str)] = &[
     ),
     (
         "append-cut-before-snapshot-complete",
-        include_str!("../../../tests/vectors/exp-0002-invalid/append-cut-before-snapshot-complete.hex"),
+        include_str!(
+            "../../../tests/vectors/exp-0002-invalid/append-cut-before-snapshot-complete.hex"
+        ),
     ),
     (
         "append-cut-footer-prefix",
@@ -100,6 +102,9 @@ fn interrupted_append_vectors_can_recover_the_earlier_complete_prefix() {
             .latest()
             .unwrap_or_else(|| panic!("no recoverable prefix for {name}"));
         assert_eq!(latest.sequence, 0, "wrong recovered sequence for {name}");
-        assert!(latest.prefix_len < bytes.len(), "tail was not excluded for {name}");
+        assert!(
+            latest.prefix_len < bytes.len(),
+            "tail was not excluded for {name}"
+        );
     }
 }

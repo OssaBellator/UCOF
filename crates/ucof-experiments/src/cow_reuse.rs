@@ -29,9 +29,7 @@ impl Page {
     fn range(&self) -> Option<(u64, u64)> {
         match self {
             Self::Leaf(entries) => Some((entries.first()?.key, entries.last()?.key)),
-            Self::Internal(children) => {
-                Some((children.first()?.minimum, children.last()?.maximum))
-            }
+            Self::Internal(children) => Some((children.first()?.minimum, children.last()?.maximum)),
         }
     }
 }
@@ -141,10 +139,7 @@ impl Directory {
             }
             level = next;
         }
-        let root = level
-            .first()
-            .ok_or(Error::EmptyDirectory)?
-            .page_id;
+        let root = level.first().ok_or(Error::EmptyDirectory)?.page_id;
         let directory = Self {
             pages,
             root,
@@ -169,11 +164,7 @@ impl Directory {
             if !seen.insert(page_id) {
                 return Err(Error::Cycle);
             }
-            match self
-                .pages
-                .get(page_id)
-                .ok_or(Error::InvalidPageReference)?
-            {
+            match self.pages.get(page_id).ok_or(Error::InvalidPageReference)? {
                 Page::Leaf(entries) => {
                     return match entries.binary_search_by_key(&key, |entry| entry.key) {
                         Ok(index) => Ok(Some(entries[index])),
@@ -202,17 +193,10 @@ impl Directory {
                 return Err(Error::Cycle);
             }
             depth = depth.checked_add(1).ok_or(Error::ArithmeticOverflow)?;
-            match self
-                .pages
-                .get(page_id)
-                .ok_or(Error::InvalidPageReference)?
-            {
+            match self.pages.get(page_id).ok_or(Error::InvalidPageReference)? {
                 Page::Leaf(_) => return Ok(depth),
                 Page::Internal(children) => {
-                    page_id = children
-                        .first()
-                        .ok_or(Error::InvalidPageRange)?
-                        .page_id;
+                    page_id = children.first().ok_or(Error::InvalidPageRange)?.page_id;
                 }
             }
         }
@@ -286,11 +270,7 @@ impl Directory {
             if seen.len() > limits.max_pages_visited {
                 return Err(Error::PageLimitExceeded);
             }
-            match self
-                .pages
-                .get(page_id)
-                .ok_or(Error::InvalidPageReference)?
-            {
+            match self.pages.get(page_id).ok_or(Error::InvalidPageReference)? {
                 Page::Leaf(entries) => {
                     if entries.is_empty() || entries.len() > self.leaf_capacity {
                         return Err(Error::InvalidPageRange);
@@ -334,11 +314,7 @@ impl Directory {
             if !reachable.insert(page_id) {
                 return Err(Error::Cycle);
             }
-            match self
-                .pages
-                .get(page_id)
-                .ok_or(Error::InvalidPageReference)?
-            {
+            match self.pages.get(page_id).ok_or(Error::InvalidPageReference)? {
                 Page::Leaf(_) => {}
                 Page::Internal(children) => {
                     stack.extend(children.iter().map(|child| child.page_id));
@@ -503,9 +479,7 @@ mod tests {
     use super::*;
 
     fn entries(count: u64) -> Vec<Entry> {
-        (1..=count)
-            .map(|key| Entry { key, revision: 0 })
-            .collect()
+        (1..=count).map(|key| Entry { key, revision: 0 }).collect()
     }
 
     #[test]
@@ -574,9 +548,7 @@ mod tests {
             )
             .expect("update");
         let copied = report.copied_bytes(16 * 1024).expect("copied bytes");
-        let rebuilt = report
-            .full_rebuild_bytes(16 * 1024)
-            .expect("rebuild bytes");
+        let rebuilt = report.full_rebuild_bytes(16 * 1024).expect("rebuild bytes");
         assert!(copied <= 64 * 1024);
         assert!(rebuilt > 80 * 1024 * 1024);
         assert!(rebuilt / copied > 1_000);
