@@ -158,3 +158,17 @@ path = "fuzz_targets/exp0002_source_history.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "immutable_successor_strict"
+path = "fuzz_targets/immutable_successor_strict.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_roundtrip"
+path = "fuzz_targets/immutable_successor_roundtrip.rs"
+test = false
+doc = false
+bench = false
