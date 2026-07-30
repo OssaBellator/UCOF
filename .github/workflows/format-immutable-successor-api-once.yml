@@ -1,7 +1,8 @@
 name: Format Immutable Successor API Once
 
 on:
-  pull_request:
+  push:
+    branches: ["phase-3/directory-snapshots-recovery"]
     paths:
       - "crates/ucof-experiments/src/immutable_successor.rs"
       - "crates/ucof-experiments/src/lib.rs"
