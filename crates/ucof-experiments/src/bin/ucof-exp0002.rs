@@ -10,7 +10,10 @@ use ucof_experiments::exp0002_rewrite::{
 use ucof_experiments::exp0002_source::{
     lookup_authenticated_at, Exp0002SeekSource, Exp0002SourceLimits,
 };
-use ucof_experiments::{scan_valid_prefixes_at, validate_strict_at, Exp0002SourceRecoveryLimits};
+use ucof_experiments::{
+    enumerate_previous_chain_at, scan_valid_prefixes_at, validate_strict_at,
+    Exp0002SourceChainLimits, Exp0002SourceRecoveryLimits,
+};
 
 fn main() {
     if let Err(error) = run() {
@@ -36,6 +39,11 @@ fn run() -> Result<(), Box<dyn Error>> {
             let path = required(&mut args, "file")?;
             require_end(args)?;
             command_roots(Path::new(&path))
+        }
+        "history" => {
+            let path = required(&mut args, "file")?;
+            require_end(args)?;
+            command_history(Path::new(&path))
         }
         "lookup" => {
             let path = required(&mut args, "file")?;
@@ -113,6 +121,30 @@ fn command_roots(path: &Path) -> Result<(), Box<dyn Error>> {
         println!("root: {root}");
     }
     print_stats(report.stats);
+    Ok(())
+}
+
+fn command_history(path: &Path) -> Result<(), Box<dyn Error>> {
+    let file = File::open(path)?;
+    let mut source = Exp0002SeekSource::new(file);
+    let report = enumerate_previous_chain_at(&mut source, &Exp0002SourceChainLimits::default())?;
+    println!("assurance: exact-end active commit and every linked ancestor validated as a strict prefix");
+    println!("file_len: {}", report.file_len);
+    println!("total_bytes_read: {}", report.total_bytes_read);
+    println!("commits: {}", report.commits.len());
+    for commit in report.commits {
+        println!(
+            "prefix={} footer={} sequence={} previous_footer={} roots={} parent_snapshot_digest={} snapshot_digest={} commit_digest={}",
+            commit.prefix_len,
+            commit.footer_offset,
+            commit.sequence,
+            commit.previous_footer_offset,
+            join_ids(&commit.roots),
+            hex(&commit.parent_snapshot_digest),
+            hex(&commit.snapshot_digest),
+            hex(&commit.commit_digest)
+        );
+    }
     Ok(())
 }
 
@@ -348,12 +380,14 @@ fn print_usage() {
         "Usage:\n  \
          ucof-exp0002 verify <file>\n  \
          ucof-exp0002 roots <file>\n  \
+         ucof-exp0002 history <file>\n  \
          ucof-exp0002 lookup <file> <object-id>\n  \
          ucof-exp0002 recover <file>\n  \
          ucof-exp0002 repair-all <input> <output> <file-id-hex> <nonce-hex>\n  \
          ucof-exp0002 rewrite-selected <input> <output> <file-id-hex> <nonce-hex> <retained-csv> <roots-csv>\n\n\
-         verify never invokes recovery; recover reports only strictly validated prefixes; \
-         rewrite-selected is caller-directed and does not claim semantic compaction."
+         verify never invokes recovery; history validates the exact linked chain; \
+         recover reports only strictly validated prefixes; rewrite-selected is caller-directed \
+         and does not claim semantic compaction."
     );
 }
 
