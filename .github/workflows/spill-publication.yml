@@ -6,7 +6,9 @@ on:
       - "tools/experiment_exp0002_spill_page_emission.py"
       - "tools/experiment_exp0002_staged_spill_merge.py"
       - "tools/experiment_exp0002_spill_publication.py"
+      - "tools/experiment_exp0002_spill_security_policy.py"
       - "docs/experiments/0036-exp0002-spill-publication.md"
+      - "docs/experiments/0045-exp0002-spill-security-policy.md"
       - ".github/workflows/spill-publication.yml"
   push:
     branches: ["phase-3/**"]
@@ -14,7 +16,9 @@ on:
       - "tools/experiment_exp0002_spill_page_emission.py"
       - "tools/experiment_exp0002_staged_spill_merge.py"
       - "tools/experiment_exp0002_spill_publication.py"
+      - "tools/experiment_exp0002_spill_security_policy.py"
       - "docs/experiments/0036-exp0002-spill-publication.md"
+      - "docs/experiments/0045-exp0002-spill-security-policy.md"
       - ".github/workflows/spill-publication.yml"
   workflow_dispatch:
 
@@ -28,3 +32,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Exercise private spill lifecycle and atomic publication
         run: python3 tools/experiment_exp0002_spill_publication.py
+      - name: Exercise ownership, cleanup, budgets, and durability policy
+        run: python3 tools/experiment_exp0002_spill_security_policy.py
