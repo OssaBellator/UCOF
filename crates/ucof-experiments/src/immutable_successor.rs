@@ -16,6 +16,7 @@ mod source_api {
     use super::*;
 
     include!("immutable_successor/source.rs");
+    include!("immutable_successor/source_full.rs");
 }
 
 pub use source_api::*;
