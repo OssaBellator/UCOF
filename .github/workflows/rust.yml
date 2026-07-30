@@ -6,7 +6,7 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   test:
@@ -39,6 +39,8 @@ jobs:
           python3 tools/exp0002_codec.py --verify-vectors tests/vectors/exp-0002
       - name: Test EXP-0002 adversarial corpus
         run: python3 tools/test_exp0002_adversarial.py
+      - name: Verify pinned EXP-0002 invalid corpus
+        run: python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
       - name: Reproduce framing experiments
         run: |
           python3 tools/experiment_framing_widths.py
@@ -46,6 +48,8 @@ jobs:
           python3 tools/experiment_scale_limits.py
           python3 tools/experiment_directory_models.py
           python3 tools/experiment_exp0002_page_sizes.py
+          python3 tools/experiment_exp0002_cow_reuse.py
+          python3 tools/experiment_exp0002_checkpoint_cadence.py
 
   msrv:
     runs-on: ubuntu-latest
@@ -76,26 +80,3 @@ jobs:
           key: ${{ matrix.target }}
       - name: Check all libraries for target
         run: cargo check --locked --workspace --lib --target ${{ matrix.target }}
-
-  generate-invalid-vectors:
-    if: github.event_name == 'push' && github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-      - name: Generate and verify invalid vectors
-        run: |
-          rm -rf tests/vectors/exp-0002-invalid
-          python3 tools/exp0002_invalid_vectors.py --write-vectors tests/vectors/exp-0002-invalid
-          python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
-      - name: Commit invalid corpus
-        run: |
-          if [[ -z "$(git status --porcelain -- tests/vectors/exp-0002-invalid)" ]]; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tests/vectors/exp-0002-invalid
-          git commit -m "test: pin invalid and interrupted EXP-0002 vectors"
-          git push origin HEAD:${{ github.ref_name }}
