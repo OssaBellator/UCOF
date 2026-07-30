@@ -12,6 +12,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: fix-source-spill-pr
+  cancel-in-progress: false
+
 jobs:
   fix:
     if: github.actor != 'github-actions[bot]'
@@ -66,7 +70,7 @@ jobs:
         run: |
           rm -f .github/workflows/fix-source-spill.yml
           rm -f .github/workflows/fix-source-spill-pr.yml
-          git show c978048bd7195ba0ef71b408e8db6258db37a0f8:.github/workflows/rust.yml > .github/workflows/rust.yml
+          git show 47148f84f377b00f1345db3c6ba5c9a5aabdf0d1:.github/workflows/rust.yml > .github/workflows/rust.yml
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add crates/ucof-experiments/src/immutable_successor/source.rs \
