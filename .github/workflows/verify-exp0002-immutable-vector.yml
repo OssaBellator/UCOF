@@ -1,0 +1,38 @@
+name: Verify Immutable Successor Vector
+
+on:
+  pull_request:
+    paths:
+      - "tests/vectors/exp-0002-immutable/**"
+      - "crates/ucof-experiments/tests/exp0002_immutable_vector.rs"
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_objects.py"
+      - ".github/workflows/verify-exp0002-immutable-vector.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tests/vectors/exp-0002-immutable/**"
+      - "crates/ucof-experiments/tests/exp0002_immutable_vector.rs"
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_objects.py"
+      - ".github/workflows/verify-exp0002-immutable-vector.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint independent vector parser
+        run: cargo clippy --locked -p ucof-experiments --test exp0002_immutable_vector -- -D warnings
+      - name: Parse and hash pinned vector independently
+        run: cargo test --locked -p ucof-experiments --test exp0002_immutable_vector -- --nocapture
