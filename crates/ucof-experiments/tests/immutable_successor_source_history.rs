@@ -17,6 +17,10 @@ impl RecordingSource {
             ranges: Vec::new(),
         }
     }
+
+    fn total_bytes_read(&self) -> usize {
+        self.ranges.iter().map(|(_, length)| *length).sum()
+    }
 }
 
 impl ImmutableReadAt for RecordingSource {
@@ -166,6 +170,39 @@ fn recovery_candidate_cap_is_explicit() {
     let report = scan_source_recovery(&mut source, limits).expect("bounded recovery");
     assert_eq!(report.recovery.candidates.len(), 1);
     assert!(report.recovery.candidates_truncated);
+}
+
+#[test]
+fn short_suffix_returns_an_empty_report_without_panicking() {
+    let mut source = RecordingSource::new(b"tiny".to_vec());
+    let report = scan_source_recovery(&mut source, ImmutableSourceLimits::default())
+        .expect("short suffix is a valid empty scan");
+    assert_eq!(report.recovery.scanned_bytes, 4);
+    assert_eq!(report.recovery.attempted_footers, 0);
+    assert!(report.recovery.candidates.is_empty());
+}
+
+#[test]
+fn failed_candidate_reads_consume_the_global_recovery_budget() {
+    let mut bytes = build_genesis(&base_objects(), ImmutableSourceLimits::default().format)
+        .expect("genesis");
+    for _ in 0..20 {
+        let mut decoy = vec![0_u8; 128];
+        decoy[..8].copy_from_slice(b"UCFTIM02");
+        bytes.extend_from_slice(&decoy);
+    }
+    let budget = bytes.len() + 300;
+    let mut limits = ImmutableSourceLimits::default();
+    limits.max_total_bytes_read = u64::try_from(budget).expect("budget");
+    limits.max_read_request_bytes = 64;
+    limits.hash_block_bytes = 64;
+    limits.format.max_recovery_scan_bytes = bytes.len();
+    let mut source = RecordingSource::new(bytes);
+    assert_eq!(
+        scan_source_recovery(&mut source, limits),
+        Err(ImmutableSourceError::Limit("read bytes"))
+    );
+    assert!(source.total_bytes_read() <= budget);
 }
 
 #[test]
