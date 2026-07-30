@@ -53,8 +53,8 @@ fn base_objects() -> Vec<ImmutableObjectInput> {
 }
 
 fn two_commit_file() -> (Vec<u8>, usize) {
-    let genesis = build_genesis(&base_objects(), ImmutableSourceLimits::default().format)
-        .expect("genesis");
+    let genesis =
+        build_genesis(&base_objects(), ImmutableSourceLimits::default().format).expect("genesis");
     let genesis_len = genesis.len();
     let appended = append_replacement(
         &genesis,
@@ -145,7 +145,12 @@ fn recovery_reports_strict_prefixes_without_selecting_one() {
         .collect();
     assert_eq!(sequences, vec![1, 0]);
     assert_eq!(
-        report.recovery.candidates.last().expect("genesis").prefix_len,
+        report
+            .recovery
+            .candidates
+            .last()
+            .expect("genesis")
+            .prefix_len,
         u64::try_from(genesis_len).expect("genesis length")
     );
     assert!(!report.recovery.attempts_truncated);
