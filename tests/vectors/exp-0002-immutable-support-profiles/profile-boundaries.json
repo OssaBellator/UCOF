@@ -1,0 +1,81 @@
+{
+  "schema": "ucof-exp0002-support-profile-boundaries-v1",
+  "status": "non-normative research vectors",
+  "profiles": {
+    "research-small": {
+      "max_file_bytes": 67108864,
+      "max_objects": 100000,
+      "max_object_bytes": 1048576,
+      "max_request_bytes": 1048576,
+      "max_read_operations": 200641,
+      "max_bytes_read": 201326592,
+      "max_hash_bytes": 134217728,
+      "max_allocation_bytes": 2097152,
+      "max_history_depth": 64,
+      "max_recovery_scan_bytes": 16777216
+    },
+    "research-medium": {
+      "max_file_bytes": 4294967296,
+      "max_objects": 1000000,
+      "max_object_bytes": 16777216,
+      "max_request_bytes": 1048576,
+      "max_read_operations": 17009557,
+      "max_bytes_read": 12884901888,
+      "max_hash_bytes": 8589934592,
+      "max_allocation_bytes": 2097152,
+      "max_history_depth": 1024,
+      "max_recovery_scan_bytes": 67108864
+    },
+    "research-large": {
+      "max_file_bytes": 68719476736,
+      "max_objects": 10000000,
+      "max_object_bytes": 67108864,
+      "max_request_bytes": 4194304,
+      "max_read_operations": 170070684,
+      "max_bytes_read": 206158430208,
+      "max_hash_bytes": 137438953472,
+      "max_allocation_bytes": 8388608,
+      "max_history_depth": 4096,
+      "max_recovery_scan_bytes": 268435456
+    }
+  },
+  "templates": [
+    {
+      "suffix": "exact",
+      "mutation": "none",
+      "expected": "accept"
+    },
+    {
+      "suffix": "read-operations-minus-one",
+      "mutation": "max_read_operations=required-1",
+      "expected": "reject",
+      "error_contains": "read operations"
+    },
+    {
+      "suffix": "read-bytes-minus-one",
+      "mutation": "max_bytes_read=required-1",
+      "expected": "reject",
+      "error_contains": "read bytes"
+    },
+    {
+      "suffix": "hash-bytes-minus-one",
+      "mutation": "max_hash_bytes=required-1",
+      "expected": "reject",
+      "error_contains": "hash bytes"
+    },
+    {
+      "suffix": "request-over-allocation",
+      "mutation": "max_request_bytes=max_allocation_bytes+1",
+      "expected": "reject",
+      "error_contains": "request exceeds allocation"
+    },
+    {
+      "suffix": "scan-over-file",
+      "mutation": "max_recovery_scan_bytes=max_file_bytes+1",
+      "expected": "reject",
+      "error_contains": "recovery scan exceeds file"
+    }
+  ],
+  "expanded_case_count": 18,
+  "expanded_cases_sha256": "c0974ff6ce7d128f8edd41fc0ee837ce8d3dd6604890f0e7d98642a3a1b69a92"
+}
