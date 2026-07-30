@@ -2,19 +2,20 @@
   "status": "non-normative successor invalid corpus recipes",
   "base_vector": "../exp-0002-immutable/genesis-four.hex",
   "base_sha256": "94f9441339fb49ffef5b8c7b54307c20488bf2e09958fd805fd2addae65c2a23",
+  "aggregate_sha256": "fa689319d7dd81cc6dc64e4bb7cb932d24961305245f4f6a36b815070cd009bd",
   "cases": [
-    {"name": "header-magic", "operation": "header_magic", "expected": "header"},
-    {"name": "footer-reserved", "operation": "footer_reserved", "expected": "footer"},
-    {"name": "commit-digest", "operation": "commit_digest", "expected": "commit digest"},
-    {"name": "object-header-reserved", "operation": "object_header_reserved", "expected": "object header"},
-    {"name": "object-payload-digest", "operation": "object_payload_digest", "expected": "object digest"},
-    {"name": "leaf-order", "operation": "leaf_order", "expected": "leaf order"},
-    {"name": "leaf-padding", "operation": "leaf_padding", "expected": "leaf padding"},
-    {"name": "leaf-header-reserved", "operation": "leaf_header_reserved", "expected": "page header"},
-    {"name": "object-overlaps-page", "operation": "object_overlaps_page", "expected": "object structural overlap"},
-    {"name": "snapshot-root-digest", "operation": "snapshot_root_digest", "expected": "page digest"},
-    {"name": "genesis-parent-nonzero", "operation": "genesis_parent_nonzero", "expected": "genesis linkage"},
-    {"name": "strict-trailing-byte", "operation": "trailing_byte", "expected": "footer"},
-    {"name": "interrupted-footer-half", "operation": "interrupted_footer_half", "expected": "footer"}
+    {"name": "header-magic", "operation": "header_magic", "expected": "header", "decoded_bytes": 16886, "sha256": "703561a40804583c1350ec53dccb7526dfb934aa90ae2f2073ec4793651c4639"},
+    {"name": "footer-reserved", "operation": "footer_reserved", "expected": "footer", "decoded_bytes": 16886, "sha256": "d3cef31f7ead9b6937d6bc3d9d366fe596c4c1ab7d23c5f17b13979d1eff96e3"},
+    {"name": "commit-digest", "operation": "commit_digest", "expected": "commit digest", "decoded_bytes": 16886, "sha256": "941e4124b32c4d890c2ecd40887a68fc940ce7177c972810f94a929577453990"},
+    {"name": "object-header-reserved", "operation": "object_header_reserved", "expected": "object header", "decoded_bytes": 16886, "sha256": "30acaa53881f6e5a02fa01f50a34f946432d5554c6dbdf1e0e8fb23eef35644e"},
+    {"name": "object-payload-digest", "operation": "object_payload_digest", "expected": "object digest", "decoded_bytes": 16886, "sha256": "0028eb0ba55eae2bdfeb0ec99654bb20ac627d6272e518e9f882fe5365170cae"},
+    {"name": "leaf-order", "operation": "leaf_order", "expected": "leaf order", "decoded_bytes": 16886, "sha256": "82ab49aa02d40716c44c331906c2dd6048708aea2b5ee04580984a40ba0ba8d9"},
+    {"name": "leaf-padding", "operation": "leaf_padding", "expected": "leaf padding", "decoded_bytes": 16886, "sha256": "48a609a06811862972dd9d9792b9c072ed603cc54970c94681d74b598d156981"},
+    {"name": "leaf-header-reserved", "operation": "leaf_header_reserved", "expected": "page header", "decoded_bytes": 16886, "sha256": "0c71574a75b501b246abb9ebbcc0bd351975eeb38fd30c698d983beb172cf920"},
+    {"name": "object-overlaps-page", "operation": "object_overlaps_page", "expected": "object structural overlap", "decoded_bytes": 16886, "sha256": "6a24ced9d8cdb825e21c0ea191683a777d45d38d51be8e6b3793b7488507de70"},
+    {"name": "snapshot-root-digest", "operation": "snapshot_root_digest", "expected": "page digest", "decoded_bytes": 16886, "sha256": "b6e6379e953fa9f5f6995799c604f81fec908f8002b5ee945a84420e68c2acb9"},
+    {"name": "genesis-parent-nonzero", "operation": "genesis_parent_nonzero", "expected": "genesis linkage", "decoded_bytes": 16886, "sha256": "8842ede6d4d1c7ed50eec9b2c6901e8718e3ec8771c303d96a4857c55ceb2c4b"},
+    {"name": "strict-trailing-byte", "operation": "trailing_byte", "expected": "footer", "decoded_bytes": 16887, "sha256": "2b673c66c059790ce949cffc3ed574d6a1b1c4f5a337091b07cf56d026f0929f"},
+    {"name": "interrupted-footer-half", "operation": "interrupted_footer_half", "expected": "footer", "decoded_bytes": 16822, "sha256": "f76e1c7986f8606bb35311b80c578ee79d67b3f7957a2888e01216bcffb0d4e6"}
   ]
 }
