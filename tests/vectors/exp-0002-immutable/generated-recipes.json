@@ -1,0 +1,34 @@
+{
+  "status": "non-normative successor generated vector recipes",
+  "base_vector": "genesis-four.hex",
+  "base_sha256": "94f9441339fb49ffef5b8c7b54307c20488bf2e09958fd805fd2addae65c2a23",
+  "vectors": [
+    {
+      "name": "append-replace-one",
+      "operation": "replace_object",
+      "object_id": 1,
+      "kind": 9,
+      "payload_utf8": "alpha-v2",
+      "decoded_bytes": 33550,
+      "sha256": "e058422145e12334934c86c51d29a480166e33d5b0d27538f6b26c9591db00bc",
+      "sequence": 1,
+      "root_level": 0,
+      "page_count": 1,
+      "object_count": 4
+    },
+    {
+      "name": "multi-level-400",
+      "operation": "generated_genesis",
+      "first_object_id": 1,
+      "last_object_id": 400,
+      "kind_expression": "1 + object_id % 5",
+      "payload_expression": "payload:{object_id}",
+      "decoded_bytes": 89316,
+      "sha256": "d4cdc721028a8abad2f381328a0bcd605ef19d26fea30c1b214f094a16ba3f70",
+      "sequence": 0,
+      "root_level": 1,
+      "page_count": 4,
+      "object_count": 400
+    }
+  ]
+}
