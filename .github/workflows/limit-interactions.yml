@@ -1,0 +1,26 @@
+name: Limit Interactions
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_limit_interactions.py"
+      - "docs/experiments/0019-exp0002-limit-interactions.md"
+      - ".github/workflows/limit-interactions.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_limit_interactions.py"
+      - "docs/experiments/0019-exp0002-limit-interactions.md"
+      - ".github/workflows/limit-interactions.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Analyze jointly reachable resource limits
+        run: python3 tools/experiment_exp0002_limit_interactions.py
