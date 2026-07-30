@@ -1,170 +1,29 @@
-name: Harden EXP-0002 Source Validation
+name: Verify Phase 3 Integration
 
 on:
-  push:
-    branches: ["phase-3/**"]
   pull_request:
     paths:
       - "crates/ucof-experiments/**"
+      - "tests/vectors/exp-0002-invalid/**"
+      - "tools/exp0002_invalid_vectors.py"
       - ".github/workflows/integrate-phase3-evidence.yml"
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  harden:
-    if: github.actor != 'github-actions[bot]' && (github.event_name == 'push' || github.event.pull_request.head.repo.full_name == github.repository)
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.head_ref || github.ref_name }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Harden recovery accounting
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("crates/ucof-experiments/src/exp0002_source_strict.rs")
-          text = path.read_text(encoding="utf-8")
-
-          def replace_once(old: str, new: str) -> None:
-              global text
-              if new in text:
-                  return
-              if old not in text:
-                  raise SystemExit(f"patch anchor not found: {old[:100]!r}")
-              text = text.replace(old, new, 1)
-
-          replace_once(
-              "    pub max_scan_bytes: u64,\n",
-              "    pub max_scan_bytes: u64,\n    pub max_scan_read_operations: u64,\n",
-          )
-          replace_once(
-              "            max_scan_bytes: 16 * 1024 * 1024,\n",
-              "            max_scan_bytes: 16 * 1024 * 1024,\n            max_scan_read_operations: 4096,\n",
-          )
-          replace_once(
-              "    pub scan_bytes_read: u64,\n",
-              "    pub scan_bytes_read: u64,\n    pub scan_read_operations: u64,\n",
-          )
-
-          scan_start = text.index("    let scan_len_usize =")
-          scan_end = text.index("    let mut report = Exp0002RecoveryReport {", scan_start)
-          scan_replacement = '''    let scan_len_usize =
-              usize::try_from(scan_len).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
-          let mut scan = vec![0_u8; scan_len_usize];
-          let mut scan_cursor = 0_usize;
-          let mut scan_read_operations = 0_u64;
-          while scan_cursor < scan.len() {
-              let take = (scan.len() - scan_cursor).min(limits.candidate.max_read_request_bytes);
-              let read_offset = scan_start
-                  .checked_add(
-                      u64::try_from(scan_cursor)
-                          .map_err(|_| Exp0002Error::ArithmeticOverflow)?,
-                  )
-                  .ok_or(Exp0002Error::ArithmeticOverflow)?;
-              source
-                  .read_exact_at(read_offset, &mut scan[scan_cursor..scan_cursor + take])
-                  .map_err(|_| Exp0002SourceError::Io("recovery scan"))?;
-              scan_cursor += take;
-              scan_read_operations = scan_read_operations
-                  .checked_add(1)
-                  .ok_or(Exp0002Error::ArithmeticOverflow)?;
-              if scan_read_operations > limits.max_scan_read_operations {
-                  return Err(Exp0002Error::ResourceLimit("recovery scan reads").into());
-              }
-          }
-
-          '''
-          text = text[:scan_start] + scan_replacement + text[scan_end:]
-          replace_once(
-              "        scan_bytes_read: scan_len,\n",
-              "        scan_bytes_read: scan_len,\n        scan_read_operations,\n",
-          )
-
-          candidate_start = text.index("        let mut prefix = PrefixSource {")
-          push_marker = "            report.results.push(RecoveredExp0002Prefix {"
-          candidate_end = text.index(push_marker, candidate_start)
-          candidate_replacement = '''        let mut prefix = PrefixSource {
-              source: &mut *source,
-              len: prefix_len,
-              bytes_read: 0,
-          };
-          let validation = validate_strict_at(&mut prefix, &limits.candidate);
-          report.total_candidate_bytes_read = report
-              .total_candidate_bytes_read
-              .checked_add(prefix.bytes_read)
-              .ok_or(Exp0002Error::ArithmeticOverflow)?;
-          if report.total_candidate_bytes_read > limits.max_total_candidate_bytes_read {
-              return Err(Exp0002Error::ResourceLimit("recovery validation bytes").into());
-          }
-          if let Ok(verified) = validation {
-'''
-          text = text[:candidate_start] + candidate_replacement + text[candidate_end:]
-
-          replace_once(
-              "struct PrefixSource<'a, S> {\n    source: &'a mut S,\n    len: u64,\n}",
-              "struct PrefixSource<'a, S> {\n    source: &'a mut S,\n    len: u64,\n    bytes_read: u64,\n}",
-          )
-          replace_once(
-              "        self.source.read_exact_at(offset, buffer)\n",
-              '''        self.bytes_read = self
-              .bytes_read
-              .checked_add(length)
-              .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidData, "read counter overflow"))?;
-          self.source.read_exact_at(offset, buffer)
-''',
-          )
-
-          marker = "    #[test]\n    fn strict_source_enforces_cumulative_read_budget() {"
-          test = '''    #[test]
-          fn recovery_counts_failed_candidate_reads() {
-              let mut bytes = build_genesis(header(), vec![object(1, b"root", true)])
-                  .expect("genesis");
-              let mut fake_footer = [0_u8; FOOTER_LEN];
-              fake_footer[..FOOTER_MAGIC.len()].copy_from_slice(FOOTER_MAGIC);
-              bytes.extend_from_slice(&fake_footer);
-              let mut source = Exp0002SliceSource::new(&bytes);
-              let error = scan_valid_prefixes_at(
-                  &mut source,
-                  &Exp0002RecoveryLimits {
-                      max_total_candidate_bytes_read: 1,
-                      ..Exp0002RecoveryLimits::default()
-                  },
-              )
-              .expect_err("failed candidate work must be charged");
-              assert_eq!(
-                  error,
-                  Exp0002SourceError::Format(Exp0002Error::ResourceLimit(
-                      "recovery validation bytes"
-                  ))
-              );
-          }
-
-'''
-          if "fn recovery_counts_failed_candidate_reads()" not in text:
-              if marker not in text:
-                  raise SystemExit("test insertion marker not found")
-              text = text.replace(marker, test + marker, 1)
-
-          path.write_text(text, encoding="utf-8")
-          PY
-          cargo fmt --all
-      - name: Test hardened experiment crate
-        run: |
-          cargo clippy --locked -p ucof-experiments --all-targets -- -D warnings
-          cargo test --locked -p ucof-experiments --all-targets
-      - name: Commit normalized hardened source
-        run: |
-          if git diff --quiet -- crates/ucof-experiments/src crates/ucof-experiments/tests; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/ucof-experiments/src crates/ucof-experiments/tests
-          git commit -m "fix: harden range-source recovery accounting"
-          git push origin HEAD:${{ github.head_ref || github.ref_name }}
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Test Phase 3 experiment crate
+        run: cargo test --locked -p ucof-experiments --all-targets
+      - name: Verify invalid vector reproducibility
+        run: python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
