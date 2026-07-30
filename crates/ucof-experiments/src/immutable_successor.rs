@@ -136,16 +136,15 @@ struct Footer {
 struct InternalReport {
     public: ImmutableReport,
     locators: Vec<Locator>,
-    root: PageRef,
     footer_offset: usize,
 }
 
-fn checked_range(
-    data: &[u8],
+fn checked_range<'a>(
+    data: &'a [u8],
     offset: usize,
     length: usize,
     label: &'static str,
-) -> Result<&[u8], ImmutableError> {
+) -> Result<&'a [u8], ImmutableError> {
     let end = offset
         .checked_add(length)
         .ok_or(ImmutableError::Invalid(label))?;
@@ -254,8 +253,8 @@ fn root_reference(
 ) -> Result<PageRef, ImmutableError> {
     let root_offset = usize_at(snapshot, 16, "snapshot root")?;
     let root_level_u64 = u64_at(snapshot, 24, "snapshot root")?;
-    let root_level = u8::try_from(root_level_u64)
-        .map_err(|_| ImmutableError::Invalid("snapshot root level"))?;
+    let root_level =
+        u8::try_from(root_level_u64).map_err(|_| ImmutableError::Invalid("snapshot root level"))?;
     if root_level > limits.max_depth {
         return Err(ImmutableError::Limit("page depth"));
     }
@@ -269,6 +268,8 @@ fn root_reference(
     })
 }
 
+// The traversal state remains explicit so every bounded collection is visible.
+#[allow(clippy::too_many_arguments)]
 fn parse_page(
     data: &[u8],
     reference: &PageRef,
@@ -288,6 +289,12 @@ fn parse_page(
         .ok_or(ImmutableError::Invalid("page range"))?;
     if end > snapshot_offset {
         return Err(ImmutableError::Invalid("page range"));
+    }
+    if structural_ranges
+        .iter()
+        .any(|(start, stop)| offset < *stop && *start < end)
+    {
+        return Err(ImmutableError::Invalid("page overlap"));
     }
     if seen.len() >= limits.max_pages {
         return Err(ImmutableError::Limit("page count"));
@@ -315,10 +322,7 @@ fn parse_page(
     if reserved != 0 || page[36..64].iter().any(|byte| *byte != 0) || count == 0 {
         return Err(ImmutableError::Invalid("page header"));
     }
-    if level != reference.level
-        || minimum != reference.minimum
-        || maximum != reference.maximum
-    {
+    if level != reference.level || minimum != reference.minimum || maximum != reference.maximum {
         return Err(ImmutableError::Invalid("page reference"));
     }
     structural_ranges.push((offset, end));
@@ -344,12 +348,8 @@ fn parse_page(
                 let kind = u16_at(page, entry + 8, "leaf entry")?;
                 if object_id == 0
                     || kind == 0
-                    || page[entry + 10..entry + 16]
-                        .iter()
-                        .any(|byte| *byte != 0)
-                    || page[entry + 72..entry + 88]
-                        .iter()
-                        .any(|byte| *byte != 0)
+                    || page[entry + 10..entry + 16].iter().any(|byte| *byte != 0)
+                    || page[entry + 72..entry + 88].iter().any(|byte| *byte != 0)
                 {
                     return Err(ImmutableError::Invalid("leaf entry"));
                 }
@@ -505,6 +505,13 @@ fn validate_internal(
             &mut structural_ranges,
         )?;
     }
+    let current_pages = seen
+        .iter()
+        .filter(|offset| **offset >= commit_start)
+        .count();
+    if footer.page_count_current != u64_from_usize(current_pages)? {
+        return Err(ImmutableError::Invalid("page count"));
+    }
     if locators.is_empty()
         || locators
             .windows(2)
@@ -537,9 +544,7 @@ fn validate_internal(
             || &record[..8] != OBJECT_MAGIC
             || usize::from(u16_at(record, 8, "object header")?) != OBJECT_HEADER_LEN
             || u32_at(record, 12, "object header")? != 0
-            || record[40..OBJECT_HEADER_LEN]
-                .iter()
-                .any(|byte| *byte != 0)
+            || record[40..OBJECT_HEADER_LEN].iter().any(|byte| *byte != 0)
         {
             return Err(ImmutableError::Invalid("object header"));
         }
@@ -569,10 +574,7 @@ fn validate_internal(
         object_ranges.push((offset, end));
     }
     object_ranges.sort_unstable();
-    if object_ranges
-        .windows(2)
-        .any(|pair| pair[0].1 > pair[1].0)
-    {
+    if object_ranges.windows(2).any(|pair| pair[0].1 > pair[1].0) {
         return Err(ImmutableError::Invalid("object overlap"));
     }
 
@@ -586,15 +588,11 @@ fn validate_internal(
             commit_digest: footer.commit_digest,
         },
         locators,
-        root,
         footer_offset,
     })
 }
 
-pub fn validate(
-    data: &[u8],
-    limits: ImmutableLimits,
-) -> Result<ImmutableReport, ImmutableError> {
+pub fn validate(data: &[u8], limits: ImmutableLimits) -> Result<ImmutableReport, ImmutableError> {
     Ok(validate_internal(data, limits)?.public)
 }
 
@@ -610,8 +608,7 @@ fn encode_object(input: &ImmutableObjectInput) -> Result<Vec<u8>, ImmutableError
     put_u16(
         &mut record,
         8,
-        u16::try_from(OBJECT_HEADER_LEN)
-            .map_err(|_| ImmutableError::Limit("object header"))?,
+        u16::try_from(OBJECT_HEADER_LEN).map_err(|_| ImmutableError::Limit("object header"))?,
     );
     put_u16(&mut record, 10, input.kind);
     put_u64(&mut record, 16, input.object_id);
@@ -666,7 +663,10 @@ fn encode_leaf(entries: &[Locator]) -> Result<Vec<u8>, ImmutableError> {
     put_u64(
         &mut page,
         28,
-        entries.last().ok_or(ImmutableError::Invalid("leaf input"))?.object_id,
+        entries
+            .last()
+            .ok_or(ImmutableError::Invalid("leaf input"))?
+            .object_id,
     );
     for (index, entry) in entries.iter().enumerate() {
         let offset = PAGE_HEADER_LEN + index * LEAF_ENTRY_LEN;
@@ -717,7 +717,11 @@ fn encode_internal(children: &[PageRef], level: u8) -> Result<Vec<u8>, Immutable
     Ok(page)
 }
 
-fn append_page(output: &mut Vec<u8>, page: &[u8], limits: ImmutableLimits) -> Result<PageRef, ImmutableError> {
+fn append_page(
+    output: &mut Vec<u8>,
+    page: &[u8],
+    limits: ImmutableLimits,
+) -> Result<PageRef, ImmutableError> {
     if output
         .len()
         .checked_add(PAGE_SIZE)
