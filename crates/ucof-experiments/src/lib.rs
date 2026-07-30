@@ -3,6 +3,8 @@
 //! Nothing in this crate defines UCOF wire compatibility. The models exist to
 //! test paged-directory, snapshot-selection, enumeration, recovery,
 //! publication, repair, compaction, and provisional EXP-0002 byte invariants.
+//! Range-source APIs deliberately separate targeted authenticated lookup from
+//! full exact-end validation and explicitly requested recovery.
 
 mod compaction;
 mod directory;
