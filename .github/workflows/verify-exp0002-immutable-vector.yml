@@ -11,8 +11,10 @@ on:
       - "crates/ucof-experiments/tests/immutable_successor_history.rs"
       - "crates/ucof-experiments/tests/immutable_successor_rewrite.rs"
       - "crates/ucof-experiments/tests/immutable_successor_source.rs"
+      - "crates/ucof-experiments/tests/immutable_successor_source_history.rs"
       - "crates/ucof-experiments/tests/exp0002_immutable_vector.rs"
       - "crates/ucof-experiments/tests/exp0002_immutable_generated_vectors.rs"
+      - "tools/patch_immutable_source_full.py"
       - ".github/workflows/verify-exp0002-immutable-vector.yml"
   push:
     branches: ["phase-3/**"]
@@ -25,8 +27,10 @@ on:
       - "crates/ucof-experiments/tests/immutable_successor_history.rs"
       - "crates/ucof-experiments/tests/immutable_successor_rewrite.rs"
       - "crates/ucof-experiments/tests/immutable_successor_source.rs"
+      - "crates/ucof-experiments/tests/immutable_successor_source_history.rs"
       - "crates/ucof-experiments/tests/exp0002_immutable_vector.rs"
       - "crates/ucof-experiments/tests/exp0002_immutable_generated_vectors.rs"
+      - "tools/patch_immutable_source_full.py"
       - ".github/workflows/verify-exp0002-immutable-vector.yml"
   workflow_dispatch:
 
@@ -73,10 +77,21 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Check formatting
-        run: cargo fmt --all -- --check
+      - name: Apply bounded source-history hardening
+        run: |
+          python3 tools/patch_immutable_source_full.py
+          cargo fmt --all
+          cargo fmt --all -- --check
+      - name: Export normalized source-history increment
+        uses: actions/upload-artifact@v4
+        with:
+          name: formatted-immutable-source-full
+          path: |
+            crates/ucof-experiments/src/immutable_successor/source_full.rs
+            crates/ucof-experiments/tests/immutable_successor_source_history.rs
+          if-no-files-found: error
       - name: Lint successor parser and reusable APIs
-        run: cargo clippy --locked -p ucof-experiments --test exp0002_immutable_vector --test immutable_successor_api --test immutable_successor_history --test immutable_successor_rewrite --test immutable_successor_source --test exp0002_immutable_generated_vectors -- -D warnings
+        run: cargo clippy --locked -p ucof-experiments --test exp0002_immutable_vector --test immutable_successor_api --test immutable_successor_history --test immutable_successor_rewrite --test immutable_successor_source --test immutable_successor_source_history --test exp0002_immutable_generated_vectors -- -D warnings
       - name: Parse, generate, validate, traverse history, recover, rewrite, and source-lookup
         run: |
           cargo test --locked -p ucof-experiments --test exp0002_immutable_vector -- --nocapture
@@ -84,4 +99,5 @@ jobs:
           cargo test --locked -p ucof-experiments --test immutable_successor_history -- --nocapture
           cargo test --locked -p ucof-experiments --test immutable_successor_rewrite -- --nocapture
           cargo test --locked -p ucof-experiments --test immutable_successor_source -- --nocapture
+          cargo test --locked -p ucof-experiments --test immutable_successor_source_history -- --nocapture
           cargo test --locked -p ucof-experiments --test exp0002_immutable_generated_vectors -- --nocapture
