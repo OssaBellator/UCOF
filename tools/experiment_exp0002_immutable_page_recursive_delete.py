@@ -113,9 +113,11 @@ def delete_node(
             right_index = index
         else:
             raise ValueError("underfull child has no sibling")
+        # One sibling may have been emitted during this deletion. Decode from
+        # the complete immutable prefix plus newly appended pages.
         replacements = combine_siblings(
             output,
-            source,
+            bytes(output),
             updated[left_index],
             updated[right_index],
         )
