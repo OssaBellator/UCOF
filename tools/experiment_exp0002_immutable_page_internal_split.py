@@ -38,15 +38,15 @@ def main() -> None:
     assert len(reused_pages) == cow.INTERNAL_FANOUT - 1
     assert len(retired_pages) == 2
 
-    # A subsequent non-splitting insertion into a reused distant leaf copies
-    # one leaf and one page per internal level.
-    second_identifier = 2 * OBJECTS + 1
+    # Insert into the underfull first split leaf. This avoids another split and
+    # copies exactly one leaf and one page per internal level.
+    second_identifier = 3
     second_bytes, second_root = tree.insert(
         inserted_bytes, inserted_root, cow.locator(second_identifier, 2)
     )
     second = tree.validate_tree(second_bytes, second_root)
     assert second_root.level == 2
-    assert second.identifiers[-1] == second_identifier
+    assert second_identifier in second.identifiers
     second_new = second.reachable - inserted.reachable
     second_reused = second.reachable & inserted.reachable
     assert len(second_new) == 3
