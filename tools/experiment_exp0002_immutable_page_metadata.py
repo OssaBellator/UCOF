@@ -59,8 +59,8 @@ def encode_catalog(
 ) -> bytes:
     if not roots or len(roots) > MAX_ROOTS:
         raise CatalogError("root count")
-    if roots != sorted(roots) or any(
-        root == 0 or left >= right for left, right in zip(roots, roots[1:])
+    if roots != sorted(roots) or any(root == 0 for root in roots) or any(
+        left >= right for left, right in zip(roots, roots[1:])
     ):
         raise CatalogError("root order")
     if CATALOG_OBJECT_ID in roots:
