@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Apply pending structural checks before rustfmt exports the successor API."""
+"""Apply pending structural and compile fixes before successor verification."""
 
 from pathlib import Path
 
@@ -14,6 +14,30 @@ def replace_once(text: str, needle: str, replacement: str, label: str) -> str:
 
 def main() -> None:
     text = PATH.read_text(encoding="utf-8")
+    if "fn checked_range<'a>(" not in text:
+        text = replace_once(
+            text,
+            "fn checked_range(\n    data: &[u8],",
+            "fn checked_range<'a>(\n    data: &'a [u8],",
+            "checked-range lifetime input",
+        )
+        text = replace_once(
+            text,
+            ") -> Result<&[u8], ImmutableError> {",
+            ") -> Result<&'a [u8], ImmutableError> {",
+            "checked-range lifetime output",
+        )
+    if "    root: PageRef,\n    footer_offset: usize," in text:
+        text = text.replace(
+            "    root: PageRef,\n    footer_offset: usize,",
+            "    footer_offset: usize,",
+            1,
+        )
+        text = text.replace(
+            "        locators,\n        root,\n        footer_offset,",
+            "        locators,\n        footer_offset,",
+            1,
+        )
     if 'Invalid("page overlap")' not in text:
         text = replace_once(
             text,
