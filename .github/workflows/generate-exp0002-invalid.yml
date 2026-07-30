@@ -1,32 +1,20 @@
-name: Generate EXP-0002 Invalid Vectors
+name: Verify EXP-0002 Invalid Vectors
 
 on:
-  push:
-    branches: ["phase-3/**"]
+  pull_request:
+    paths:
+      - "tools/exp0002_invalid_vectors.py"
+      - "tests/vectors/exp-0002-invalid/**"
+      - ".github/workflows/generate-exp0002-invalid.yml"
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  generate:
-    if: github.actor != 'github-actions[bot]'
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.ref_name }}
-      - name: Generate and verify invalid vectors
-        run: |
-          rm -rf tests/vectors/exp-0002-invalid
-          python3 tools/exp0002_invalid_vectors.py --write-vectors tests/vectors/exp-0002-invalid
-          python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
-      - name: Commit invalid corpus
-        run: |
-          if [[ -z "$(git status --porcelain -- tests/vectors/exp-0002-invalid)" ]]; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tests/vectors/exp-0002-invalid
-          git commit -m "test: pin invalid and interrupted EXP-0002 vectors"
-          git push origin HEAD:${{ github.ref_name }}
+      - name: Regenerate and compare invalid corpus
+        run: python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
