@@ -1,7 +1,7 @@
 use ucof_experiments::immutable_successor::{
     append_replacement, build_genesis, scan_source_recovery, validate_source_at,
-    validate_source_history, ImmutableError, ImmutableObjectInput, ImmutableReadAt,
-    ImmutableSourceError, ImmutableSourceLimits, OBJECT_HEADER_LEN,
+    validate_source_history, ImmutableError, ImmutableLimits, ImmutableObjectInput,
+    ImmutableReadAt, ImmutableSourceError, ImmutableSourceLimits, OBJECT_HEADER_LEN,
 };
 
 #[derive(Debug)]
@@ -192,11 +192,16 @@ fn failed_candidate_reads_consume_the_global_recovery_budget() {
         bytes.extend_from_slice(&decoy);
     }
     let budget = bytes.len() + 300;
-    let mut limits = ImmutableSourceLimits::default();
-    limits.max_total_bytes_read = u64::try_from(budget).expect("budget");
-    limits.max_read_request_bytes = 64;
-    limits.hash_block_bytes = 64;
-    limits.format.max_recovery_scan_bytes = bytes.len();
+    let limits = ImmutableSourceLimits {
+        max_total_bytes_read: u64::try_from(budget).expect("budget"),
+        max_read_request_bytes: 64,
+        hash_block_bytes: 64,
+        format: ImmutableLimits {
+            max_recovery_scan_bytes: bytes.len(),
+            ..ImmutableLimits::default()
+        },
+        ..ImmutableSourceLimits::default()
+    };
     let mut source = RecordingSource::new(bytes);
     assert_eq!(
         scan_source_recovery(&mut source, limits),
