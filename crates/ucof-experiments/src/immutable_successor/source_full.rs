@@ -19,6 +19,8 @@ pub struct ImmutableSourceRecoveryReport {
 struct PrefixSource<'a, S> {
     inner: &'a mut S,
     length: u64,
+    limits: ImmutableSourceLimits,
+    stats: ImmutableSourceStats,
 }
 
 impl<S: ImmutableReadAt> ImmutableReadAt for PrefixSource<'_, S> {
@@ -36,9 +38,27 @@ impl<S: ImmutableReadAt> ImmutableReadAt for PrefixSource<'_, S> {
         let end = offset
             .checked_add(length)
             .ok_or(ImmutableSourceError::Io("range"))?;
-        if end > self.length {
+        if end > self.length || buffer.len() > self.limits.max_read_request_bytes {
             return Err(ImmutableSourceError::Io("range"));
         }
+        let next_operations = self
+            .stats
+            .read_operations
+            .checked_add(1)
+            .ok_or(ImmutableSourceError::Limit("read operations"))?;
+        let next_bytes = self
+            .stats
+            .bytes_read
+            .checked_add(length)
+            .ok_or(ImmutableSourceError::Limit("read bytes"))?;
+        if next_operations > self.limits.max_read_operations {
+            return Err(ImmutableSourceError::Limit("read operations"));
+        }
+        if next_bytes > self.limits.max_total_bytes_read {
+            return Err(ImmutableSourceError::Limit("read bytes"));
+        }
+        self.stats.read_operations = next_operations;
+        self.stats.bytes_read = next_bytes;
         self.inner.read_exact_at(offset, buffer)
     }
 }
@@ -342,6 +362,7 @@ pub fn validate_source_at<S: ImmutableReadAt>(
             "page count",
         )));
     }
+    locators.sort_by_key(|locator| locator.object_id);
     if locators.is_empty()
         || locators
             .windows(2)
@@ -352,8 +373,8 @@ pub fn validate_source_at<S: ImmutableReadAt>(
         )));
     }
 
-    let mut object_ranges = Vec::with_capacity(locators.len());
     allocation_check::<(usize, usize)>(locators.len(), reader.limits.format)?;
+    let mut object_ranges = Vec::with_capacity(locators.len());
     for locator in &locators {
         let offset = usize_from_u64(locator.record_offset, "object range")?;
         let length = usize_from_u64(locator.record_len, "object range")?;
@@ -402,10 +423,31 @@ fn validate_source_prefix<S: ImmutableReadAt>(
     let mut prefix = PrefixSource {
         inner: source,
         length: prefix_len,
+        limits: call_limits,
+        stats: ImmutableSourceStats::default(),
     };
-    let report = validate_source_at(&mut prefix, call_limits)?;
-    add_source_stats(stats, report.stats)?;
-    Ok(report)
+    let result = validate_source_at(&mut prefix, call_limits);
+    let attempted = prefix.stats;
+    match result {
+        Ok(mut report) => {
+            let addition = ImmutableSourceStats {
+                read_operations: attempted.read_operations,
+                bytes_read: attempted.bytes_read,
+                bytes_hashed: report.stats.bytes_hashed,
+                largest_allocation: report
+                    .stats
+                    .largest_allocation
+                    .max(attempted.largest_allocation),
+            };
+            add_source_stats(stats, addition)?;
+            report.stats = addition;
+            Ok(report)
+        }
+        Err(error) => {
+            add_source_stats(stats, attempted)?;
+            Err(error)
+        }
+    }
 }
 
 fn source_footer_and_parent<S: ImmutableReadAt>(
@@ -545,13 +587,18 @@ pub fn scan_source_recovery<S: ImmutableReadAt>(
     read_direct(source, limits, &mut stats, scan_start, &mut suffix)?;
 
     let mut offsets = Vec::new();
-    for index in 0..=suffix.len().saturating_sub(FOOTER_MAGIC.len()) {
-        if &suffix[index..index + FOOTER_MAGIC.len()] == FOOTER_MAGIC {
-            offsets.push(
-                scan_start
-                    .checked_add(u64::try_from(index).map_err(|_| ImmutableSourceError::Limit("offset"))?)
-                    .ok_or(ImmutableSourceError::Limit("offset"))?,
-            );
+    if suffix.len() >= FOOTER_MAGIC.len() {
+        for index in 0..=suffix.len() - FOOTER_MAGIC.len() {
+            if &suffix[index..index + FOOTER_MAGIC.len()] == FOOTER_MAGIC {
+                offsets.push(
+                    scan_start
+                        .checked_add(
+                            u64::try_from(index)
+                                .map_err(|_| ImmutableSourceError::Limit("offset"))?,
+                        )
+                        .ok_or(ImmutableSourceError::Limit("offset"))?,
+                );
+            }
         }
     }
     offsets.reverse();

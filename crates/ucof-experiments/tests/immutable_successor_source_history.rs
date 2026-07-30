@@ -197,8 +197,8 @@ fn short_suffix_returns_an_empty_report_without_panicking() {
 
 #[test]
 fn failed_candidate_reads_consume_the_global_recovery_budget() {
-    let mut bytes = build_genesis(&base_objects(), ImmutableSourceLimits::default().format)
-        .expect("genesis");
+    let mut bytes =
+        build_genesis(&base_objects(), ImmutableSourceLimits::default().format).expect("genesis");
     for _ in 0..20 {
         let mut decoy = vec![0_u8; 128];
         decoy[..8].copy_from_slice(b"UCFTIM02");
