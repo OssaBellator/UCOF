@@ -1,0 +1,47 @@
+name: Land Immutable Successor Source Hardening
+
+on:
+  push:
+    branches: ["phase-3/directory-snapshots-recovery"]
+    paths:
+      - ".github/workflows/land-immutable-successor-source-hardening.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  land:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/directory-snapshots-recovery
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Apply source hardening
+        run: |
+          python3 tools/patch_immutable_successor_source_hardening.py
+          cargo fmt --all
+          cargo fmt --all -- --check
+      - name: Lint focused successor APIs
+        run: cargo clippy --locked -p ucof-experiments --test exp0002_immutable_vector --test immutable_successor_api --test immutable_successor_history --test immutable_successor_rewrite --test immutable_successor_source --test exp0002_immutable_generated_vectors -- -D warnings
+      - name: Test focused successor APIs
+        run: |
+          cargo test --locked -p ucof-experiments --test exp0002_immutable_vector
+          cargo test --locked -p ucof-experiments --test immutable_successor_api
+          cargo test --locked -p ucof-experiments --test immutable_successor_history
+          cargo test --locked -p ucof-experiments --test immutable_successor_rewrite
+          cargo test --locked -p ucof-experiments --test immutable_successor_source
+          cargo test --locked -p ucof-experiments --test exp0002_immutable_generated_vectors
+      - name: Commit verified hardening
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/ucof-experiments/src/immutable_successor/source.rs \
+            crates/ucof-experiments/tests/immutable_successor_source.rs
+          git diff --cached --check
+          git commit -m "fix: harden immutable successor source arithmetic"
+          git push origin HEAD:phase-3/directory-snapshots-recovery
