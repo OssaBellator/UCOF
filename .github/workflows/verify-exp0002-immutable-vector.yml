@@ -16,88 +16,151 @@ on:
       - "crates/ucof-experiments/tests/exp0002_immutable_generated_vectors.rs"
       - "tools/patch_immutable_source_full.py"
       - ".github/workflows/verify-exp0002-immutable-vector.yml"
-  push:
-    branches: ["phase-3/**"]
-    paths:
-      - "tests/vectors/exp-0002-immutable/**"
-      - "crates/ucof-experiments/src/immutable_successor.rs"
-      - "crates/ucof-experiments/src/immutable_successor/**"
-      - "crates/ucof-experiments/src/lib.rs"
-      - "crates/ucof-experiments/tests/immutable_successor_api.rs"
-      - "crates/ucof-experiments/tests/immutable_successor_history.rs"
-      - "crates/ucof-experiments/tests/immutable_successor_rewrite.rs"
-      - "crates/ucof-experiments/tests/immutable_successor_source.rs"
-      - "crates/ucof-experiments/tests/immutable_successor_source_history.rs"
-      - "crates/ucof-experiments/tests/exp0002_immutable_vector.rs"
-      - "crates/ucof-experiments/tests/exp0002_immutable_generated_vectors.rs"
-      - "tools/patch_immutable_source_full.py"
-      - ".github/workflows/verify-exp0002-immutable-vector.yml"
-  workflow_dispatch:
 
 permissions:
   contents: read
 
 jobs:
-  verify:
+  finalize-source-history:
+    if: github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      actions: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      - name: Verify pinned vector manifest and boundaries
-        run: |
-          python3 - <<'PY'
-          from hashlib import sha256
-          import json
-          from pathlib import Path
-
-          directory = Path("tests/vectors/exp-0002-immutable")
-          manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
-          assert manifest["status"] == "non-normative successor microformat evidence"
-          assert len(manifest["vectors"]) == 1
-          vector = manifest["vectors"][0]
-          data = bytes.fromhex((directory / vector["file"]).read_text(encoding="ascii"))
-          digest = sha256(data).hexdigest()
-          assert len(data) == vector["decoded_bytes"]
-          assert digest == vector["sha256"]
-          magic = b"UCFTIM02"
-          offsets = []
-          cursor = 0
-          while True:
-              offset = data.find(magic, cursor)
-              if offset < 0:
-                  break
-              offsets.append(offset)
-              cursor = offset + 1
-          assert offsets == [len(data) - 128]
-          print(f"decoded_bytes={len(data)}")
-          print(f"sha256={digest}")
-          print(f"footer_magic_offsets={offsets}")
-          print("trailing_bytes_after_last_footer=0")
-          PY
+        with:
+          ref: phase-3/directory-snapshots-recovery
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Apply bounded source-history hardening
+      - name: Download and verify green artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
-          python3 tools/patch_immutable_source_full.py
-          cargo fmt --all
+          gh api repos/OssaBellator/UCOF/actions/artifacts/8761703573/zip > /tmp/source-full.zip
+          rm -rf /tmp/source-full
+          mkdir -p /tmp/source-full
+          unzip -q /tmp/source-full.zip -d /tmp/source-full
+          test "$(git hash-object /tmp/source-full/src/immutable_successor/source_full.rs)" = "68bae39d568e70fda718aa9ae771b2597cdcadd8"
+          test "$(git hash-object /tmp/source-full/tests/immutable_successor_source_history.rs)" = "29a9ad589743185b2db4628d2799b01a4b745d9c"
+          cp /tmp/source-full/src/immutable_successor/source_full.rs crates/ucof-experiments/src/immutable_successor/source_full.rs
+          cp /tmp/source-full/tests/immutable_successor_source_history.rs crates/ucof-experiments/tests/immutable_successor_source_history.rs
+          rm -f tools/patch_immutable_source_full.py
+      - name: Verify landed source
+        run: |
           cargo fmt --all -- --check
-      - name: Export normalized source-history increment
-        uses: actions/upload-artifact@v4
-        with:
-          name: formatted-immutable-source-full
-          path: |
-            crates/ucof-experiments/src/immutable_successor/source_full.rs
-            crates/ucof-experiments/tests/immutable_successor_source_history.rs
-          if-no-files-found: error
-      - name: Lint successor parser and reusable APIs
-        run: cargo clippy --locked -p ucof-experiments --test exp0002_immutable_vector --test immutable_successor_api --test immutable_successor_history --test immutable_successor_rewrite --test immutable_successor_source --test immutable_successor_source_history --test exp0002_immutable_generated_vectors -- -D warnings
-      - name: Parse, generate, validate, traverse history, recover, rewrite, and source-lookup
+          cargo clippy --locked -p ucof-experiments --test exp0002_immutable_vector --test immutable_successor_api --test immutable_successor_history --test immutable_successor_rewrite --test immutable_successor_source --test immutable_successor_source_history --test exp0002_immutable_generated_vectors -- -D warnings
+          cargo test --locked -p ucof-experiments --test exp0002_immutable_vector
+          cargo test --locked -p ucof-experiments --test immutable_successor_api
+          cargo test --locked -p ucof-experiments --test immutable_successor_history
+          cargo test --locked -p ucof-experiments --test immutable_successor_rewrite
+          cargo test --locked -p ucof-experiments --test immutable_successor_source
+          cargo test --locked -p ucof-experiments --test immutable_successor_source_history
+          cargo test --locked -p ucof-experiments --test exp0002_immutable_generated_vectors
+      - name: Restore direct read-only verifier and commit
         run: |
-          cargo test --locked -p ucof-experiments --test exp0002_immutable_vector -- --nocapture
-          cargo test --locked -p ucof-experiments --test immutable_successor_api -- --nocapture
-          cargo test --locked -p ucof-experiments --test immutable_successor_history -- --nocapture
-          cargo test --locked -p ucof-experiments --test immutable_successor_rewrite -- --nocapture
-          cargo test --locked -p ucof-experiments --test immutable_successor_source -- --nocapture
-          cargo test --locked -p ucof-experiments --test immutable_successor_source_history -- --nocapture
-          cargo test --locked -p ucof-experiments --test exp0002_immutable_generated_vectors -- --nocapture
+          cat > .github/workflows/verify-exp0002-immutable-vector.yml <<'EOF'
+          name: Verify Immutable Successor Vector
+
+          on:
+            pull_request:
+              paths:
+                - "tests/vectors/exp-0002-immutable/**"
+                - "crates/ucof-experiments/src/immutable_successor.rs"
+                - "crates/ucof-experiments/src/immutable_successor/**"
+                - "crates/ucof-experiments/src/lib.rs"
+                - "crates/ucof-experiments/tests/immutable_successor_api.rs"
+                - "crates/ucof-experiments/tests/immutable_successor_history.rs"
+                - "crates/ucof-experiments/tests/immutable_successor_rewrite.rs"
+                - "crates/ucof-experiments/tests/immutable_successor_source.rs"
+                - "crates/ucof-experiments/tests/immutable_successor_source_history.rs"
+                - "crates/ucof-experiments/tests/exp0002_immutable_vector.rs"
+                - "crates/ucof-experiments/tests/exp0002_immutable_generated_vectors.rs"
+                - ".github/workflows/verify-exp0002-immutable-vector.yml"
+            push:
+              branches: ["phase-3/**"]
+              paths:
+                - "tests/vectors/exp-0002-immutable/**"
+                - "crates/ucof-experiments/src/immutable_successor.rs"
+                - "crates/ucof-experiments/src/immutable_successor/**"
+                - "crates/ucof-experiments/src/lib.rs"
+                - "crates/ucof-experiments/tests/immutable_successor_api.rs"
+                - "crates/ucof-experiments/tests/immutable_successor_history.rs"
+                - "crates/ucof-experiments/tests/immutable_successor_rewrite.rs"
+                - "crates/ucof-experiments/tests/immutable_successor_source.rs"
+                - "crates/ucof-experiments/tests/immutable_successor_source_history.rs"
+                - "crates/ucof-experiments/tests/exp0002_immutable_vector.rs"
+                - "crates/ucof-experiments/tests/exp0002_immutable_generated_vectors.rs"
+                - ".github/workflows/verify-exp0002-immutable-vector.yml"
+            workflow_dispatch:
+
+          permissions:
+            contents: read
+
+          jobs:
+            verify:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - name: Verify pinned vector manifest and boundaries
+                  run: |
+                    python3 - <<'PY'
+                    from hashlib import sha256
+                    import json
+                    from pathlib import Path
+
+                    directory = Path("tests/vectors/exp-0002-immutable")
+                    manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+                    assert manifest["status"] == "non-normative successor microformat evidence"
+                    assert len(manifest["vectors"]) == 1
+                    vector = manifest["vectors"][0]
+                    data = bytes.fromhex((directory / vector["file"]).read_text(encoding="ascii"))
+                    digest = sha256(data).hexdigest()
+                    assert len(data) == vector["decoded_bytes"]
+                    assert digest == vector["sha256"]
+                    magic = b"UCFTIM02"
+                    offsets = []
+                    cursor = 0
+                    while True:
+                        offset = data.find(magic, cursor)
+                        if offset < 0:
+                            break
+                        offsets.append(offset)
+                        cursor = offset + 1
+                    assert offsets == [len(data) - 128]
+                    print(f"decoded_bytes={len(data)}")
+                    print(f"sha256={digest}")
+                    print(f"footer_magic_offsets={offsets}")
+                    print("trailing_bytes_after_last_footer=0")
+                    PY
+                - uses: dtolnay/rust-toolchain@stable
+                  with:
+                    components: rustfmt, clippy
+                - uses: Swatinem/rust-cache@v2
+                - name: Check formatting
+                  run: cargo fmt --all -- --check
+                - name: Lint successor parser and reusable APIs
+                  run: cargo clippy --locked -p ucof-experiments --test exp0002_immutable_vector --test immutable_successor_api --test immutable_successor_history --test immutable_successor_rewrite --test immutable_successor_source --test immutable_successor_source_history --test exp0002_immutable_generated_vectors -- -D warnings
+                - name: Parse, generate, validate, traverse history, recover, rewrite, and source-lookup
+                  run: |
+                    cargo test --locked -p ucof-experiments --test exp0002_immutable_vector -- --nocapture
+                    cargo test --locked -p ucof-experiments --test immutable_successor_api -- --nocapture
+                    cargo test --locked -p ucof-experiments --test immutable_successor_history -- --nocapture
+                    cargo test --locked -p ucof-experiments --test immutable_successor_rewrite -- --nocapture
+                    cargo test --locked -p ucof-experiments --test immutable_successor_source -- --nocapture
+                    cargo test --locked -p ucof-experiments --test immutable_successor_source_history -- --nocapture
+                    cargo test --locked -p ucof-experiments --test exp0002_immutable_generated_vectors -- --nocapture
+          EOF
+          sed -i 's/^          //' .github/workflows/verify-exp0002-immutable-vector.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/ucof-experiments/src/immutable_successor/source_full.rs \
+            crates/ucof-experiments/tests/immutable_successor_source_history.rs \
+            tools/patch_immutable_source_full.py \
+            .github/workflows/verify-exp0002-immutable-vector.yml
+          git diff --cached --check
+          git commit -m "feat: add bounded successor source history and recovery"
+          git push origin HEAD:phase-3/directory-snapshots-recovery
