@@ -23,6 +23,19 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Apply focused history fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/ucof-experiments/src/exp0002_source_chain.rs")
+          text = path.read_text(encoding="utf-8")
+          text = text.replace(
+              "Exp0002Error::PreviousFooterCycle",
+              "Exp0002Error::InvalidPreviousFooter",
+          )
+          path.write_text(text, encoding="utf-8")
+          PY
       - name: Normalize Rust sources
         run: cargo fmt --all
       - name: Lint and test experiment crate
@@ -37,5 +50,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add crates/ucof-experiments
-          git commit -m "style: normalize EXP-0002 history and CLI sources"
+          git commit -m "fix: finalize EXP-0002 history and CLI sources"
           git push origin HEAD:${{ github.head_ref || github.ref_name }}
