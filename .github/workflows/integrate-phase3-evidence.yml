@@ -1,0 +1,36 @@
+name: Integrate Phase 3 Evidence
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  integrate:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Normalize and generate evidence
+        run: |
+          cargo fmt --all
+          rm -rf tests/vectors/exp-0002-invalid
+          python3 tools/exp0002_invalid_vectors.py --write-vectors tests/vectors/exp-0002-invalid
+          python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
+      - name: Commit evidence
+        run: |
+          if [[ -z "$(git status --porcelain -- crates/ucof-experiments tests/vectors/exp-0002-invalid)" ]]; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/ucof-experiments tests/vectors/exp-0002-invalid
+          git commit -m "test: normalize copy-on-write model and pin invalid vectors"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
