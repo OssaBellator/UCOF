@@ -144,8 +144,11 @@ def run_sort(run_entries: int) -> SortReport:
 def duplicate_test() -> None:
     with tempfile.TemporaryDirectory(prefix="ucof-exp0002-duplicate-") as temporary:
         directory = Path(temporary)
-        paths = write_runs(directory, [3, 1, 2, 2], 2)
         try:
+            # The first run contains 1, 2, 3 and the second contains 2. The
+            # duplicate is therefore discovered by the k-way merge rather than
+            # by the per-run sorter.
+            paths = write_runs(directory, [3, 1, 2, 2], 3)
             merge_runs(paths)
         except DuplicateKey:
             return
