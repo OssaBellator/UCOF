@@ -76,8 +76,7 @@ fn history_limit_fails_closed_before_omitting_an_older_entry() {
 #[test]
 fn recovery_reports_valid_prefixes_without_selecting_one() {
     let (genesis, appended) = two_commits();
-    let report =
-        scan_recovery_candidates(&appended, ImmutableLimits::default()).expect("scan");
+    let report = scan_recovery_candidates(&appended, ImmutableLimits::default()).expect("scan");
     assert_eq!(report.candidates.len(), 2);
     assert_eq!(report.candidates[0].report.sequence, 1);
     assert_eq!(report.candidates[1].report.sequence, 0);
@@ -91,8 +90,7 @@ fn recovery_reports_valid_prefixes_without_selecting_one() {
 fn interrupted_append_reports_only_the_complete_genesis_prefix() {
     let (genesis, mut appended) = two_commits();
     appended.truncate(appended.len() - 17);
-    let report =
-        scan_recovery_candidates(&appended, ImmutableLimits::default()).expect("scan");
+    let report = scan_recovery_candidates(&appended, ImmutableLimits::default()).expect("scan");
     assert_eq!(report.candidates.len(), 1);
     assert_eq!(report.candidates[0].report.sequence, 0);
     assert_eq!(report.candidates[0].prefix_len as usize, genesis.len());
