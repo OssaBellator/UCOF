@@ -36,17 +36,23 @@ impl Page {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Limits {
+    /// Maximum pages copied or inspected along one update path.
     pub max_pages_visited: usize,
+    /// Maximum new persistent pages produced by one update.
     pub max_new_pages: usize,
+    /// Maximum root-to-leaf depth.
     pub max_depth: usize,
+    /// Maximum unique pages inspected by whole-directory validation.
+    pub max_validation_pages: usize,
 }
 
 impl Default for Limits {
     fn default() -> Self {
         Self {
-            max_pages_visited: 1024,
-            max_new_pages: 1024,
+            max_pages_visited: 64,
+            max_new_pages: 128,
             max_depth: 64,
+            max_validation_pages: 1_000_000,
         }
     }
 }
@@ -139,6 +145,7 @@ impl Directory {
             }
             level = next;
         }
+
         let root = level.first().ok_or(Error::EmptyDirectory)?.page_id;
         let directory = Self {
             pages,
@@ -150,6 +157,7 @@ impl Directory {
             max_pages_visited: directory.pages.len(),
             max_new_pages: directory.pages.len(),
             max_depth: 128,
+            max_validation_pages: directory.pages.len(),
         })?;
         Ok(directory)
     }
@@ -163,6 +171,9 @@ impl Directory {
         loop {
             if !seen.insert(page_id) {
                 return Err(Error::Cycle);
+            }
+            if seen.len() > self.pages.len() {
+                return Err(Error::PageLimitExceeded);
             }
             match self.pages.get(page_id).ok_or(Error::InvalidPageReference)? {
                 Page::Leaf(entries) => {
@@ -185,33 +196,20 @@ impl Directory {
     }
 
     pub fn depth(&self) -> Result<usize, Error> {
-        let mut depth = 0_usize;
-        let mut page_id = self.root;
-        let mut seen = HashSet::new();
-        loop {
-            if !seen.insert(page_id) {
-                return Err(Error::Cycle);
-            }
-            depth = depth.checked_add(1).ok_or(Error::ArithmeticOverflow)?;
-            match self.pages.get(page_id).ok_or(Error::InvalidPageReference)? {
-                Page::Leaf(_) => return Ok(depth),
-                Page::Internal(children) => {
-                    page_id = children.first().ok_or(Error::InvalidPageRange)?.page_id;
-                }
-            }
-        }
+        self.depth_with_limit(self.pages.len())
     }
 
     pub fn reachable_page_count(&self) -> Result<usize, Error> {
-        Ok(self.reachable_pages()?.len())
+        Ok(self.reachable_pages(self.pages.len())?.len())
     }
 
     pub fn upsert(&self, entry: Entry, limits: Limits) -> Result<UpdateReport, Error> {
         if entry.key == 0 {
             return Err(Error::InvalidKey);
         }
-        let old_reachable = self.reachable_pages()?;
-        let old_depth = self.depth()?;
+
+        let old_reachable = self.reachable_pages(limits.max_validation_pages)?;
+        let old_depth = self.depth_with_limit(limits.max_depth)?;
         let mut pages = self.pages.clone();
         let mut context = Context {
             pages: &mut pages,
@@ -240,9 +238,10 @@ impl Directory {
             internal_fanout: self.internal_fanout,
         };
         directory.validate(limits)?;
-        let new_reachable = directory.reachable_pages()?;
+        let new_reachable = directory.reachable_pages(limits.max_validation_pages)?;
         let reused_pages = old_reachable.intersection(&new_reachable).count();
-        let new_depth = directory.depth()?;
+        let new_depth = directory.depth_with_limit(limits.max_depth)?;
+
         Ok(UpdateReport {
             directory,
             replaced_existing,
@@ -267,7 +266,7 @@ impl Directory {
             if !seen.insert(page_id) {
                 return Err(Error::Cycle);
             }
-            if seen.len() > limits.max_pages_visited {
+            if seen.len() > limits.max_validation_pages {
                 return Err(Error::PageLimitExceeded);
             }
             match self.pages.get(page_id).ok_or(Error::InvalidPageReference)? {
@@ -307,12 +306,36 @@ impl Directory {
         Ok(())
     }
 
-    fn reachable_pages(&self) -> Result<BTreeSet<usize>, Error> {
+    fn depth_with_limit(&self, max_depth: usize) -> Result<usize, Error> {
+        let mut depth = 0_usize;
+        let mut page_id = self.root;
+        let mut seen = HashSet::new();
+        loop {
+            if !seen.insert(page_id) {
+                return Err(Error::Cycle);
+            }
+            depth = depth.checked_add(1).ok_or(Error::ArithmeticOverflow)?;
+            if depth > max_depth {
+                return Err(Error::DepthLimitExceeded);
+            }
+            match self.pages.get(page_id).ok_or(Error::InvalidPageReference)? {
+                Page::Leaf(_) => return Ok(depth),
+                Page::Internal(children) => {
+                    page_id = children.first().ok_or(Error::InvalidPageRange)?.page_id;
+                }
+            }
+        }
+    }
+
+    fn reachable_pages(&self, max_pages: usize) -> Result<BTreeSet<usize>, Error> {
         let mut reachable = BTreeSet::new();
         let mut stack = vec![self.root];
         while let Some(page_id) = stack.pop() {
             if !reachable.insert(page_id) {
                 return Err(Error::Cycle);
+            }
+            if reachable.len() > max_pages {
+                return Err(Error::PageLimitExceeded);
             }
             match self.pages.get(page_id).ok_or(Error::InvalidPageReference)? {
                 Page::Leaf(_) => {}
@@ -357,6 +380,7 @@ impl Context<'_> {
         if self.pages_visited > self.limits.max_pages_visited {
             return Err(Error::PageLimitExceeded);
         }
+
         let page = self
             .pages
             .get(page_id)
@@ -378,6 +402,7 @@ impl Context<'_> {
                         right: None,
                     });
                 }
+
                 let split = entries.len() / 2;
                 let right_entries = entries.split_off(split);
                 let left_id = self.push(Page::Leaf(entries))?;
@@ -405,6 +430,7 @@ impl Context<'_> {
                         right: None,
                     });
                 }
+
                 let split = children.len() / 2;
                 let right_children = children.split_off(split);
                 let left_id = self.push(Page::Internal(children))?;
@@ -552,6 +578,35 @@ mod tests {
         assert!(copied <= 64 * 1024);
         assert!(rebuilt > 80 * 1024 * 1024);
         assert!(rebuilt / copied > 1_000);
+    }
+
+    #[test]
+    fn path_and_validation_budgets_are_independent() {
+        let directory = Directory::build(entries(100_000), 185, 255).expect("directory");
+        let entry = Entry {
+            key: 50_000,
+            revision: 1,
+        };
+        assert_eq!(
+            directory.upsert(
+                entry,
+                Limits {
+                    max_pages_visited: 2,
+                    ..Limits::default()
+                }
+            ),
+            Err(Error::PageLimitExceeded)
+        );
+        assert_eq!(
+            directory.upsert(
+                entry,
+                Limits {
+                    max_validation_pages: 2,
+                    ..Limits::default()
+                }
+            ),
+            Err(Error::PageLimitExceeded)
+        );
     }
 
     #[test]
