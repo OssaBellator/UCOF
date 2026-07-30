@@ -1,0 +1,54 @@
+name: Land Formatted Immutable Successor
+
+on:
+  push:
+    branches: ["phase-3/directory-snapshots-recovery"]
+    paths:
+      - ".github/workflows/land-formatted-immutable-successor.yml"
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  land:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/directory-snapshots-recovery
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Download verified normalized artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p /tmp/formatted
+          gh api /repos/${GITHUB_REPOSITORY}/actions/artifacts/8755940417/zip > /tmp/formatted.zip
+          unzip -q /tmp/formatted.zip -d /tmp/formatted
+          cp /tmp/formatted/src/immutable_successor.rs crates/ucof-experiments/src/immutable_successor.rs
+          cp /tmp/formatted/src/lib.rs crates/ucof-experiments/src/lib.rs
+          cp /tmp/formatted/tests/immutable_successor_api.rs crates/ucof-experiments/tests/immutable_successor_api.rs
+          test "$(git hash-object crates/ucof-experiments/src/immutable_successor.rs)" = "6af4537d2fe3c0e6f20dc559930cc3132e7b6bf0"
+          test "$(git hash-object crates/ucof-experiments/src/lib.rs)" = "b1af66d46642299d3e6d8c427675eb694fb44360"
+          test "$(git hash-object crates/ucof-experiments/tests/immutable_successor_api.rs)" = "d6ae431fe252fc39058d372bf40b1f489c28c38b"
+      - name: Verify checked-in result
+        run: |
+          cargo fmt --all -- --check
+          cargo clippy --locked -p ucof-experiments --test exp0002_immutable_vector --test immutable_successor_api --test exp0002_immutable_generated_vectors -- -D warnings
+          cargo test --locked -p ucof-experiments --test exp0002_immutable_vector
+          cargo test --locked -p ucof-experiments --test immutable_successor_api
+          cargo test --locked -p ucof-experiments --test exp0002_immutable_generated_vectors
+      - name: Commit verified files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/ucof-experiments/src/immutable_successor.rs \
+            crates/ucof-experiments/src/lib.rs \
+            crates/ucof-experiments/tests/immutable_successor_api.rs
+          git diff --cached --check
+          git commit -m "feat: land reusable immutable successor API"
+          git push origin HEAD:phase-3/directory-snapshots-recovery
