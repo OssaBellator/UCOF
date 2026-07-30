@@ -186,3 +186,10 @@ path = "fuzz_targets/immutable_successor_rewrite.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "immutable_successor_source_lookup"
+path = "fuzz_targets/immutable_successor_source_lookup.rs"
+test = false
+doc = false
+bench = false
