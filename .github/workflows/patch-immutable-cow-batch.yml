@@ -1,0 +1,96 @@
+name: Patch Immutable COW Batch Evidence
+
+on:
+  push:
+    branches: ["phase-3/directory-snapshots-recovery"]
+    paths:
+      - ".github/workflows/patch-immutable-cow-batch.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/directory-snapshots-recovery
+      - name: Add two-leaf batch assertions
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("tools/experiment_exp0002_immutable_page_cow.py")
+          text = path.read_text(encoding="utf-8")
+          old = '''    update = locator(50_000, generation=1)
+              appended = append_updates(genesis, [update])
+              appended_reverse = append_updates(genesis, list(reversed([update])))
+              assert appended == appended_reverse
+              appended_report = validate_strict(appended)
+          '''.replace("              ", "    ")
+          new = '''    update = locator(50_000, generation=1)
+              appended = append_updates(genesis, [update])
+              appended_report = validate_strict(appended)
+
+              batch = [locator(25_000, generation=1), locator(75_000, generation=1)]
+              batched = append_updates(genesis, batch)
+              batched_reverse = append_updates(genesis, list(reversed(batch)))
+              assert batched == batched_reverse
+              batched_report = validate_strict(batched)
+          '''.replace("              ", "    ")
+          if old not in text:
+              raise SystemExit("singleton determinism anchor not found")
+          text = text.replace(old, new, 1)
+
+          old = '''    assert len(new_pages) == depth
+              assert len(retired_pages) == depth
+              assert len(reused_pages) == expected_pages - depth
+          '''.replace("              ", "    ")
+          new = '''    assert len(new_pages) == depth
+              assert len(retired_pages) == depth
+              assert len(reused_pages) == expected_pages - depth
+
+              batch_new_pages = batched_report.reachable_pages - genesis_report.reachable_pages
+              batch_reused_pages = batched_report.reachable_pages & genesis_report.reachable_pages
+              batch_retired_pages = genesis_report.reachable_pages - batched_report.reachable_pages
+              expected_batch_pages = 5  # two leaves, two level-1 parents, one root
+              assert len(batch_new_pages) == expected_batch_pages
+              assert len(batch_retired_pages) == expected_batch_pages
+              assert len(batch_reused_pages) == expected_pages - expected_batch_pages
+          '''.replace("              ", "    ")
+          if old not in text:
+              raise SystemExit("page count anchor not found")
+          text = text.replace(old, new, 1)
+
+          old = '''    print(f"append_retired_pages={len(retired_pages)}")
+              print(f"full_rebuild_page_bytes={full_rebuild_page_bytes:,}")
+          '''.replace("              ", "    ")
+          new = '''    print(f"append_retired_pages={len(retired_pages)}")
+              print(f"batch_new_pages={len(batch_new_pages)}")
+              print(f"batch_reused_pages={len(batch_reused_pages):,}")
+              print(f"batch_retired_pages={len(batch_retired_pages)}")
+              print(f"full_rebuild_page_bytes={full_rebuild_page_bytes:,}")
+          '''.replace("              ", "    ")
+          if old not in text:
+              raise SystemExit("report anchor not found")
+          text = text.replace(old, new, 1)
+
+          text = text.replace(
+              '    print("deterministic_update_order=pass")\n',
+              '    print("deterministic_two_leaf_batch_order=pass")\n',
+              1,
+          )
+          path.write_text(text, encoding="utf-8")
+          PY
+      - name: Execute strengthened prototype
+        run: python3 tools/experiment_exp0002_immutable_page_cow.py
+      - name: Commit source
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/experiment_exp0002_immutable_page_cow.py
+          git diff --cached --check
+          git commit -m "test: strengthen immutable-page batch reuse evidence"
+          git push origin HEAD:phase-3/directory-snapshots-recovery
