@@ -1,0 +1,32 @@
+name: Immutable Page Property Campaign
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_splits.py"
+      - "tools/experiment_exp0002_immutable_page_sequences.py"
+      - "tools/experiment_exp0002_immutable_page_property_campaign.py"
+      - "docs/experiments/0030-exp0002-immutable-page-property-campaign.md"
+      - ".github/workflows/immutable-page-property-campaign.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_splits.py"
+      - "tools/experiment_exp0002_immutable_page_sequences.py"
+      - "tools/experiment_exp0002_immutable_page_property_campaign.py"
+      - "docs/experiments/0030-exp0002-immutable-page-property-campaign.md"
+      - ".github/workflows/immutable-page-property-campaign.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run deterministic immutable-page property campaign
+        run: python3 tools/experiment_exp0002_immutable_page_property_campaign.py
