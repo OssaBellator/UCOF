@@ -101,7 +101,8 @@ def insert(data: bytes, root: cow.PageRef, value: cow.Locator) -> tuple[bytes, c
     replacements = insert_node(output, data, root, value)
     if len(replacements) == 1:
         return bytes(output), replacements[0]
-    return bytes(output), emit_internal(output, replacements, root.level + 1)
+    new_root = emit_internal(output, replacements, root.level + 1)
+    return bytes(output), new_root
 
 
 def leaf_entries(data: bytes, reference: cow.PageRef) -> list[cow.Locator]:
@@ -120,7 +121,8 @@ def delete_from_height_one(data: bytes, root: cow.PageRef, object_id: int) -> tu
         if not kept:
             raise ValueError("prototype does not emit an empty tree")
         output = bytearray(data)
-        return bytes(output), emit_leaf(output, kept)
+        new_root = emit_leaf(output, kept)
+        return bytes(output), new_root
     if root.level != 1:
         raise ValueError("prototype deletion supports height-one roots only")
 
@@ -164,7 +166,8 @@ def delete_from_height_one(data: bytes, root: cow.PageRef, object_id: int) -> tu
 
     if len(updated_children) == 1:
         return bytes(output), updated_children[0]
-    return bytes(output), emit_internal(output, updated_children, 1)
+    new_root = emit_internal(output, updated_children, 1)
+    return bytes(output), new_root
 
 
 def main() -> None:
