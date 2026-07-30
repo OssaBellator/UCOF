@@ -1,0 +1,30 @@
+name: Immutable Page Object Source
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_objects.py"
+      - "tools/experiment_exp0002_immutable_page_object_source.py"
+      - "docs/experiments/0033-exp0002-immutable-page-object-source.md"
+      - ".github/workflows/immutable-page-object-source.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_objects.py"
+      - "tools/experiment_exp0002_immutable_page_object_source.py"
+      - "docs/experiments/0033-exp0002-immutable-page-object-source.md"
+      - ".github/workflows/immutable-page-object-source.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise bounded source validation and targeted lookup
+        run: python3 tools/experiment_exp0002_immutable_page_object_source.py
