@@ -177,7 +177,7 @@ def main() -> None:
     interrupted = deleted[:-cow.FOOTER_LEN // 2]
     try:
         objects.validate_complete(interrupted)
-    except objects.ObjectError:
+    except cow.FormatError:
         pass
     else:
         raise AssertionError("interrupted deletion validated")
