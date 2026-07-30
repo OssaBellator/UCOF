@@ -14,6 +14,7 @@ pub mod exp0002_lookup;
 pub mod exp0002_recovery;
 pub mod exp0002_rewrite;
 pub mod exp0002_source;
+pub mod exp0002_source_chain;
 pub mod exp0002_source_recovery;
 #[allow(dead_code, unused_imports)]
 mod exp0002_source_strict;
@@ -31,6 +32,9 @@ pub use directory::{
 pub use enumeration::{
     EnumeratedRoot, EnumeratedRootStatus, EnumerationLimits, RootEnumerationError,
     RootEnumerationReport,
+};
+pub use exp0002_source_chain::{
+    enumerate_previous_chain_at, Exp0002SourceChainLimits, Exp0002SourceChainReport,
 };
 pub use exp0002_source_recovery::{
     scan_valid_prefixes_at, Exp0002SourceRecoveryLimits, Exp0002SourceRecoveryReport,
