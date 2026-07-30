@@ -1,0 +1,214 @@
+name: Generate Immutable Invalid Corpus
+
+on:
+  push:
+    branches: ["phase-3/directory-snapshots-recovery"]
+    paths:
+      - ".github/workflows/generate-immutable-invalid-corpus.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  generate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/directory-snapshots-recovery
+      - name: Generate pinned invalid vectors and verifier
+        run: |
+          python3 - <<'PY'
+          from __future__ import annotations
+
+          import hashlib
+          import importlib.util
+          import json
+          import sys
+          import textwrap
+          from pathlib import Path
+
+          root = Path.cwd()
+          tools = root / "tools"
+          sys.path.insert(0, str(tools))
+          modules = sorted(tools.glob("*immutable*complete*object*.py"))
+          if len(modules) != 1:
+              raise SystemExit(f"expected one complete-object module, found {modules}")
+          spec = importlib.util.spec_from_file_location("immutable_complete_objects", modules[0])
+          if spec is None or spec.loader is None:
+              raise SystemExit("cannot load complete-object module")
+          module = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = module
+          spec.loader.exec_module(module)
+
+          valid_dir = root / "tests/vectors/exp-0002-immutable"
+          valid_manifest = json.loads((valid_dir / "manifest.json").read_text(encoding="utf-8"))
+          valid = bytes.fromhex("".join((valid_dir / valid_manifest["hex_file"]).read_text(encoding="utf-8").split()))
+          report = module.validate_complete(valid)
+          first = report.objects[0]
+          object_header_len = int(module.OBJECT_HEADER_LEN)
+          footer_len = int(module.cow.FOOTER_LEN)
+          snapshot_len = int(module.cow.SNAPSHOT_LEN)
+
+          def flipped(offset: int) -> bytes:
+              value = bytearray(valid)
+              value[offset] ^= 1
+              return bytes(value)
+
+          cases = {
+              "truncated-one": valid[:-1],
+              "truncated-footer-half": valid[: -(footer_len // 2)],
+              "trailing-zero": valid + b"\x00",
+              "invalid-file-magic": flipped(0),
+              "invalid-first-object-magic": flipped(int(first.record_offset)),
+              "invalid-first-payload": flipped(int(first.record_offset) + object_header_len),
+              "invalid-root-page-magic": flipped(int(report.structural.root.offset)),
+              "invalid-snapshot-byte": flipped(int(report.structural.footer_offset) - snapshot_len),
+          }
+
+          out_dir = root / "tests/vectors/exp-0002-immutable-invalid"
+          out_dir.mkdir(parents=True, exist_ok=True)
+          manifest_cases = {}
+          for name, data in cases.items():
+              try:
+                  module.validate_complete(data)
+              except Exception as error:  # exact implementation-local diagnostic is pinned for this corpus
+                  error_type = type(error).__name__
+                  error_message = str(error)
+              else:
+                  raise SystemExit(f"invalid vector unexpectedly validated: {name}")
+              hex_text = data.hex()
+              (out_dir / f"{name}.hex").write_text("\n".join(textwrap.wrap(hex_text, 96)) + "\n", encoding="utf-8")
+              manifest_cases[name] = {
+                  "hex_file": f"{name}.hex",
+                  "length": len(data),
+                  "sha256": hashlib.sha256(data).hexdigest(),
+                  "error_type": error_type,
+                  "error_message": error_message,
+              }
+
+          invalid_manifest = {
+              "epoch": "UCOF-EXP-0002-IMMUTABLE-MICROFORMAT",
+              "valid_parent": "../exp-0002-immutable/genesis-four.hex",
+              "diagnostic_contract": "implementation-local exact errors for this experimental corpus",
+              "cases": manifest_cases,
+          }
+          (out_dir / "manifest.json").write_text(json.dumps(invalid_manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+          verifier = '''#!/usr/bin/env python3
+          """Verify pinned invalid immutable-page successor vectors."""
+          from __future__ import annotations
+
+          import hashlib
+          import importlib.util
+          import json
+          import sys
+          from pathlib import Path
+
+          ROOT = Path(__file__).resolve().parents[1]
+          TOOLS = ROOT / "tools"
+          sys.path.insert(0, str(TOOLS))
+          modules = sorted(TOOLS.glob("*immutable*complete*object*.py"))
+          if len(modules) != 1:
+              raise SystemExit(f"expected one complete-object module, found {modules}")
+          spec = importlib.util.spec_from_file_location("immutable_complete_objects", modules[0])
+          if spec is None or spec.loader is None:
+              raise SystemExit("cannot load complete-object module")
+          module = importlib.util.module_from_spec(spec)
+          sys.modules[spec.name] = module
+          spec.loader.exec_module(module)
+
+          corpus = ROOT / "tests/vectors/exp-0002-immutable-invalid"
+          manifest = json.loads((corpus / "manifest.json").read_text(encoding="utf-8"))
+          for name, expected in sorted(manifest["cases"].items()):
+              data = bytes.fromhex("".join((corpus / expected["hex_file"]).read_text(encoding="utf-8").split()))
+              if len(data) != expected["length"]:
+                  raise SystemExit(f"{name}: length mismatch")
+              if hashlib.sha256(data).hexdigest() != expected["sha256"]:
+                  raise SystemExit(f"{name}: SHA-256 mismatch")
+              try:
+                  module.validate_complete(data)
+              except Exception as error:
+                  actual = (type(error).__name__, str(error))
+              else:
+                  raise SystemExit(f"{name}: unexpectedly validated")
+              wanted = (expected["error_type"], expected["error_message"])
+              if actual != wanted:
+                  raise SystemExit(f"{name}: diagnostic mismatch: {actual!r} != {wanted!r}")
+          print(f"invalid_vectors={len(manifest['cases'])}")
+          print("strict_rejection_and_pinned_diagnostics=pass")
+          '''
+          verifier = "\n".join(line[10:] if line.startswith("          ") else line for line in verifier.splitlines()) + "\n"
+          verifier_path = tools / "verify_exp0002_immutable_invalid_vectors.py"
+          verifier_path.write_text(verifier, encoding="utf-8")
+          verifier_path.chmod(0o755)
+
+          doc = f'''# Experiment 0032: Pinned immutable-page invalid vectors
+
+          ## Question
+
+          Can the complete-object immutable-page microformat publish a deterministic invalid corpus with exact byte identity and stable strict-rejection evidence?
+
+          ## Method
+
+          The corpus derives eight files from the pinned four-object valid vector. Cases cover exact-end truncation and trailing data, file/object/page magic corruption, payload corruption, and snapshot corruption. Every file records its byte length, SHA-256 digest, exception type, and current implementation-local diagnostic string.
+
+          The deeper twelve-case layer-targeted adversarial experiment remains complementary: it recomputes outer hashes where necessary to reach canonical page, child-range, locator, and digest checks. This pinned corpus instead provides durable byte fixtures for independent implementations to consume.
+
+          ## Result
+
+          All {len(cases)} files fail strict validation deterministically. The valid parent remains separately pinned and independently checked by Python and Rust.
+
+          ## Interpretation
+
+          Exact diagnostic strings are not a public format contract. They are pinned only to detect accidental behavior drift in this disposable microformat. A successor proposal should standardize coarse error categories only when interoperability requires them.
+
+          ## Remaining work
+
+          - add an independent Rust strict parser for the invalid corpus rather than only the valid-vector field/digest verifier;
+          - add reauthenticated pinned mutations for every structural layer;
+          - add cross-language regeneration of both valid and invalid bytes;
+          - define bounded diagnostics separately from strict validity.
+          '''
+          doc = "\n".join(line[10:] if line.startswith("          ") else line for line in doc.splitlines()) + "\n"
+          (root / "docs/experiments/0032-exp0002-immutable-invalid-vectors.md").write_text(doc, encoding="utf-8")
+
+          workflow = '''name: Verify Immutable Successor Invalid Vectors
+
+          on:
+            pull_request:
+            push:
+              branches: [main]
+
+          permissions:
+            contents: read
+
+          jobs:
+            verify:
+              runs-on: ubuntu-latest
+              steps:
+                - uses: actions/checkout@v4
+                - name: Verify pinned invalid corpus
+                  run: python3 tools/verify_exp0002_immutable_invalid_vectors.py
+          '''
+          workflow = "\n".join(line[10:] if line.startswith("          ") else line for line in workflow.splitlines()) + "\n"
+          (root / ".github/workflows/verify-exp0002-immutable-invalid-vectors.yml").write_text(workflow, encoding="utf-8")
+          PY
+      - name: Verify generated invalid corpus
+        run: |
+          git diff --check
+          python3 tools/verify_exp0002_immutable_vector.py
+          python3 tools/verify_exp0002_immutable_invalid_vectors.py
+      - name: Commit corpus and remove helper
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/vectors/exp-0002-immutable-invalid \
+            tools/verify_exp0002_immutable_invalid_vectors.py \
+            docs/experiments/0032-exp0002-immutable-invalid-vectors.md \
+            .github/workflows/verify-exp0002-immutable-invalid-vectors.yml
+          git rm .github/workflows/generate-immutable-invalid-corpus.yml
+          git diff --cached --check
+          git commit -m "test: pin immutable successor invalid corpus"
+          git push origin HEAD:phase-3/directory-snapshots-recovery
