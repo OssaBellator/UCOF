@@ -215,7 +215,7 @@ fn independently_parses_and_hashes_pinned_immutable_vector() {
     let bytes = decode_hex(include_str!(
         "../../../tests/vectors/exp-0002-immutable/genesis-four.hex"
     ));
-    assert_eq!(bytes.len(), 189_698, "pinned vector length");
+    assert_eq!(bytes.len(), 16_886, "pinned vector length");
     assert_eq!(checked(&bytes, 0, 8), FILE_MAGIC);
     assert!(bytes[8..FILE_HEADER_LEN].iter().all(|byte| *byte == 0));
 
