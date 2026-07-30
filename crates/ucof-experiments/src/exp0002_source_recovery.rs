@@ -43,7 +43,11 @@ pub struct RecoveredExp0002SourcePrefix {
     pub prefix_len: u64,
     pub footer_offset: u64,
     pub sequence: u64,
+    pub previous_footer_offset: u64,
+    pub parent_snapshot_digest: [u8; 32],
     pub snapshot_digest: [u8; 32],
+    pub commit_digest: [u8; 32],
+    pub roots: Vec<u64>,
     pub validation_stats: Exp0002SourceStats,
 }
 
@@ -160,7 +164,11 @@ pub fn scan_valid_prefixes_at<S: Exp0002ReadAt>(
                 prefix_len,
                 footer_offset: verified.footer_offset,
                 sequence: verified.footer.sequence,
+                previous_footer_offset: verified.footer.previous_footer_offset,
+                parent_snapshot_digest: verified.snapshot.parent_snapshot_digest,
                 snapshot_digest: verified.footer.snapshot_digest,
+                commit_digest: verified.footer.commit_digest,
+                roots: verified.snapshot.roots.clone(),
                 validation_stats: verified.stats,
             });
         }
@@ -254,10 +262,14 @@ mod tests {
         let mut source = Exp0002SliceSource::new(interrupted);
         let report = scan_valid_prefixes_at(&mut source, &Exp0002SourceRecoveryLimits::default())
             .expect("recovery");
-        assert!(report
+        let recovered = report
             .results
             .iter()
-            .any(|candidate| candidate.prefix_len == u64::try_from(genesis.len()).expect("len")));
+            .find(|candidate| candidate.prefix_len == u64::try_from(genesis.len()).expect("len"))
+            .expect("genesis prefix");
+        assert_eq!(recovered.sequence, 0);
+        assert_eq!(recovered.roots, vec![1]);
+        assert_eq!(recovered.parent_snapshot_digest, [0_u8; 32]);
         assert!(report
             .results
             .iter()
