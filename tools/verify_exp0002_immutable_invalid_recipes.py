@@ -15,7 +15,13 @@ import experiment_exp0002_immutable_page_objects as objects
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "tests" / "vectors" / "exp-0002-immutable-invalid" / "cases.json"
-REQUIRED_CASE_FIELDS = {"name", "operation", "expected"}
+REQUIRED_CASE_FIELDS = {
+    "name",
+    "operation",
+    "expected",
+    "decoded_bytes",
+    "sha256",
+}
 
 
 def load_base(contract: dict) -> bytes:
@@ -174,18 +180,32 @@ def main() -> None:
             raise AssertionError(f"{case['name']}: mutation was not deterministic")
         actual = reject(case, first)
         digest = sha256(first).hexdigest()
+        if len(first) != case["decoded_bytes"]:
+            raise AssertionError(
+                f"{case['name']}: byte length expected {case['decoded_bytes']}, received {len(first)}"
+            )
+        if digest != case["sha256"]:
+            raise AssertionError(
+                f"{case['name']}: SHA-256 expected {case['sha256']}, received {digest}"
+            )
         aggregate.update(case["name"].encode("utf-8"))
         aggregate.update(bytes.fromhex(digest))
         print(
             f"{case['name']}: expected={actual} bytes={len(first)} sha256={digest}"
         )
 
+    aggregate_digest = aggregate.hexdigest()
+    if aggregate_digest != contract["aggregate_sha256"]:
+        raise AssertionError(
+            f"aggregate SHA-256 expected {contract['aggregate_sha256']}, received {aggregate_digest}"
+        )
     print(f"base_bytes={len(base)}")
     print(f"base_sha256={sha256(base).hexdigest()}")
     print(f"invalid_cases={len(cases)}")
-    print(f"aggregate_sha256={aggregate.hexdigest()}")
+    print(f"aggregate_sha256={aggregate_digest}")
     print("deterministic_materialization=pass")
     print("coarse_rejection_layers=pass")
+    print("cryptographic_recipe_pins=pass")
 
 
 if __name__ == "__main__":
