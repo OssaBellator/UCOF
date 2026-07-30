@@ -5,6 +5,7 @@ on:
     paths:
       - "tests/vectors/exp-0002-immutable/**"
       - "crates/ucof-experiments/src/immutable_successor.rs"
+      - "crates/ucof-experiments/src/immutable_successor/**"
       - "crates/ucof-experiments/src/lib.rs"
       - "crates/ucof-experiments/tests/immutable_successor_api.rs"
       - "crates/ucof-experiments/tests/immutable_successor_history.rs"
@@ -16,6 +17,7 @@ on:
     paths:
       - "tests/vectors/exp-0002-immutable/**"
       - "crates/ucof-experiments/src/immutable_successor.rs"
+      - "crates/ucof-experiments/src/immutable_successor/**"
       - "crates/ucof-experiments/src/lib.rs"
       - "crates/ucof-experiments/tests/immutable_successor_api.rs"
       - "crates/ucof-experiments/tests/immutable_successor_history.rs"
