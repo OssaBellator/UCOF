@@ -6,16 +6,17 @@
 
 **UCOF is an early design and research project.** No stable specification, production wire format, or production-compatible file exists yet.
 
-Current implementation stage: **Phase 3 — first concrete directory, snapshot, and recovery candidate under active research**.
+Current implementation stage: **Phase 3 — first concrete directory, snapshot, recovery, and rewrite candidate under active research**.
 
 Two disposable epochs are represented in the repository:
 
 - `UCOF-EXP-0001` proves minimal framing and Phase 2 safety-first reader/writer APIs;
-- `UCOF-EXP-0002` Candidate 1 tests authenticated paged directories, append snapshots, exact-end publication, previous-root recovery, authenticated lookup, repair, and compaction output.
+- `UCOF-EXP-0002` Candidate 1 tests authenticated paged directories, append snapshots, exact-end publication, complete checkpoints, bounded source access, linked history, recovery, repair, and caller-selected rewrite.
 
-Neither epoch is stable. Candidate 1 works across Rust and an independent in-repository Python implementation, but FCP-0002 remains Draft and its bytes may be retired.
+Neither epoch is stable. Candidate 1 works across Rust and an independent in-repository Python implementation, but FCP-0002 remains Draft and its bytes may be retired. Current evidence has already found one architectural blocker: the page sequence field prevents byte-for-byte historical page reuse.
 
 - [Phase 3 status](docs/PHASE_3_STATUS.md)
+- [Phase 3 experimental CLI guide](docs/PHASE_3_CLI_GUIDE.md)
 - [EXP-0002 Candidate 1 byte specification](docs/spec/EXP_0002_BYTE_CANDIDATE.md)
 - [FCP-0002 proposal](docs/proposals/0002-exp-0002-directory-snapshots.md)
 - [EXP-0002 concrete security findings](docs/security/EXP_0002_BYTE_FINDINGS.md)
@@ -78,19 +79,36 @@ The first Phase 3 byte candidate includes:
 - variable snapshot records with parent and previous-footer relationships;
 - 160-byte exact-end commit footers;
 - deterministic genesis and append writers;
-- strict full validation;
-- bounded authenticated single-object lookup and absence results;
-- bounded random-access lookup that streams hashes without materializing the whole file;
-- separately requested recovery and previous-footer traversal;
+- strict full validation over slices and bounded random-access sources;
+- authenticated single-object lookup and absence results;
+- verified linked-history enumeration;
+- separately requested bounded recovery;
+- complete checkpoints represented as ordinary valid commits;
 - repair-to-new-file and caller-directed object-selection rewrite;
-- pinned byte-identical Rust/Python vectors;
-- a layer-targeted adversarial corpus and continuous fuzzing.
+- strong caller-supplied source-version checking for mutable range sources;
+- byte-identical Rust/Python valid vectors;
+- thirteen pinned invalid and interrupted vectors;
+- twenty-one fuzz targets plus layer-targeted adversarial tests.
 
-The targeted lookup assurance is intentionally narrower than full validation. It verifies the active commit, snapshot, one page path, and selected object; it does not claim unrelated historical object records were rehashed.
+The assurance modes are intentionally distinct:
 
-The range-source implementation demonstrates that a small historical-object lookup can skip an unrelated one-megabyte historical payload while enforcing read-operation, byte, request-size, page, and hash budgets.
+- full strict validation rehashes every object referenced by the active directory;
+- targeted lookup verifies the active commit, snapshot, one page path, and selected object or absence;
+- linked history validates the exact previous-footer chain one strict prefix at a time;
+- recovery scans only when requested and reports only candidates that pass full strict-prefix validation;
+- caller-selected rewrite does not claim automatic semantic compaction.
 
-Candidate 1 still excludes transforms, compression, encryption, signatures, provenance, external references, schemas, profiles, copy-on-write page reuse, and defined checkpoint bytes. Its source view is assumed stable during one operation.
+A cold-cache localhost HTTP Range benchmark over an append containing an unrelated 1 MiB historical object measured 7 requests and 16,993 transferred bytes for targeted lookup, versus 26 requests and 1,065,673 bytes for full validation. Targeted lookup did not read the large historical object; full validation did.
+
+Candidate 1 also exposes important negative evidence:
+
+- the 88-byte leaf entry costs approximately 8.28 GiB at 100 million objects;
+- sixteen reserved bytes per leaf cost about 1.50 GiB at that scale;
+- the page sequence field is authenticated and required to equal the active snapshot sequence, so unchanged historical pages cannot be reused byte-for-byte;
+- complete-only checkpoint cadence requires a batched writer strategy rather than naive per-object path copying;
+- bounded external sorting is feasible, but is not yet integrated into the byte writer.
+
+Candidate 1 still excludes transforms, compression, encryption, signatures, provenance, external references, schemas, profiles, and semantic dependency discovery. It has no trusted freshness mechanism.
 
 No field width, magic value, page size, digest, footer rule, identifier width, or identity scope is stable merely because the implementation works.
 
@@ -123,13 +141,28 @@ cargo run --locked -p ucof-cli --bin ucof -- salvage demo.ucof
 | `salvage` | Unverified complete-prefix record discovery; never a conformance claim |
 | `make-demo` | Deterministic EXP-0001 output through explicit finalization |
 
-Verify the independent EXP-0002 implementation and pinned corpus:
+Exercise the isolated EXP-0002 Candidate 1 CLI:
+
+```console
+cargo run --locked -p ucof-experiments --bin ucof-exp0002 -- verify archive.ucof
+cargo run --locked -p ucof-experiments --bin ucof-exp0002 -- roots archive.ucof
+cargo run --locked -p ucof-experiments --bin ucof-exp0002 -- history archive.ucof
+cargo run --locked -p ucof-experiments --bin ucof-exp0002 -- lookup archive.ucof 42
+cargo run --locked -p ucof-experiments --bin ucof-exp0002 -- recover damaged.ucof
+```
+
+Repair and rewrite commands require a new output path and explicit 16-byte file identity and nonce values. See the [Phase 3 CLI guide](docs/PHASE_3_CLI_GUIDE.md) before using them.
+
+Verify the independent EXP-0002 implementation and evidence:
 
 ```console
 python3 tools/exp0002_codec.py --self-test
 python3 tools/exp0002_codec.py --verify-vectors tests/vectors/exp-0002
+python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
 python3 tools/test_exp0002_adversarial.py
-python3 tools/experiment_exp0002_page_sizes.py
+python3 tools/experiment_exp0002_page_sequence_reuse.py
+python3 tools/experiment_exp0002_http_range.py
+python3 tools/experiment_exp0002_external_sort.py
 ```
 
 Canonical hexadecimal fixtures and expected metadata are stored under `tests/vectors/`. Generated ad hoc `.ucof` binaries are ignored by Git.
@@ -140,7 +173,7 @@ Canonical hexadecimal fixtures and expected metadata are stored under `tests/vec
 crates/
   ucof-core/         Bounded EXP-0001 readers, validators, diagnostics, and writers
   ucof-cli/          EXP-0001 inspect, verify, diagnose, salvage, and make-demo commands
-  ucof-experiments/  Unpublished Phase 3 models and disposable EXP-0002 Candidate 1 codec
+  ucof-experiments/  Unpublished Phase 3 models, Candidate 1 codec, source APIs, and CLI
 fuzz/                 Standalone cargo-fuzz package and model/parser/writer targets
 spec/
   experimental/      Disposable experimental specifications
@@ -207,9 +240,9 @@ UCOF does not attempt to make every workload equally efficient under one layout,
 
 ## Security posture
 
-Every input byte is assumed hostile. The project explicitly considers checked arithmetic, forged or overlapping ranges, bounded metadata and allocation, decompression expansion, recursive object graphs, malicious indexes, parser differentials, digest and algorithm confusion, signature wrapping, metadata leakage, stale-root selection, external-reference confusion, source mutation, and safe extraction or repair.
+Every input byte is assumed hostile. The project explicitly considers checked arithmetic, forged or overlapping ranges, bounded metadata and allocation, decompression expansion, recursive object graphs, malicious indexes, parser differentials, digest and algorithm confusion, signature wrapping, metadata leakage, stale-root selection, external-reference confusion, source mutation, temporary-spill leakage, and safe extraction or repair.
 
-The primary threat model incorporates executable EXP-0001 and EXP-0002 findings, including validation-order effects, exact-end versus recovery separation, authenticated page and object cross-checks, range-source work budgets, identity scopes, repair boundaries, fuzzing, and portability evidence.
+The primary threat model incorporates executable EXP-0001 and EXP-0002 findings, including validation-order effects, exact-end versus recovery separation, authenticated page and object cross-checks, range-source work budgets, stable source views, page-identity limitations, identity scopes, repair boundaries, fuzzing, and portability evidence.
 
 See the [threat model](docs/THREAT_MODEL.md), [EXP-0002 concrete findings](docs/security/EXP_0002_BYTE_FINDINGS.md), and [security policy](SECURITY.md).
 
