@@ -1,6 +1,6 @@
 # Phase 3 Status — Directory, Snapshots, and Recovery
 
-**Status:** In progress; EXP-0002 Candidate 1 is executable, extensively tested, and still disposable  
+**Status:** In progress; EXP-0002 Candidate 1 is executable and rejected as a reusable-page design, while an immutable-page successor is under executable evaluation  
 **Started:** 2026-07-30  
 **Working branch:** `phase-3/directory-snapshots-recovery`  
 **Stacked pull request:** #3  
@@ -8,232 +8,310 @@
 
 ## Objective
 
-Deliver bounded random access, append publication, snapshots, previous-root recovery, repair, and compaction while preserving the rule that damaged, recovered, historical, or merely plausible state never silently becomes active valid state.
+Deliver bounded random access, append publication, snapshots, previous-root recovery, repair, and compaction while preserving the rule that damaged, recovered, historical, partially interpreted, or merely plausible state never silently becomes active valid state.
 
-## Current experimental decisions
+## Current epoch boundaries
+
+### EXP-0002 Candidate 1
+
+Candidate 1 is a complete disposable experiment with exact bytes documented in `docs/spec/EXP_0002_BYTE_CANDIDATE.md`.
+
+It provides:
+
+- a 64-byte bootstrap header;
+- 48-byte object records;
+- 16 KiB authenticated directory pages;
+- 88-byte leaf and 64-byte internal entries;
+- complete snapshot records and 160-byte exact-end footers;
+- domain-separated SHA-256 identities;
+- deterministic Rust and Python writers;
+- strict slice and bounded source validation;
+- targeted authenticated lookup and absence;
+- explicit recovery and verified linked history;
+- repair and caller-selected rewrite;
+- a separate experimental CLI.
+
+Candidate 1 remains unpublished and has no compatibility promise.
+
+### Immutable-page successor microformat
+
+The successor experiments remove active snapshot sequence from page identity and use immutable content-addressed pages. They are executable evidence, not a proposed Candidate 2 epoch.
+
+They currently cover complete objects, immutable pages, recursive tree updates, bounded source access, metadata catalogs, recovery, spill-backed writing, and one independently parsed exact-end vector. No successor compatibility promise exists.
+
+## Accepted experimental decisions
 
 - Phase 3 uses disposable epoch `UCOF-EXP-0002` because directory and active-root semantics change validity.
-- Candidate 1 exact bytes are defined in `docs/spec/EXP_0002_BYTE_CANDIDATE.md`.
-- Candidate 1 uses little-endian fixed fields, 16 KiB authenticated pages, fixed binary entries, domain-separated SHA-256 digests, variable-length snapshot records, and 160-byte exact-end footers.
 - Strict validation is exact-end and never invokes recovery implicitly.
-- Recovery is explicitly requested and independently bounds suffix bytes, scan reads, footer-magic matches, candidate validations, cumulative successful and failed candidate reads, results, and chain depth.
+- Recovery is explicitly requested, independently bounded, and never selects a candidate.
 - Structural snapshot identity and file-instance commit identity are separate scopes under ADR-0011.
-- Candidate 1 checkpoints are ordinary complete snapshot commits under ADR-0012; no weaker progress-checkpoint bytes are defined.
-- Mutable or remote range sources require a caller-provided strong stable-view token under ADR-0013. Stable view is not trusted freshness.
-- Repair and caller-selected rewrite accept only fully verified sources and always publish a new commit identity.
-- All concrete Candidate 1 APIs remain in unpublished `ucof-experiments`; no stable compatibility promise exists.
+- Candidate 1 checkpoints are ordinary complete commits under ADR-0012.
+- Stable source access requires strong caller-supplied version evidence under ADR-0013.
+- Version change, cancellation, deadline, or exhausted retries terminate one assurance operation; a new version starts clean under ADR-0014.
+- Current implementation limits are policy ceilings, not normative conformance minima, under ADR-0015.
+- Repair and rewrite accept only fully verified sources and publish new commit identity.
+- Candidate 1 page-sequence semantics are rejected for any successor promising historical page reuse.
+- Immutable content identity is the current successor research direction; it does not establish authenticity or freshness.
 
-## Implemented frontiers
+## Candidate 1 implementation status
 
-### Proposal, specification, and decisions
+### Codec and source access
 
-| Frontier | Status | Evidence |
-|---|---|---|
-| EXP-0002 scope and invariants | Draft | FCP-0002 |
-| Independently implementable Candidate 1 bytes | Implemented | provisional byte specification |
-| Research isolation | Accepted | ADR-0009 |
-| First byte candidate | Accepted experimentally | ADR-0010 |
-| Snapshot versus commit identity | Accepted experimentally | ADR-0011 |
-| Complete-only checkpoints | Accepted experimentally | ADR-0012 |
-| Versioned stable-view source adapter | Accepted implementation policy | ADR-0013 |
-| Strict versus recovery separation | Specified and implemented | source and slice APIs |
-| Security findings | Published | model, byte, and threat-model documents |
-
-### Concrete codec
-
-| Frontier | Status | Evidence |
-|---|---|---|
-| 64-byte bootstrap header | Implemented and tested | Rust and Python codecs |
-| 48-byte opaque object records | Implemented and tested | deterministic writers and strict readers |
-| 16 KiB authenticated leaf/internal pages | Implemented and tested | multi-leaf vectors and corruption tests |
-| 88-byte leaf entries | Implemented as Candidate 1; under comparison | exact vectors and Experiment 0010 |
-| 64-byte internal entries | Implemented and tested | exact vectors |
-| Variable snapshot record | Implemented and tested | roots and capability arrays |
-| 160-byte commit footer | Implemented and tested | exact-end validation |
-| Domain-separated object/page/snapshot/commit digests | Implemented and tested | mutation and adversarial cases |
-| Genesis writer | Deterministic | Rust/Python byte equality |
-| Append writer | Deterministic | parent-linked append vector |
-| Strict slice validator | Implemented and bounded | `validate_strict` |
-| Strict random-access source validator | Implemented and bounded | `validate_strict_at` |
-| Reserved-byte, padding, and physical-overlap rejection | Implemented | adversarial and corpus tests |
-
-### Valid and invalid vector corpora
-
-The valid corpus under `tests/vectors/exp-0002` contains:
-
-| Vector | Purpose |
+| Frontier | Status |
 |---|---|
-| `genesis-two-object` | deterministic genesis with root and non-root object |
-| `append-add-third` | parent-linked append reusing historical object records |
-| `multi-leaf-400` | authenticated multi-leaf directory and internal root |
+| Bootstrap, objects, pages, snapshots, and footer | Implemented and tested |
+| Domain-separated object/page/snapshot/commit digests | Implemented and tested |
+| Deterministic genesis and append writers | Implemented in Rust and Python |
+| Strict slice validator | Implemented |
+| Bounded strict source validator | Implemented |
+| Targeted authenticated lookup and absence | Implemented |
+| Stable-view source adapter | Implemented |
+| Exact-end strict/recovery separation | Implemented |
+| Physical overlap and canonical padding checks | Implemented |
 
-For every valid vector, Python writes and verifies the canonical bytes, Rust rebuilds the same bytes exactly, and both strict validators accept the stored file.
+Targeted lookup authenticates the active commit, snapshot, one directory path, and the selected object or absence result. It does not claim unrelated historical objects were rehashed.
 
-The public invalid corpus under `tests/vectors/exp-0002-invalid` contains thirteen deterministic files covering bootstrap, object, page, physical-layout, snapshot, parent-chain, exact-end, and interrupted-publication failures. Python verifies corpus reproducibility; Rust independently rejects every file. Coarse diagnostic layers are recorded, while exact exception strings remain implementation-local.
+A localhost HTTP Range benchmark over an append file containing an unrelated 1 MiB historical object measured:
 
-### Authenticated lookup and source access
+| Assurance mode | Requests | Bytes transferred | Objects hashed |
+|---|---:|---:|---:|
+| Targeted lookup | 7 | 16,993 | 1 |
+| Full strict validation | 26 | 1,065,673 | 3 |
 
-| Frontier | Status | Evidence |
-|---|---|---|
-| Root-to-leaf authenticated lookup | Implemented | slice and source APIs |
-| Authenticated absence | Implemented and tested | missing-key tests |
-| Historical object rehash after append | Implemented and tested | mutation tests |
-| Page, hash, read, and request limits | Implemented | source limits |
-| Structural-range overlap rejection | Implemented | targeted range isolation |
-| Full source strict validation | Implemented and corpus-bound | `validate_strict_at` |
-| Stable-view version adapter | Implemented and tested | `Exp0002StableSource` |
+Targeted lookup did not request the large historical payload; full validation did.
 
-Targeted lookup authenticates the active commit, snapshot, one page path, and selected object. It does not claim unrelated historical objects were rehashed.
+### Publication, recovery, and history
 
-A localhost HTTP Range benchmark over an append file with an unrelated 1 MiB historical object measured:
+| Frontier | Status |
+|---|---|
+| Footer-only publication | Implemented |
+| Incomplete latest footer rejection | Implemented and tested at every cut |
+| Bounded backward discovery | Implemented |
+| Failed candidate work accounting | Implemented |
+| Candidate magic without authority | Implemented |
+| Linked-history validation | Implemented |
+| Root and identity reporting per verified prefix | Implemented |
+| Candidate-storm and chain-depth limits | Implemented |
+| Complete checkpoints | Implemented as ordinary commits |
 
-| Assurance mode | Requests | Bytes transferred | Pages | Objects hashed |
-|---|---:|---:|---:|---:|
-| Targeted lookup | 7 | 16,993 | 1 | 1 |
-| Full strict validation | 26 | 1,065,673 | 1 | 3 |
+Every reported recovery result is a strict valid prefix. Neither strict validation nor recovery silently chooses an alternative active state.
 
-Targeted lookup made no request overlapping the large historical object. Full validation read it.
+### Repair, rewrite, and CLI
 
-### Append, history, and recovery
+| Frontier | Status |
+|---|---|
+| Verified-source repair to new file | Implemented |
+| Caller-selected object rewrite | Implemented |
+| Object, payload, and output-byte limits | Implemented |
+| Damaged-source rejection | Implemented |
+| Snapshot/commit identity reporting | Implemented |
+| Automatic semantic dependency discovery | Not implemented; requires profile/application input |
 
-| Frontier | Status | Evidence |
-|---|---|---|
-| Footer-only publication | Implemented | append writer and publication model |
-| Every incomplete latest footer rejected by strict mode | Implemented and tested | every-cut and pinned-cut tests |
-| Bounded backward candidate discovery | Implemented | hardened source recovery facade |
-| Failed candidate work charged | Implemented and tested | cumulative source-read accounting |
-| Candidate magic has no authority | Implemented | strict-prefix validation |
-| Verified linked-history enumeration | Implemented | `enumerate_previous_chain_at` |
-| Root and identity reporting per verified prefix | Implemented | recovery and history reports |
-| Candidate-storm and scan-window limits | Implemented and tested | recovery tests and fuzzing |
-| Complete checkpoints | Implemented as normal commits | ADR-0012 and cadence experiment |
-| Separate progress-checkpoint bytes | Deferred | no Candidate 1 allocation |
+The `ucof-exp0002` binary exposes distinct `verify`, `roots`, `history`, `lookup`, `recover`, `repair-all`, and `rewrite-selected` commands. `verify` never invokes recovery, and `rewrite-selected` does not claim semantic compaction.
 
-Linked-history enumeration validates the exact-end active file and every referenced ancestor as an independent strict prefix. It cross-checks previous-footer offsets, parent snapshot digests, and exact sequence increments while bounding depth and cumulative source reads.
+### Candidate 1 corpora and continuous testing
 
-### Repair and rewrite
+The valid corpus contains deterministic genesis, append, and multi-leaf files. Rust and Python reproduce the same bytes.
 
-| Frontier | Status | Evidence |
-|---|---|---|
-| Abstract reachability and orphan planning | Implemented | graph model |
-| Verified-source repair to new file | Implemented | `repair_all_to_new_file` |
-| Caller-directed object-selection rewrite | Implemented | `rewrite_selected_to_new_file` |
-| Object, payload, and output-byte limits | Implemented | rewrite limits |
-| Damaged-source rejection | Implemented and tested | strict source gate |
-| Root-retention checks | Implemented and tested | rewrite tests |
-| Snapshot/commit identity report | Implemented | ADR-0011 fields |
-| Byte-scoped signature non-preservation | Explicit | rewrite reports |
-| Automatic semantic dependency discovery | Pending | requires schemas, profiles, or supplied graph |
+The invalid corpus contains thirteen deterministic files covering bootstrap, object, page, layout, snapshot, parent-chain, exact-end, and interrupted-publication failures. Python regenerates them and Rust independently rejects them.
 
-A deterministic genesis repair may preserve structural snapshot identity while always changing file-instance commit identity. Append repair becomes a new genesis and changes both scopes.
+The branch also carries layer-targeted adversarial mutations, Rust 1.85 checks, 32-bit and big-endian compilation, and twenty-one cargo-fuzz targets.
 
-### Experimental CLI
+## Candidate 1 architectural rejection
 
-The separate `ucof-exp0002` binary exposes distinct commands:
+Candidate 1 stores and authenticates the active snapshot sequence in every directory page. Validation requires page sequence equality with the active snapshot.
 
-- `verify` — full exact-end validation;
-- `roots` — active roots after full validation;
-- `history` — exact linked history, each ancestor strictly validated;
-- `lookup` — targeted authenticated object or absence;
-- `recover` — bounded discovery of strict prefixes without candidate selection;
-- `repair-all` — verified source to new genesis output;
-- `rewrite-selected` — caller-selected output without a semantic-compaction claim.
+An unchanged historical page therefore cannot be reused. Re-encoding the page changes its digest and propagates through every ancestor. At 100 million objects, the Candidate 1 model rewrites approximately 8.89 GB of directory pages for one changed object, while an immutable no-split path rewrites 64 KiB.
 
-End-to-end tests exercise pinned vectors, history, recovery, rewrite output validation, and create-new output protection. Assurance boundaries are documented in `docs/PHASE_3_CLI_GUIDE.md`.
+This is a byte-design blocker, not merely an unfinished writer optimization. Candidate 1 may still serve as disposable evidence, but it is not a suitable reusable-page successor baseline.
 
-## Architectural findings
+## Immutable-page successor evidence
 
-### Candidate 1 page sequence prevents historical page reuse
+Detailed evidence is consolidated in `docs/PHASE_3_SUCCESSOR_EVIDENCE.md`.
 
-The persistent COW model proves the desired O(depth) update algorithm, but Experiment 0011 demonstrates that Candidate 1 bytes prohibit exact historical page reuse. Every page stores and authenticates the active snapshot sequence, and validation requires equality with the current snapshot. Unchanged leaves therefore must still be copied, causing new digests to propagate through every ancestor.
+### Page identity and persistent updates
 
-This is a Candidate 1 byte-design blocker, not merely a missing writer optimization. A later candidate must revise page identity or intentionally accept full-directory rewrite amplification.
+The successor microformat demonstrates:
 
-### Page-size and locator-width results
+- exact reuse and deduplication of unchanged pages;
+- strict traversal of mixed-age pages;
+- deterministic single-path replacement;
+- two-leaf batched path sharing independent of input order;
+- insertion routing across sparse child ranges;
+- leaf split, sibling merge, and redistribution;
+- root-height increase and collapse;
+- recursive internal split and recursive deletion/underflow;
+- exact reuse of an earlier root when an inverse update restores identical contents.
 
-At 100 million objects with Candidate 1 88-byte leaves:
+A reused historical root does not reuse publication identity: the new commit still receives new sequence, parent, snapshot, and commit identities.
 
-| Page size | Depth | Directory bytes | Authenticated path bytes |
-|---:|---:|---:|---:|
-| 4 KiB | 5 | 9,249,042,432 | 20 KiB |
-| 16 KiB | 4 | 8,891,121,664 | 64 KiB |
-| 64 KiB | 3 | 8,817,344,512 | 192 KiB |
+### Operation campaigns
 
-At 16 KiB pages:
+- one deterministic 512-operation sorted-set differential sequence;
+- 34 deterministic seeds;
+- 256 operations per seed;
+- 8,704 operations total;
+- deterministic replay and exact oracle agreement after every operation;
+- bounded page-emission and root-transition checks.
 
-| Leaf layout | 100M directory size | Depth |
-|---|---:|---:|
-| 88-byte Candidate 1, 64-bit ID | 8.280 GiB | 4 |
-| 72-byte no-reserve, same fields | 6.778 GiB | 4 |
-| 56-byte minimal authenticated, 64-bit ID | 5.264 GiB | 4 |
-| 64-byte minimal authenticated, 128-bit ID | 6.007 GiB | 4 |
+The campaign still concentrates on a constrained height-one random envelope. Recursive depth boundaries are tested separately rather than fuzzed together.
 
-The 16-byte per-entry reserve alone costs roughly 1.50 GiB at this scale. Final layout selection requires range-request and inventory measurements, not directory size alone.
+### Complete objects and historical assurance
 
-### Checkpoint strategy crossover
+Successor complete-object experiments implement:
 
-Complete-only checkpoint evidence shows no universal writer strategy:
+- real 48-byte object records and payloads;
+- object and locator cross-checks;
+- domain-separated object digests;
+- object/object and object/structural overlap rejection;
+- deterministic replacement, insertion, and deletion;
+- historical object reuse;
+- active-snapshot versus verified-history assurance separation.
 
-- frequent checkpoints make repeated full-directory rebuilds dominant;
-- sparse checkpoints can make naive per-object path copying more expensive than one final rebuild;
-- a future reusable-page writer must batch changes, share ancestors, and serialize only final reachable pages.
+Corrupting a deleted historical object can leave the active snapshot valid while verified history rejects the ancestor that references it. This distinction is intentional.
 
-### Bounded external sort is feasible
+### Bounded successor source access
 
-Experiment 0013 deterministically sorts 200,003 exact 88-byte locator-shaped entries using sub-megabyte spill runs and a k-way merge. Two run sizes produce identical output; missing and duplicate keys fail closed. Byte-producing writer integration and secure spill policy remain pending.
+A random-access source prototype implements:
+
+- targeted authenticated lookup and absence;
+- full exact-end validation;
+- bounded request size, operations, bytes, pages, objects, hash work, and allocation;
+- chunked commit and object hashing;
+- proof that targeted lookup skips an unrelated 1 MiB payload that full validation reads.
+
+The prototype uses a stable in-memory source. Concrete conditional HTTP/cloud adapters and asynchronous cancellation remain pending.
+
+### Roots, capabilities, and extension preservation
+
+An authenticated catalog object carries sorted roots, sorted capabilities, required criticality, and canonical extension records.
+
+- unknown required capabilities preserve structural-integrity evidence but block interpretation;
+- unknown optional extensions survive catalog replacement byte-for-byte;
+- missing roots, duplicate/zero roots, malformed capability ordering, unknown flags, malformed extensions, and work-limit violations fail closed.
+
+No normative capability allocation has been selected.
+
+### Successor recovery
+
+The successor recovery model:
+
+- bounds suffix bytes, requests, request size, matches, validations, results, chain depth, and cumulative reads;
+- charges failed candidate work;
+- validates every result as a strict prefix;
+- reports but never selects candidates;
+- rejects cycles, sequence gaps, invalid parents, truncation, and candidate storms.
+
+### Bounded writer and publication lifecycle
+
+The writer experiments provide:
+
+- bounded external sorting of 200,003 locator-shaped records;
+- canonical immutable page emission directly from the sorted stream;
+- fixed-width page-reference spill levels;
+- staged descriptor-limited merging at fan-in 4, 8, and 32;
+- output identical to a directly sorted baseline;
+- private staging, disk budgets, create-new final-path semantics, no-overwrite publication, and abandoned-stage cleanup;
+- explicit pre-publication and post-link-indeterminate outcomes.
+
+Production spill confidentiality, secure deletion, inode exhaustion, platform durability, and portable atomic publication remain unresolved.
+
+### Independently parsed successor vector
+
+The non-normative `genesis-four` vector is pinned by manifest:
+
+- decoded length: 16,886 bytes;
+- SHA-256: `94f9441339fb49ffef5b8c7b54307c20488bf2e09958fd805fd2addae65c2a23`;
+- exact-end footer with no trailing bytes;
+- object identifiers 1–4 and payloads `alpha`, `bravo`, `charlie`, and `delta`.
+
+Python generates and strictly validates the file. A separate Rust integration test parses raw fixed fields and independently verifies object, page, snapshot, and commit hashes, ordering, padding, locator claims, and physical overlap without using the Python validator or Candidate 1 parser.
+
+The independent workflow discovered and replaced an earlier malformed checked-in fixture containing no footer magic.
+
+## Measured successor trade-offs
+
+At 100 million objects and 16 KiB pages:
+
+| Leaf layout | Approximate directory size |
+|---|---:|
+| 88-byte Candidate 1, 64-bit ID | 8.280 GiB |
+| 72-byte tight mirrored, 64-bit ID | 6.778 GiB |
+| 56-byte minimal authenticated, 64-bit ID | 5.264 GiB |
+| 64-byte minimal authenticated, 128-bit ID | 6.007 GiB |
+
+A 56-byte locator transfers fewer bytes than a 72-byte mirrored locator only below approximately 33.9% metadata-inventory coverage. Identifier width and metadata mirroring remain separate decisions.
+
+Current resource defaults are not a coherent conformance class. For example, a ten-million-object ceiling conflicts with a one-million-read ceiling even at an optimistic one read per object.
+
+## Security boundaries
+
+- SHA-256 integrity is not authenticity, confidentiality, provenance, signer trust, or freshness.
+- Stable source version prevents mixed-version reads but does not prove the latest version.
+- Whole-file rollback remains undetectable without trusted external state.
+- Unknown required capabilities block interpretation but do not erase integrity evidence.
+- Unknown optional fields require explicit preservation policy during repair, rewrite, and compaction.
+- Semantic compaction requires a history-retention policy and profile/application dependency semantics.
+- Byte-scoped signatures are not preserved by rewrite.
+- Both current implementations live in one repository and may share a specification misunderstanding.
 
 ## Continuous verification
 
-The branch passes:
+Permanent workflows use read-only repository permissions.
 
-- locked dependency resolution;
-- stable Rust formatting and clippy with warnings denied;
-- all workspace unit, integration, CLI, and documentation tests;
-- independent EXP-0001 validation and adversarial corpus;
-- independent Phase 3 model corpus;
-- independent EXP-0002 codec self-tests and valid-vector verification;
-- the thirteen-file invalid/interrupted corpus;
-- 21 layer-targeted adversarial mutations;
-- all framing, footer, scale, directory, page-size, COW, checkpoint, locator-width, page-reuse, HTTP-range, and external-sort experiments;
-- Rust 1.85 MSRV compilation;
-- 32-bit `i686-unknown-linux-gnu` library compilation;
-- 64-bit big-endian `powerpc64-unknown-linux-gnu` library compilation;
-- twenty-one cargo-fuzz target builds and bounded pull-request smoke campaigns.
+The current matrix covers:
 
-The twenty-one fuzz targets consist of six inherited Phase 2 byte targets, seven Phase 3 algorithm-model targets, and eight concrete EXP-0002 targets covering strict parsing, recovery, writer round trips, slice lookup, rewrite, source lookup, source strict/recovery, and source history.
-
-All permanent workflows use read-only repository permissions.
+- locked dependencies;
+- rustfmt and clippy with warnings denied;
+- workspace, documentation, integration, and CLI tests;
+- Candidate 1 Rust/Python valid and invalid corpora;
+- independent Phase 3 model cases;
+- immutable page identity, update, split, delete, history, source, metadata, recovery, and publication experiments;
+- hostile-byte cases;
+- the manifest-pinned independently parsed successor vector;
+- Rust 1.85, 32-bit, and big-endian compilation;
+- twenty-one cargo-fuzz target builds and bounded smoke campaigns.
 
 ## Current limitations and blockers
 
-- Candidate 1 page-sequence semantics prohibit exact historical page reuse.
-- The append writer rebuilds all directory pages.
-- The final page identity, leaf layout, and object-identifier width are unresolved.
-- Full source readers are synchronous.
-- `Exp0002StableSource` requires transport-provided strong version evidence; concrete conditional HTTP/cloud adapters are not implemented.
-- Rewrite commands currently materialize source and output in memory.
-- The bounded external sort is a model, not yet integrated into the byte writer.
-- Automatic semantic dependency discovery is unavailable without profiles or schemas.
-- Default resource limits remain implementation-local; normative minima are unresolved.
-- Capability identifiers are structurally encoded, but Candidate 1 defines no non-zero allocation.
-- No authenticity, signature, provenance, encryption, metadata confidentiality, or external trusted freshness exists.
-- Replacing the entire file with an older valid copy remains undetectable without trusted external state.
-- Both current byte implementations live in one repository and may share a specification misunderstanding.
+### Candidate 1
+
+- page-sequence semantics prohibit historical page reuse;
+- the append writer rebuilds all directory pages;
+- locator width and identifier width remain unresolved;
+- readers are synchronous;
+- rewrite commands materialize source and output in memory;
+- no authenticity, confidentiality, signatures, provenance, or external freshness exists.
+
+### Successor microformat
+
+- no complete Candidate 2 byte specification exists;
+- identifier, locator, occupancy, split, and deletion policies are not selected normatively;
+- no general arbitrary-depth mixed-operation batch planner exists;
+- successor implementations remain Python experiments plus one independent Rust vector parser;
+- only one pinned successor genesis vector exists;
+- no pinned successor invalid/interrupted/fork corpus exists;
+- no cross-language successor append, multi-level, recovery, or compaction corpus exists;
+- no production successor writer, source adapter, recovery, history, or repair library exists;
+- support profiles and boundary vectors are unresolved;
+- production spill confidentiality and durability policy is unresolved;
+- arbitrary-depth operation and hostile-source fuzzing is unresolved;
+- independent external review is absent.
 
 ## Next frontier tasks
 
-1. Design and test revised immutable-page or page-birth-generation semantics that permit safe reuse.
-2. Implement a deterministic batched byte-level page-reuse writer for the revised semantics.
-3. Integrate bounded external sorting with object emission, page packing, failure cleanup, and final publication.
-4. Prototype a concrete conditional HTTP or cloud-object adapter using strong version evidence.
-5. Benchmark cold-cache inventory workloads for 88-, 72-, 56-, and 64-byte locator alternatives.
-6. Decide object-identifier width and leaf layout.
-7. Define normative minimum limits versus caller policy.
-8. Define future-field and capability-preservation rules.
-9. Define profile-supplied dependency and history-retention inputs for semantic compaction.
-10. Obtain an independently maintained implementation or external independent review.
-11. Resolve FCP-0002 objections before moving the proposal to Review.
+1. Build a pinned successor invalid and interrupted corpus with coarse validation layers.
+2. Pin successor append and multi-level vectors and parse them independently in Rust.
+3. Write a complete provisional successor byte specification without allocating a stable epoch.
+4. Implement a general deterministic mixed-operation batch planner at arbitrary depth.
+5. Move successor parsing and validation into a reusable Rust experiment module, then add fuzz targets.
+6. Add conditional remote-source and asynchronous cancellation tests under stable-view rules.
+7. Define jointly satisfiable support profiles and boundary vectors.
+8. Select identifier width, locator layout, occupancy, split, and deletion policy.
+9. Define production spill confidentiality, cleanup, and durability requirements.
+10. Obtain independently maintained implementation or external review.
+11. Resolve FCP-0002 objections and record maintainer disposition of Candidate 1.
 
 ## Exit rule
 
-Phase 3 is not complete until a selected experimental layout demonstrates bounded source-based lookup and validation, append publication, safe page reuse or an explicitly accepted alternative, previous-root recovery, linked-history enumeration, unambiguous active-root rules, repair, and compaction with cross-language valid and invalid vectors, hostile-input evidence, continuous fuzzing, realistic range-I/O measurements, deterministic large-writer strategy, documented rejected alternatives, independent review, and maintainer disposition of FCP-0002 blockers.
+Phase 3 is not complete until a selected experimental layout demonstrates bounded source lookup and validation, append publication, safe page reuse or an explicitly accepted alternative, previous-root recovery, linked history, unambiguous active-root rules, repair, semantic-compaction inputs, cross-language valid and invalid vectors, hostile-input evidence, continuous fuzzing, realistic range-I/O measurements, deterministic large-writer strategy, documented rejected alternatives, independent review, and maintainer disposition of FCP-0002 blockers.
