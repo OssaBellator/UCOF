@@ -37,7 +37,7 @@ Candidate 1 remains unpublished and has no compatibility promise.
 
 The successor experiments remove active snapshot sequence from page identity and use immutable content-addressed pages. They are executable evidence, not a proposed Candidate 2 epoch.
 
-They currently cover complete objects, immutable pages, recursive tree updates, bounded source access, metadata catalogs, recovery, spill-backed writing, and one independently parsed exact-end vector. No successor compatibility promise exists.
+They currently cover complete objects, immutable pages, recursive tree updates, a reusable Rust slice writer/strict-validator/history/recovery/rewrite core, bounded source models, metadata catalogs, spill-backed writing, and one independently parsed exact-end vector. No successor compatibility promise exists.
 
 ## Accepted experimental decisions
 
@@ -49,6 +49,7 @@ They currently cover complete objects, immutable pages, recursive tree updates, 
 - Stable source access requires strong caller-supplied version evidence under ADR-0013.
 - Version change, cancellation, deadline, or exhausted retries terminate one assurance operation; a new version starts clean under ADR-0014.
 - Current implementation limits are policy ceilings, not normative conformance minima, under ADR-0015.
+- Exact-end validity, linked-history verification, and report-only suffix recovery remain separate Rust assurance scopes under ADR-0016.
 - Repair and rewrite accept only fully verified sources and publish new commit identity.
 - Candidate 1 page-sequence semantics are rejected for any successor promising historical page reuse.
 - Immutable content identity is the current successor research direction; it does not establish authenticity or freshness.
@@ -202,6 +203,20 @@ The successor recovery model:
 - reports but never selects candidates;
 - rejects cycles, sequence gaps, invalid parents, truncation, and candidate storms.
 
+### Reusable Rust successor core
+
+Experiment 0043 promotes the independently parsed microformat into a reusable Rust slice module without allocating Candidate 2. It provides deterministic genesis and replacement-append writers, exact-end strict validation, independently revalidated linked history, report-only bounded suffix recovery, and strict-source `rewrite_all` and `rewrite_selected` operations.
+
+The Rust writer reproduces the established identities exactly:
+
+| Case | Length | SHA-256 |
+|---|---:|---|
+| Four-object genesis | 16,886 | `94f9441339fb49ffef5b8c7b54307c20488bf2e09958fd805fd2addae65c2a23` |
+| Replacement append | 33,550 | `e058422145e12334934c86c51d29a480166e33d5b0d27538f6b26c9591db00bc` |
+| 400-object multi-level genesis | 89,316 | `d4cdc721028a8abad2f381328a0bcd605ef19d26fea30c1b214f094a16ba3f70` |
+
+Rewrite creates a new genesis and new byte-scoped commit identity. It performs no semantic dependency discovery, preserves no byte-scoped signatures, and never invokes recovery. Allocation, output, object, page, history, and recovery work are independently bounded.
+
 ### Bounded writer and publication lifecycle
 
 The writer experiments provide:
@@ -270,7 +285,7 @@ The current matrix covers:
 - hostile-byte cases;
 - the manifest-pinned independently parsed successor vector;
 - Rust 1.85, 32-bit, and big-endian compilation;
-- twenty-one cargo-fuzz target builds and bounded smoke campaigns.
+- twenty-five cargo-fuzz target builds and bounded smoke campaigns.
 
 ## Current limitations and blockers
 
@@ -288,11 +303,11 @@ The current matrix covers:
 - no complete Candidate 2 byte specification exists;
 - identifier, locator, occupancy, split, and deletion policies are not selected normatively;
 - no general arbitrary-depth mixed-operation batch planner exists;
-- successor implementations remain Python experiments plus one independent Rust vector parser;
+- successor implementations remain Python models plus a reusable Rust slice writer/validator/history/recovery/rewrite experiment;
 - only one pinned successor genesis vector exists;
 - no pinned successor invalid/interrupted/fork corpus exists;
 - no cross-language successor append, multi-level, recovery, or compaction corpus exists;
-- no production successor writer, source adapter, recovery, history, or repair library exists;
+- no production random-access/conditional source adapter, streaming or spill-integrated writer, or hardened repair/publication library exists;
 - support profiles and boundary vectors are unresolved;
 - production spill confidentiality and durability policy is unresolved;
 - arbitrary-depth operation and hostile-source fuzzing is unresolved;
@@ -304,7 +319,7 @@ The current matrix covers:
 2. Pin successor append and multi-level vectors and parse them independently in Rust.
 3. Write a complete provisional successor byte specification without allocating a stable epoch.
 4. Implement a general deterministic mixed-operation batch planner at arbitrary depth.
-5. Move successor parsing and validation into a reusable Rust experiment module, then add fuzz targets.
+5. Extend the reusable Rust core with bounded random-access source, streaming/spill writer, and hardened repair/publication APIs.
 6. Add conditional remote-source and asynchronous cancellation tests under stable-view rules.
 7. Define jointly satisfiable support profiles and boundary vectors.
 8. Select identifier width, locator layout, occupancy, split, and deletion policy.

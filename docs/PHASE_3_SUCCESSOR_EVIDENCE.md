@@ -154,6 +154,23 @@ The successor recovery prototype:
 
 Recovery remains separate from exact-end strict validation. A caller must make any recovery-selection decision explicitly.
 
+## Reusable Rust successor core
+
+### Experiment 0043 and ADR-0016
+
+A reusable Rust slice module now reproduces the exact four-object genesis, replacement append, and 400-object multi-level identities. It exposes deterministic writing, exact-end strict validation, linked-history verification, bounded suffix recovery, and strict-source full or caller-selected rewrite.
+
+The assurance scopes are intentionally separate:
+
+- current validity never searches for an alternative footer;
+- linked history independently revalidates every prefix and fails closed rather than returning a partial chain;
+- recovery treats footer magic only as a bounded hint and reports strictly validated prefixes without selecting one;
+- rewrite accepts only exact-end strictly validated active state, publishes a new genesis identity, performs no semantic dependency discovery, and does not preserve byte-scoped signatures.
+
+The focused suite covers current-page-count forgery, partial page overlap, ancestor corruption that leaves current validation successful but makes history fail, interrupted publication, recovery attempt/result caps, deterministic selected rewrite, damaged-source rejection, and allocation/output limits.
+
+Three raw/generated/history targets plus one rewrite target extend the immutable-successor fuzz surface. The full cargo-fuzz matrix now contains twenty-five targets.
+
 ## Bounded deterministic writer and spill lifecycle
 
 ### Experiments 0013, 0016, and 0028
@@ -300,6 +317,7 @@ Green read-only workflows now exist for:
 - bounded source lookup and strict validation;
 - authenticated roots, capabilities, and extension preservation;
 - bounded recovery without candidate selection;
+- reusable Rust successor writing, strict validation, linked history, recovery, rewrite, and fuzz targets;
 - spill-backed page emission, staged merge, and publication lifecycle;
 - locator inventory crossover;
 - stable-source retry and restart semantics;
@@ -318,7 +336,7 @@ Before an immutable-page successor can be proposed as an independently implement
 1. one complete byte specification covering file, object, immutable page, catalog/extension, snapshot, and footer structures;
 2. one selected identifier width, locator layout, occupancy rule, split policy, and deletion policy;
 3. a general deterministic mixed-operation batch planner across replacements, insertions, and deletions at arbitrary depth;
-4. production-language implementations of the immutable successor writer, source reader, recovery, history, and repair paths;
+4. production random-access/conditional source, streaming or spill-integrated writer, and hardened repair/publication paths beyond the reusable Rust slice core;
 5. cross-language multi-level, append, recovery, fork, and compaction vectors;
 6. a pinned successor invalid and interrupted corpus with coarse diagnostic classes;
 7. jointly satisfiable support profiles and boundary vectors;
@@ -355,6 +373,8 @@ Before an immutable-page successor can be proposed as an independently implement
 - `docs/experiments/0035-exp0002-immutable-page-recovery.md`
 - `docs/experiments/0036-exp0002-spill-publication.md`
 - `docs/experiments/0037-exp0002-immutable-successor-vector.md`
+- `docs/experiments/0043-immutable-successor-rust-api.md`
 - `docs/decisions/0013-exp0002-versioned-source-stability.md`
 - `docs/decisions/0014-exp0002-restart-whole-operation-on-version-change.md`
 - `docs/decisions/0015-exp0002-resource-defaults-are-policy.md`
+- `docs/decisions/0016-immutable-successor-rust-assurance-scopes.md`
