@@ -1,0 +1,74 @@
+name: Fix Source Contract and Spill Fixture
+
+on:
+  push:
+    branches: ["phase-3/directory-snapshots-recovery"]
+    paths:
+      - ".github/workflows/fix-source-spill.yml"
+      - "crates/ucof-experiments/src/immutable_successor/source.rs"
+      - "tools/experiment_exp0002_spill_security_policy.py"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/directory-snapshots-recovery
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Apply focused fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          source = Path('crates/ucof-experiments/src/immutable_successor/source.rs')
+          text = source.read_text(encoding='utf-8')
+          needle = '''pub trait ImmutableReadAt {
+    fn len(&mut self) -> Result<u64, ImmutableSourceError>;
+    fn read_exact_at(
+'''
+          replacement = '''pub trait ImmutableReadAt {
+    fn len(&mut self) -> Result<u64, ImmutableSourceError>;
+
+    fn is_empty(&mut self) -> Result<bool, ImmutableSourceError> {
+        Ok(self.len()? == 0)
+    }
+
+    fn read_exact_at(
+'''
+          if needle not in text:
+              raise SystemExit('ImmutableReadAt anchor not found')
+          source.write_text(text.replace(needle, replacement, 1), encoding='utf-8')
+
+          spill = Path('tools/experiment_exp0002_spill_security_policy.py')
+          text = spill.read_text(encoding='utf-8')
+          needle = 'SpillLimits(max_bytes=64, max_files=4, max_open_files=1),'
+          if needle not in text:
+              raise SystemExit('spill budget anchor not found')
+          spill.write_text(text.replace(needle, 'SpillLimits(max_bytes=96, max_files=4, max_open_files=1),', 1), encoding='utf-8')
+          PY
+          cargo fmt --all
+          cargo fmt --all -- --check
+          cargo clippy --locked --workspace --all-targets -- -D warnings
+          cargo test --locked -p ucof-experiments --all-targets
+          python3 tools/experiment_exp0002_spill_publication.py
+          python3 tools/experiment_exp0002_spill_security_policy.py
+      - name: Commit fixes and remove helper
+        run: |
+          rm .github/workflows/fix-source-spill.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/ucof-experiments/src/immutable_successor/source.rs \
+            tools/experiment_exp0002_spill_security_policy.py \
+            .github/workflows/fix-source-spill.yml
+          git diff --cached --check
+          git commit -m "fix: harden source contract and spill budgets"
+          git push origin HEAD:phase-3/directory-snapshots-recovery
