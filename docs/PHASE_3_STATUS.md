@@ -1,6 +1,6 @@
 # Phase 3 Status — Directory, Snapshots, and Recovery
 
-**Status:** In progress; first concrete EXP-0002 byte candidate implemented and passing CI  
+**Status:** In progress; EXP-0002 Candidate 1 is executable, extensively tested, and still disposable  
 **Started:** 2026-07-30  
 **Working branch:** `phase-3/directory-snapshots-recovery`  
 **Stacked pull request:** #3  
@@ -8,20 +8,20 @@
 
 ## Objective
 
-Deliver bounded random access, append publication, snapshots, previous-root recovery, repair, and compaction while preserving the rule that damaged, recovered, or merely plausible state never silently becomes valid state.
+Deliver bounded random access, append publication, snapshots, previous-root recovery, repair, and compaction while preserving the rule that damaged, recovered, historical, or merely plausible state never silently becomes active valid state.
 
 ## Current experimental decisions
 
 - Phase 3 uses disposable epoch `UCOF-EXP-0002` because directory and active-root semantics change validity.
-- Candidate 1 has exact provisional bytes defined in `docs/spec/EXP_0002_BYTE_CANDIDATE.md`.
-- The candidate uses little-endian fixed fields, 16 KiB authenticated pages, fixed binary entries, domain-separated SHA-256 digests, variable-length snapshot records, and 160-byte exact-end footers.
-- Strict validation remains exact-end and never silently invokes recovery.
-- Recovery is explicit and independently bounds scan bytes, magic matches, candidate validations, results, and chain depth.
-- The flat EXP-0001 directory is not a promotion candidate.
-- Ordered pages remain experimental; 4 KiB and 64 KiB alternatives retain measured evidence.
+- Candidate 1 exact bytes are defined in `docs/spec/EXP_0002_BYTE_CANDIDATE.md`.
+- Candidate 1 uses little-endian fixed fields, 16 KiB authenticated pages, fixed binary entries, domain-separated SHA-256 digests, variable-length snapshot records, and 160-byte exact-end footers.
+- Strict validation is exact-end and never invokes recovery implicitly.
+- Recovery is explicitly requested and independently bounds suffix bytes, scan reads, footer-magic matches, candidate validations, cumulative successful and failed candidate reads, results, and chain depth.
 - Structural snapshot identity and file-instance commit identity are separate scopes under ADR-0011.
-- Repair and compaction accept only strictly verified complete snapshots and always publish a new commit identity.
-- All concrete byte APIs remain in unpublished `ucof-experiments`; no stable compatibility promise exists.
+- Candidate 1 checkpoints are ordinary complete snapshot commits under ADR-0012; no weaker progress-checkpoint bytes are defined.
+- Mutable or remote range sources require a caller-provided strong stable-view token under ADR-0013. Stable view is not trusted freshness.
+- Repair and caller-selected rewrite accept only fully verified sources and always publish a new commit identity.
+- All concrete Candidate 1 APIs remain in unpublished `ucof-experiments`; no stable compatibility promise exists.
 
 ## Implemented frontiers
 
@@ -29,204 +29,211 @@ Deliver bounded random access, append publication, snapshots, previous-root reco
 
 | Frontier | Status | Evidence |
 |---|---|---|
-| EXP-0002 scope and invariants | Drafted | FCP-0002 |
-| First independently implementable bytes | Implemented | provisional byte specification |
+| EXP-0002 scope and invariants | Draft | FCP-0002 |
+| Independently implementable Candidate 1 bytes | Implemented | provisional byte specification |
 | Research isolation | Accepted | ADR-0009 |
 | First byte candidate | Accepted experimentally | ADR-0010 |
 | Snapshot versus commit identity | Accepted experimentally | ADR-0011 |
-| Strict versus recovery separation | Specified and implemented | strict and recovery APIs |
-| Security findings | Model and concrete-byte findings published | security documents |
+| Complete-only checkpoints | Accepted experimentally | ADR-0012 |
+| Versioned stable-view source adapter | Accepted implementation policy | ADR-0013 |
+| Strict versus recovery separation | Specified and implemented | source and slice APIs |
+| Security findings | Published | model, byte, and threat-model documents |
 
-### Concrete file, object, page, snapshot, and footer codec
+### Concrete codec
 
 | Frontier | Status | Evidence |
 |---|---|---|
 | 64-byte bootstrap header | Implemented and tested | Rust and Python codecs |
 | 48-byte opaque object records | Implemented and tested | deterministic writers and strict readers |
 | 16 KiB authenticated leaf/internal pages | Implemented and tested | multi-leaf vectors and corruption tests |
-| 88-byte leaf entries | Implemented and tested | exact vector agreement |
-| 64-byte internal entries | Implemented and tested | exact vector agreement |
-| Variable snapshot record | Implemented and tested | roots and capability-array parsing |
+| 88-byte leaf entries | Implemented as Candidate 1; under comparison | exact vectors and Experiment 0010 |
+| 64-byte internal entries | Implemented and tested | exact vectors |
+| Variable snapshot record | Implemented and tested | roots and capability arrays |
 | 160-byte commit footer | Implemented and tested | exact-end validation |
 | Domain-separated object/page/snapshot/commit digests | Implemented and tested | mutation and adversarial cases |
-| Genesis writer | Implemented and deterministic | Rust/Python equality |
-| Append writer | Implemented and deterministic | parent-linked append vector |
-| Strict exact-end validator | Implemented and bounded | `validate_strict` |
-| Reserved-byte and zero-padding enforcement | Implemented | adversarial corpus |
-| Physical overlap rejection | Implemented | strict and targeted readers |
+| Genesis writer | Deterministic | Rust/Python byte equality |
+| Append writer | Deterministic | parent-linked append vector |
+| Strict slice validator | Implemented and bounded | `validate_strict` |
+| Strict random-access source validator | Implemented and bounded | `validate_strict_at` |
+| Reserved-byte, padding, and physical-overlap rejection | Implemented | adversarial and corpus tests |
 
-### Cross-language vectors
+### Valid and invalid vector corpora
 
-The pinned corpus under `tests/vectors/exp-0002` contains:
+The valid corpus under `tests/vectors/exp-0002` contains:
 
 | Vector | Purpose |
 |---|---|
 | `genesis-two-object` | deterministic genesis with root and non-root object |
-| `append-add-third` | parent-linked append reusing historical objects |
+| `append-add-third` | parent-linked append reusing historical object records |
 | `multi-leaf-400` | authenticated multi-leaf directory and internal root |
 
-For every valid vector:
+For every valid vector, Python writes and verifies the canonical bytes, Rust rebuilds the same bytes exactly, and both strict validators accept the stored file.
 
-- Python writes the canonical bytes;
-- Python verifies the stored bytes and manifest hashes;
-- Rust rebuilds the same file byte-for-byte;
-- Rust strictly validates the stored file.
+The public invalid corpus under `tests/vectors/exp-0002-invalid` contains thirteen deterministic files covering bootstrap, object, page, physical-layout, snapshot, parent-chain, exact-end, and interrupted-publication failures. Python verifies corpus reproducibility; Rust independently rejects every file. Coarse diagnostic layers are recorded, while exact exception strings remain implementation-local.
 
-### Authenticated lookup
+### Authenticated lookup and source access
 
 | Frontier | Status | Evidence |
 |---|---|---|
-| Root-to-leaf authenticated path | Implemented | `lookup_authenticated` |
-| Authenticated absence result | Implemented and tested | missing-key tests |
-| Selected historical object rehash after append | Implemented and tested | old-object mutation test |
-| Page-read and hash-work limits | Implemented | lookup limits |
-| Page/snapshot/footer overlap rejection | Implemented | targeted range isolation |
-| Pinned-vector lookup tests | Implemented | multi-leaf and append integration tests |
-| Random-access source without full slice | Implemented and tested | `lookup_authenticated_at` |
+| Root-to-leaf authenticated lookup | Implemented | slice and source APIs |
+| Authenticated absence | Implemented and tested | missing-key tests |
+| Historical object rehash after append | Implemented and tested | mutation tests |
+| Page, hash, read, and request limits | Implemented | source limits |
+| Structural-range overlap rejection | Implemented | targeted range isolation |
+| Full source strict validation | Implemented and corpus-bound | `validate_strict_at` |
+| Stable-view version adapter | Implemented and tested | `Exp0002StableSource` |
 
-The targeted lookup verifies the active commit, snapshot, one page path, and selected object. It does not claim that unrelated historical object records were rehashed. The range-source implementation streams commit and object hashing under read-operation, byte, request-size, page, and hash budgets; a test proves that lookup of a small historical root does not read an unrelated one-megabyte historical payload. The range-source implementation streams commit and object hashing under read-operation, byte, request-size, page, and hash budgets; a test proves that lookup of a small historical root does not read an unrelated one-megabyte historical payload.
+Targeted lookup authenticates the active commit, snapshot, one page path, and selected object. It does not claim unrelated historical objects were rehashed.
 
-### Concrete append and recovery
+A localhost HTTP Range benchmark over an append file with an unrelated 1 MiB historical object measured:
+
+| Assurance mode | Requests | Bytes transferred | Pages | Objects hashed |
+|---|---:|---:|---:|---:|
+| Targeted lookup | 7 | 16,993 | 1 | 1 |
+| Full strict validation | 26 | 1,065,673 | 1 | 3 |
+
+Targeted lookup made no request overlapping the large historical object. Full validation read it.
+
+### Append, history, and recovery
 
 | Frontier | Status | Evidence |
 |---|---|---|
 | Footer-only publication | Implemented | append writer and publication model |
-| Every incomplete latest footer rejected by strict mode | Implemented and tested | every-cut append tests |
-| Bounded backward candidate discovery | Implemented | `scan_valid_prefixes` |
-| Candidate magic has no authority | Implemented | strict-prefix candidate validation |
-| Previous-footer chain enumeration | Implemented | `enumerate_previous_chain` |
-| Candidate-storm limits | Implemented and tested | recovery tests and fuzz target |
-| Scan-window non-guessing | Implemented and tested | bounded-window test |
-| Concrete progress checkpoint bytes | Pending | candidate 1 defines complete snapshots only |
+| Every incomplete latest footer rejected by strict mode | Implemented and tested | every-cut and pinned-cut tests |
+| Bounded backward candidate discovery | Implemented | hardened source recovery facade |
+| Failed candidate work charged | Implemented and tested | cumulative source-read accounting |
+| Candidate magic has no authority | Implemented | strict-prefix validation |
+| Verified linked-history enumeration | Implemented | `enumerate_previous_chain_at` |
+| Root and identity reporting per verified prefix | Implemented | recovery and history reports |
+| Candidate-storm and scan-window limits | Implemented and tested | recovery tests and fuzzing |
+| Complete checkpoints | Implemented as normal commits | ADR-0012 and cadence experiment |
+| Separate progress-checkpoint bytes | Deferred | no Candidate 1 allocation |
 
-### Repair and compaction
+Linked-history enumeration validates the exact-end active file and every referenced ancestor as an independent strict prefix. It cross-checks previous-footer offsets, parent snapshot digests, and exact sequence increments while bounding depth and cumulative source reads.
+
+### Repair and rewrite
 
 | Frontier | Status | Evidence |
 |---|---|---|
-| Abstract reachability and orphan planning | Implemented | Phase 3 graph model |
+| Abstract reachability and orphan planning | Implemented | graph model |
 | Verified-source repair to new file | Implemented | `repair_all_to_new_file` |
 | Caller-directed object-selection rewrite | Implemented | `rewrite_selected_to_new_file` |
 | Object, payload, and output-byte limits | Implemented | rewrite limits |
 | Damaged-source rejection | Implemented and tested | strict source gate |
 | Root-retention checks | Implemented and tested | rewrite tests |
 | Snapshot/commit identity report | Implemented | ADR-0011 fields |
-| Byte-scoped signature non-preservation | Explicit | rewrite report |
-| Automatic semantic dependency discovery | Pending | requires schemas/profiles or supplied graph |
-| Copy-on-write page reuse | Pending | writer currently rebuilds the full directory |
+| Byte-scoped signature non-preservation | Explicit | rewrite reports |
+| Automatic semantic dependency discovery | Pending | requires schemas, profiles, or supplied graph |
 
-A deterministic genesis repair may preserve the structural snapshot digest while always changing the file-instance commit digest. Append repair becomes a new genesis and changes both scopes.
+A deterministic genesis repair may preserve structural snapshot identity while always changing file-instance commit identity. Append repair becomes a new genesis and changes both scopes.
 
-### Independent and adversarial evidence
+### Experimental CLI
 
-- independent Python model fixtures cover directory shapes, selection, recovery, forks, checkpoints, compaction, and cycles;
-- independent Python concrete codec implements candidate 1 without importing Rust;
-- 21 layer-targeted adversarial cases mutate headers, objects, pages, padding, child links, snapshots, parents, footers, exact-end state, and append truncations;
-- outer digests are recomputed where necessary so mutations reach deeper validation layers;
-- every-cut Rust tests cover interrupted append publication;
-- page-size Experiment 0006 compares 4 KiB, 16 KiB, and 64 KiB pages using the actual entry widths;
-- Experiment 0005 retains ordered-tree, sorted-array, and deterministic-hash alternatives.
+The separate `ucof-exp0002` binary exposes distinct commands:
 
-## Continuous verification
+- `verify` — full exact-end validation;
+- `roots` — active roots after full validation;
+- `history` — exact linked history, each ancestor strictly validated;
+- `lookup` — targeted authenticated object or absence;
+- `recover` — bounded discovery of strict prefixes without candidate selection;
+- `repair-all` — verified source to new genesis output;
+- `rewrite-selected` — caller-selected output without a semantic-compaction claim.
 
-The concrete branch passes:
+End-to-end tests exercise pinned vectors, history, recovery, rewrite output validation, and create-new output protection. Assurance boundaries are documented in `docs/PHASE_3_CLI_GUIDE.md`.
 
-- locked dependency resolution;
-- stable Rust formatting and clippy with warnings denied;
-- all workspace unit, integration, and documentation tests;
-- independent EXP-0001 parser and adversarial corpus;
-- independent Phase 3 model corpus;
-- independent EXP-0002 codec self-tests and stored-vector verification;
-- the EXP-0002 layer-targeted adversarial corpus;
-- all reproducible framing, footer, scale, directory-model, and page-size experiments;
-- Rust 1.85 MSRV compilation;
-- 32-bit `i686-unknown-linux-gnu` library compilation;
-- big-endian `powerpc64-unknown-linux-gnu` library compilation;
-- nineteen cargo-fuzz target builds and bounded pull-request smoke campaigns.
+## Architectural findings
 
-The nineteen fuzz targets consist of six inherited Phase 2 byte targets, seven Phase 3 algorithm-model targets, and six concrete EXP-0002 targets for strict validation, recovery, writer round trips, in-memory lookup, range-source lookup, and rewrite output.
+### Candidate 1 page sequence prevents historical page reuse
 
-All permanent workflows use read-only repository permissions.
+The persistent COW model proves the desired O(depth) update algorithm, but Experiment 0011 demonstrates that Candidate 1 bytes prohibit exact historical page reuse. Every page stores and authenticates the active snapshot sequence, and validation requires equality with the current snapshot. Unchanged leaves therefore must still be copied, causing new digests to propagate through every ancestor.
 
-## Measured page-size finding
+This is a Candidate 1 byte-design blocker, not merely a missing writer optimization. A later candidate must revise page identity or intentionally accept full-directory rewrite amplification.
 
-At 100 million objects with the candidate entry widths:
+### Page-size and locator-width results
 
-| Page size | Tree depth | Directory bytes | Authenticated path bytes |
+At 100 million objects with Candidate 1 88-byte leaves:
+
+| Page size | Depth | Directory bytes | Authenticated path bytes |
 |---:|---:|---:|---:|
 | 4 KiB | 5 | 9,249,042,432 | 20 KiB |
 | 16 KiB | 4 | 8,891,121,664 | 64 KiB |
 | 64 KiB | 3 | 8,817,344,512 | 192 KiB |
 
-The provisional 16 KiB page is a middle point, not an accepted constant. The 88-byte leaf entry dominates total directory size; reducing entry width may provide more value than increasing page size.
+At 16 KiB pages:
 
-## Properties demonstrated
+| Leaf layout | 100M directory size | Depth |
+|---|---:|---:|
+| 88-byte Candidate 1, 64-bit ID | 8.280 GiB | 4 |
+| 72-byte no-reserve, same fields | 6.778 GiB | 4 |
+| 56-byte minimal authenticated, 64-bit ID | 5.264 GiB | 4 |
+| 64-byte minimal authenticated, 128-bit ID | 6.007 GiB | 4 |
 
-### Validity and integrity
+The 16-byte per-entry reserve alone costs roughly 1.50 GiB at this scale. Final layout selection requires range-request and inventory measurements, not directory size alone.
 
-- header, footer, snapshot, page, and object ranges use checked arithmetic;
-- reserved bytes and page padding must be zero;
-- object, page, snapshot, and commit digests have separate domains;
-- directory claims are cross-checked against referenced pages and object headers;
-- page levels, ranges, ordering, fanout, digests, and cycles fail closed;
-- required exact-end state is published only after a complete footer;
-- targeted lookup cannot treat a structural page or footer range as an object record;
-- repair cannot operate on a damaged source.
+### Checkpoint strategy crossover
 
-### Bounded work
+Complete-only checkpoint evidence shows no universal writer strategy:
 
-- file, commit, snapshot, page, depth, object, payload, root, capability, hash, lookup, recovery, rewrite, and output limits are caller controlled;
-- recovery candidate storms fail under configured limits;
-- lookup reads one page per path level after commit and snapshot verification;
-- rewrite bounds object count and copied/output bytes before accepting output.
+- frequent checkpoints make repeated full-directory rebuilds dominant;
+- sparse checkpoints can make naive per-object path copying more expensive than one final rebuild;
+- a future reusable-page writer must batch changes, share ancestors, and serialize only final reachable pages.
 
-### Identity and recovery
+### Bounded external sort is feasible
 
-- snapshot digest identifies exact authenticated snapshot structure;
-- commit digest identifies one published file-instance commit;
-- parent snapshot digest and previous-footer locator are cross-checked;
-- interrupted append tails do not replace an earlier complete root;
-- repair always produces a new commit identity;
-- no freshness or authenticity claim is inferred from hashes or sequence numbers.
+Experiment 0013 deterministically sorts 200,003 exact 88-byte locator-shaped entries using sub-megabyte spill runs and a k-way merge. Two run sizes produce identical output; missing and duplicate keys fail closed. Byte-producing writer integration and secure spill policy remain pending.
 
-## Current limitations
+## Continuous verification
 
-- full strict validation, backward recovery scanning, and rewrite currently operate on in-memory byte slices; authenticated lookup also has a bounded range-source implementation;
-- strict and targeted readers are synchronous, and range-source validation assumes one stable source view for the operation;
-- the current append writer rebuilds all directory pages;
-- historical object records may be referenced by later snapshots, but no page reuse exists yet;
-- capability identifiers are structurally encoded, but candidate 1 defines no non-zero capability allocation;
-- progress checkpoint bytes are undefined;
-- automatic dependency discovery for compaction is unavailable without profile/schema semantics;
-- independent invalid vectors are generated through mutation tests but are not yet pinned as separate files;
-- no HTTP-range, cold-cache, or real-storage benchmark exists;
-- no authenticity, signature, provenance, encryption, metadata confidentiality, or external freshness mechanism exists;
-- replacement of the whole file with an older valid copy remains undetectable without external state.
+The branch passes:
 
-## Completed tasks from the previous frontier list
+- locked dependency resolution;
+- stable Rust formatting and clippy with warnings denied;
+- all workspace unit, integration, CLI, and documentation tests;
+- independent EXP-0001 validation and adversarial corpus;
+- independent Phase 3 model corpus;
+- independent EXP-0002 codec self-tests and valid-vector verification;
+- the thirteen-file invalid/interrupted corpus;
+- 21 layer-targeted adversarial mutations;
+- all framing, footer, scale, directory, page-size, COW, checkpoint, locator-width, page-reuse, HTTP-range, and external-sort experiments;
+- Rust 1.85 MSRV compilation;
+- 32-bit `i686-unknown-linux-gnu` library compilation;
+- 64-bit big-endian `powerpc64-unknown-linux-gnu` library compilation;
+- twenty-one cargo-fuzz target builds and bounded pull-request smoke campaigns.
 
-- first candidate bootstrap, object, page, snapshot, and footer bytes are specified;
-- Rust and independent Python writers/readers exist;
-- deterministic cross-language vectors are pinned;
-- page sizes are compared using concrete entry widths;
-- concrete exact-end validation and previous-root recovery exist;
-- authenticated single-object lookup and absence proof exist over both slices and bounded random-access sources;
-- repair-to-new-file and object-selection rewrite output exist;
-- concrete parsers, slice and range-source lookup, recovery, writers, and rewrite paths are continuously fuzzed;
-- concrete-byte adversarial findings are executable in CI;
-- snapshot and commit identity scopes are resolved experimentally.
+The twenty-one fuzz targets consist of six inherited Phase 2 byte targets, seven Phase 3 algorithm-model targets, and eight concrete EXP-0002 targets covering strict parsing, recovery, writer round trips, slice lookup, rewrite, source lookup, source strict/recovery, and source history.
+
+All permanent workflows use read-only repository permissions.
+
+## Current limitations and blockers
+
+- Candidate 1 page-sequence semantics prohibit exact historical page reuse.
+- The append writer rebuilds all directory pages.
+- The final page identity, leaf layout, and object-identifier width are unresolved.
+- Full source readers are synchronous.
+- `Exp0002StableSource` requires transport-provided strong version evidence; concrete conditional HTTP/cloud adapters are not implemented.
+- Rewrite commands currently materialize source and output in memory.
+- The bounded external sort is a model, not yet integrated into the byte writer.
+- Automatic semantic dependency discovery is unavailable without profiles or schemas.
+- Default resource limits remain implementation-local; normative minima are unresolved.
+- Capability identifiers are structurally encoded, but Candidate 1 defines no non-zero allocation.
+- No authenticity, signature, provenance, encryption, metadata confidentiality, or external trusted freshness exists.
+- Replacing the entire file with an older valid copy remains undetectable without trusted external state.
+- Both current byte implementations live in one repository and may share a specification misunderstanding.
 
 ## Next frontier tasks
 
-1. move full strict validation and recovery scanning onto bounded random-access sources without materialising the whole file;
-2. pin invalid and interrupted-append byte vectors with expected failure categories;
-3. implement copy-on-write page reuse and measure append rewrite amplification;
-4. define complete-checkpoint bytes and evaluate whether progress checkpoints are justified;
-5. add HTTP-range, cold-cache, and realistic object-count benchmarks;
-6. evaluate narrower leaf locators and alternative object-identity widths;
-7. define CLI assurance surfaces for root enumeration, recovery, repair, and compaction;
-8. obtain a second independently maintained implementation rather than only an independent in-repository Python implementation;
-9. resolve remaining FCP-0002 questions before moving the proposal to Review.
+1. Design and test revised immutable-page or page-birth-generation semantics that permit safe reuse.
+2. Implement a deterministic batched byte-level page-reuse writer for the revised semantics.
+3. Integrate bounded external sorting with object emission, page packing, failure cleanup, and final publication.
+4. Prototype a concrete conditional HTTP or cloud-object adapter using strong version evidence.
+5. Benchmark cold-cache inventory workloads for 88-, 72-, 56-, and 64-byte locator alternatives.
+6. Decide object-identifier width and leaf layout.
+7. Define normative minimum limits versus caller policy.
+8. Define future-field and capability-preservation rules.
+9. Define profile-supplied dependency and history-retention inputs for semantic compaction.
+10. Obtain an independently maintained implementation or external independent review.
+11. Resolve FCP-0002 objections before moving the proposal to Review.
 
 ## Exit rule
 
-Phase 3 is not complete until the selected experimental layout demonstrates bounded source-based lookup, append publication, previous-root recovery, unambiguous root selection, valid-root enumeration, repair, and compaction with cross-language valid and invalid vectors, hostile-input evidence, continuous fuzzing, realistic range-I/O measurements, documented rejected alternatives, and maintainer review of FCP-0002.
+Phase 3 is not complete until a selected experimental layout demonstrates bounded source-based lookup and validation, append publication, safe page reuse or an explicitly accepted alternative, previous-root recovery, linked-history enumeration, unambiguous active-root rules, repair, and compaction with cross-language valid and invalid vectors, hostile-input evidence, continuous fuzzing, realistic range-I/O measurements, deterministic large-writer strategy, documented rejected alternatives, independent review, and maintainer disposition of FCP-0002 blockers.
