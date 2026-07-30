@@ -4,6 +4,7 @@
 from pathlib import Path
 
 PATH = Path("crates/ucof-experiments/src/immutable_successor.rs")
+TEST_PATH = Path("crates/ucof-experiments/tests/immutable_successor_api.rs")
 
 
 def replace_once(text: str, needle: str, replacement: str, label: str) -> str:
@@ -107,6 +108,19 @@ def main() -> None:
             "page-count",
         )
     PATH.write_text(text, encoding="utf-8")
+
+    test = TEST_PATH.read_text(encoding="utf-8")
+    test = test.replace(
+        "    let mut limits = ImmutableLimits::default();\n    limits.max_output_bytes = 64;",
+        "    let limits = ImmutableLimits {\n        max_output_bytes: 64,\n        ..ImmutableLimits::default()\n    };",
+        1,
+    )
+    test = test.replace(
+        "    let mut limits = ImmutableLimits::default();\n    limits.max_pages = 0;",
+        "    let limits = ImmutableLimits {\n        max_pages: 0,\n        ..ImmutableLimits::default()\n    };",
+        1,
+    )
+    TEST_PATH.write_text(test, encoding="utf-8")
 
 
 if __name__ == "__main__":
