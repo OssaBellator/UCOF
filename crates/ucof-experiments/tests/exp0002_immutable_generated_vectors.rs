@@ -79,7 +79,11 @@ fn sha256(parts: &[&[u8]]) -> [u8; 32] {
 }
 
 fn hex_digest(value: [u8; 32]) -> String {
-    value.iter().map(|byte| format!("{byte:02x}")).collect()
+    let mut output = String::with_capacity(64);
+    for byte in value {
+        output.push_str(&format!("{byte:02x}"));
+    }
+    output
 }
 
 fn decode_hex(input: &str) -> Vec<u8> {
@@ -102,9 +106,12 @@ fn encode_object(object_id: u64, kind: u16, payload: &[u8]) -> Vec<u8> {
     assert!(object_id != 0 && kind != 0);
     let mut record = vec![0_u8; OBJECT_HEADER_LEN + payload.len()];
     record[..8].copy_from_slice(OBJECT_MAGIC);
-    put_u16(&mut record, 8, u16::try_from(OBJECT_HEADER_LEN).unwrap());
+    put_u16(
+        &mut record,
+        8,
+        u16::try_from(OBJECT_HEADER_LEN).expect("header length"),
+    );
     put_u16(&mut record, 10, kind);
-    put_u32(&mut record, 12, 0);
     put_u64(&mut record, 16, object_id);
     put_u64(&mut record, 24, u64_from_usize(payload.len()));
     put_u64(&mut record, 32, u64_from_usize(payload.len()));
@@ -131,15 +138,15 @@ fn encode_leaf(entries: &[Locator]) -> Vec<u8> {
     assert!(entries
         .windows(2)
         .all(|pair| pair[0].object_id < pair[1].object_id));
+
     let mut page = vec![0_u8; PAGE_SIZE];
     page[..8].copy_from_slice(PAGE_MAGIC);
     page[8] = 1;
-    page[9] = 0;
-    put_u16(&mut page, 10, 0);
     put_u32(&mut page, 12, u32_from_usize(entries.len()));
     put_u32(&mut page, 16, u32_from_usize(LEAF_ENTRY_LEN));
     put_u64(&mut page, 20, entries[0].object_id);
-    put_u64(&mut page, 28, entries.last().unwrap().object_id);
+    put_u64(&mut page, 28, entries.last().expect("last leaf entry").object_id);
+
     for (index, entry) in entries.iter().enumerate() {
         let offset = PAGE_HEADER_LEN + index * LEAF_ENTRY_LEN;
         put_u64(&mut page, offset, entry.object_id);
@@ -158,15 +165,20 @@ fn encode_internal(children: &[PageRef], level: u8) -> Vec<u8> {
         .windows(2)
         .all(|pair| pair[0].maximum < pair[1].minimum));
     assert!(children.iter().all(|child| child.level + 1 == level));
+
     let mut page = vec![0_u8; PAGE_SIZE];
     page[..8].copy_from_slice(PAGE_MAGIC);
     page[8] = 2;
     page[9] = level;
-    put_u16(&mut page, 10, 0);
     put_u32(&mut page, 12, u32_from_usize(children.len()));
     put_u32(&mut page, 16, u32_from_usize(INTERNAL_ENTRY_LEN));
     put_u64(&mut page, 20, children[0].minimum);
-    put_u64(&mut page, 28, children.last().unwrap().maximum);
+    put_u64(
+        &mut page,
+        28,
+        children.last().expect("last child").maximum,
+    );
+
     for (index, child) in children.iter().enumerate() {
         let offset = PAGE_HEADER_LEN + index * INTERNAL_ENTRY_LEN;
         put_u64(&mut page, offset, child.minimum);
@@ -180,19 +192,15 @@ fn encode_internal(children: &[PageRef], level: u8) -> Vec<u8> {
 
 fn append_page(output: &mut Vec<u8>, page: &[u8]) -> PageRef {
     assert_eq!(page.len(), PAGE_SIZE);
-    let offset = u64_from_usize(output.len());
-    let level = page[9];
-    let minimum = u64::from_le_bytes(page[20..28].try_into().unwrap());
-    let maximum = u64::from_le_bytes(page[28..36].try_into().unwrap());
-    let digest = sha256(&[PAGE_DOMAIN, page]);
+    let reference = PageRef {
+        minimum: u64::from_le_bytes(page[20..28].try_into().expect("page minimum")),
+        maximum: u64::from_le_bytes(page[28..36].try_into().expect("page maximum")),
+        offset: u64_from_usize(output.len()),
+        level: page[9],
+        digest: sha256(&[PAGE_DOMAIN, page]),
+    };
     output.extend_from_slice(page);
-    PageRef {
-        minimum,
-        maximum,
-        offset,
-        level,
-        digest,
-    }
+    reference
 }
 
 fn build_tree(output: &mut Vec<u8>, locators: &mut [Locator]) -> PageRef {
@@ -200,6 +208,7 @@ fn build_tree(output: &mut Vec<u8>, locators: &mut [Locator]) -> PageRef {
     assert!(locators
         .windows(2)
         .all(|pair| pair[0].object_id < pair[1].object_id));
+
     let mut level: Vec<PageRef> = locators
         .chunks(LEAF_CAPACITY)
         .map(|chunk| append_page(output, &encode_leaf(chunk)))
@@ -207,8 +216,10 @@ fn build_tree(output: &mut Vec<u8>, locators: &mut [Locator]) -> PageRef {
     while level.len() > 1 {
         let mut next = Vec::new();
         for chunk in level.chunks(INTERNAL_FANOUT) {
-            let parent_level = chunk[0].level + 1;
-            next.push(append_page(output, &encode_internal(chunk, parent_level)));
+            next.push(append_page(
+                output,
+                &encode_internal(chunk, chunk[0].level + 1),
+            ));
         }
         level = next;
     }
@@ -228,7 +239,7 @@ fn footer_semantics(
     put_u64(&mut semantics, 16, u64_from_usize(SNAPSHOT_LEN));
     put_u64(&mut semantics, 24, previous_footer_offset);
     put_u64(&mut semantics, 32, u64_from_usize(page_count));
-    semantics[40..72].copy_from_slice(snapshot_digest);
+    semantics[40..].copy_from_slice(snapshot_digest);
     semantics
 }
 
@@ -247,7 +258,7 @@ fn publish(
     put_u64(&mut snapshot, 16, root.offset);
     put_u64(&mut snapshot, 24, u64::from(root.level));
     snapshot[32..64].copy_from_slice(&root.digest);
-    snapshot[64..96].copy_from_slice(parent_snapshot_digest);
+    snapshot[64..].copy_from_slice(parent_snapshot_digest);
     let snapshot_digest = sha256(&[SNAPSHOT_DOMAIN, &snapshot]);
     output.extend_from_slice(&snapshot);
 
@@ -261,7 +272,7 @@ fn publish(
     let commit_start = if previous_footer_offset == ABSENT_OFFSET {
         0
     } else {
-        usize::try_from(previous_footer_offset).unwrap() + FOOTER_LEN
+        usize::try_from(previous_footer_offset).expect("footer offset") + FOOTER_LEN
     };
     let commit_digest = sha256(&[COMMIT_DOMAIN, &output[commit_start..], &semantics]);
 
@@ -333,13 +344,12 @@ fn independently_generates_pinned_successor_recipes() {
     let page_start = append_bytes.len();
     let append_root = build_tree(&mut append_bytes, &mut active);
     let append_page_count = (append_bytes.len() - page_start) / PAGE_SIZE;
-    let previous_footer_offset = u64_from_usize(base.bytes.len() - FOOTER_LEN);
     publish(
         &mut append_bytes,
         1,
         &append_root,
         &base.snapshot_digest,
-        previous_footer_offset,
+        u64_from_usize(base.bytes.len() - FOOTER_LEN),
         append_page_count,
     );
     assert_eq!(append_bytes.len(), 33_550);
@@ -354,7 +364,7 @@ fn independently_generates_pinned_successor_recipes() {
         .map(|object_id| {
             (
                 object_id,
-                u16::try_from(1 + object_id % 5).unwrap(),
+                u16::try_from(1 + object_id % 5).expect("object kind"),
                 format!("payload:{object_id}").into_bytes(),
             )
         })
