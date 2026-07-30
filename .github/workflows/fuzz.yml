@@ -54,7 +54,8 @@ jobs:
             exp0002_source_history \
             immutable_successor_strict \
             immutable_successor_roundtrip \
-            immutable_successor_history_recovery
+            immutable_successor_history_recovery \
+            immutable_successor_rewrite
           do
             if [[ "${{ github.event_name }}" == "schedule" ]]; then
               cargo fuzz run "$target" -- -max_total_time=30 -max_len=65536
