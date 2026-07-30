@@ -631,3 +631,57 @@ The flat EXP-0001 directory is not suitable for UC-02-scale archives. One millio
 
 The detailed Phase 1 evidence remains in `docs/security/EXP_0001_FINDINGS.md` and the FCP-0001 evidence appendix. Future experiments must update this section when they confirm, invalidate, or supersede these findings.
 
+## 17. Executable findings from UCOF-EXP-0002 Candidate 1
+
+Candidate 1 adds exact experimental bytes for authenticated pages, complete snapshots, append commits, recovery, lookup, repair, and compaction. The candidate remains disposable and Draft. Detailed evidence is recorded in `docs/security/EXP_0002_BYTE_FINDINGS.md`.
+
+### 17.1 Serialized-structure controls
+
+The Rust and independent Python readers enforce exact magic, version, length, little-endian fields, zero flags, zero reserved bytes, zero page padding, checked range arithmetic, and explicit SHA-256 algorithm identifiers. Object, page, snapshot, and commit hashes use separate domain prefixes.
+
+An authenticated outer digest does not replace inner validation. Layer-targeted adversarial cases recompute outer hashes and still reach rejection for non-zero padding, forged child ranges, inconsistent levels, invalid parent links, object-header disagreement, and physical overlap.
+
+### 17.2 Directory and lookup findings
+
+Candidate 1 pages require sorted unique leaf keys, sorted non-overlapping child ranges, exact child levels, exact 16 KiB page lengths, complete-page digests, and cycle or repeated-offset rejection during full traversal.
+
+The full strict reader validates every referenced object. Narrow authenticated lookup instead validates the exact-end footer, current commit, active snapshot, one root-to-leaf path, and the selected object. It may return authenticated absence but does not claim unrelated historical objects were rehashed.
+
+A bounded random-access source implementation streams current-commit and selected-object hashing, limits read operations, bytes, request size, pages, and hashed bytes, and demonstrates that a small historical-object lookup does not read an unrelated one-megabyte historical payload. The source must remain stable for the operation; remote version-token and mutation rules are not yet defined.
+
+### 17.3 Publication and recovery findings
+
+Only a complete 160-byte footer at exact file end publishes the latest snapshot. Every tested incomplete append fails strict validation. Recovery is separately requested and independently bounds scan bytes, magic matches, candidate validations, results, and previous-chain depth.
+
+Footer magic and previous-footer pointers have no authority by themselves. Every reported recovery candidate is strictly validated as an exact-end prefix. Equal verified forks remain ambiguous rather than being silently selected.
+
+### 17.4 Identity, repair, and compaction findings
+
+ADR-0011 separates structural snapshot identity from file-instance commit identity. A deterministic repair can preserve an identical snapshot digest while always publishing a newly computed commit digest. This does not preserve the original file instance or byte-scoped signatures.
+
+Repair and caller-directed rewrite accept only strictly verified sources, copy authenticated payload ranges, enforce object, copied-byte, and output-byte limits, require retained roots, validate generated output, and never claim automatic semantic dependency discovery.
+
+### 17.5 Differential, adversarial, and portability evidence
+
+- Rust and independent Python implementations produce byte-identical genesis, append, and multi-leaf vectors;
+- both implementations continuously validate the pinned corpus;
+- 21 layer-targeted adversarial cases exercise headers, objects, pages, padding, parent links, footers, exact-end state, and append truncation;
+- page-size experiments compare 4 KiB, 16 KiB, and 64 KiB pages using the actual Candidate 1 entry widths;
+- nineteen fuzz targets cover inherited byte paths, Phase 3 models, and concrete strict, recovery, writer, lookup, range-source, and rewrite paths;
+- the workspace compiles at Rust 1.85, on 32-bit little-endian, and on 64-bit big-endian targets.
+
+### 17.6 Residual risks and open controls
+
+- SHA-256 integrity is not authenticity, signer trust, confidentiality, or external freshness;
+- a valid older whole file can be replayed without external trusted state;
+- full strict validation and backward recovery scanning still operate on in-memory slices;
+- range-source readers assume a stable source view for one operation;
+- the writer rebuilds every directory page and has no copy-on-write reuse;
+- progress checkpoint bytes and normative recovery-limit minima are unresolved;
+- 88-byte leaf entries dominate large-directory space;
+- invalid vectors are exercised but are not yet pinned as a cross-language public corpus;
+- both current implementations share one repository and may share a specification misunderstanding;
+- profiles, schemas, transforms, compression, signatures, provenance, encryption, and external references remain outside Candidate 1.
+
+FCP-0002 must not enter Review until remaining implementation-blocking questions, realistic range-I/O evidence, checkpoint and page-reuse semantics, invalid-vector expectations, and independent stewardship are addressed.
+

@@ -35,7 +35,7 @@ Deliver bounded random access, append publication, snapshots, previous-root reco
 | First byte candidate | Accepted experimentally | ADR-0010 |
 | Snapshot versus commit identity | Accepted experimentally | ADR-0011 |
 | Strict versus recovery separation | Specified and implemented | strict and recovery APIs |
-| Security findings | Model findings published; byte findings in progress | security documents |
+| Security findings | Model and concrete-byte findings published | security documents |
 
 ### Concrete file, object, page, snapshot, and footer codec
 
@@ -82,9 +82,9 @@ For every valid vector:
 | Page-read and hash-work limits | Implemented | lookup limits |
 | Page/snapshot/footer overlap rejection | Implemented | targeted range isolation |
 | Pinned-vector lookup tests | Implemented | multi-leaf and append integration tests |
-| Random-access source without full slice | Pending | next I/O frontier |
+| Random-access source without full slice | Implemented and tested | `lookup_authenticated_at` |
 
-The targeted lookup verifies the active commit, snapshot, one page path, and selected object. It does not claim that unrelated historical object records were rehashed.
+The targeted lookup verifies the active commit, snapshot, one page path, and selected object. It does not claim that unrelated historical object records were rehashed. The range-source implementation streams commit and object hashing under read-operation, byte, request-size, page, and hash budgets; a test proves that lookup of a small historical root does not read an unrelated one-megabyte historical payload.
 
 ### Concrete append and recovery
 
@@ -141,9 +141,9 @@ The concrete branch passes:
 - Rust 1.85 MSRV compilation;
 - 32-bit `i686-unknown-linux-gnu` library compilation;
 - big-endian `powerpc64-unknown-linux-gnu` library compilation;
-- eighteen cargo-fuzz target builds and bounded pull-request smoke campaigns.
+- nineteen cargo-fuzz target builds and bounded pull-request smoke campaigns.
 
-The eighteen fuzz targets consist of six inherited Phase 2 byte targets, seven Phase 3 algorithm-model targets, and five concrete EXP-0002 targets for strict validation, recovery, writer round trips, authenticated lookup, and rewrite output.
+The nineteen fuzz targets consist of six inherited Phase 2 byte targets, seven Phase 3 algorithm-model targets, and six concrete EXP-0002 targets for strict validation, recovery, writer round trips, in-memory lookup, range-source lookup, and rewrite output.
 
 All permanent workflows use read-only repository permissions.
 
@@ -190,8 +190,8 @@ The provisional 16 KiB page is a middle point, not an accepted constant. The 88-
 
 ## Current limitations
 
-- all concrete EXP-0002 APIs currently operate on in-memory byte slices;
-- strict and targeted readers are synchronous;
+- full strict validation, backward recovery scanning, and rewrite currently operate on in-memory byte slices; authenticated lookup also has a bounded range-source implementation;
+- strict and targeted readers are synchronous, and range-source validation assumes one stable source view for the operation;
 - the current append writer rebuilds all directory pages;
 - historical object records may be referenced by later snapshots, but no page reuse exists yet;
 - capability identifiers are structurally encoded, but candidate 1 defines no non-zero capability allocation;
@@ -209,21 +209,21 @@ The provisional 16 KiB page is a middle point, not an accepted constant. The 88-
 - deterministic cross-language vectors are pinned;
 - page sizes are compared using concrete entry widths;
 - concrete exact-end validation and previous-root recovery exist;
-- authenticated single-object lookup and absence proof exist;
+- authenticated single-object lookup and absence proof exist over both slices and bounded random-access sources;
 - repair-to-new-file and object-selection rewrite output exist;
-- concrete parsers, lookup, recovery, writers, and rewrite paths are continuously fuzzed;
+- concrete parsers, slice and range-source lookup, recovery, writers, and rewrite paths are continuously fuzzed;
 - concrete-byte adversarial findings are executable in CI;
 - snapshot and commit identity scopes are resolved experimentally.
 
 ## Next frontier tasks
 
-1. move authenticated lookup and recovery onto a bounded random-access source abstraction without materialising the whole file;
+1. move full strict validation and recovery scanning onto bounded random-access sources without materialising the whole file;
 2. pin invalid and interrupted-append byte vectors with expected failure categories;
 3. implement copy-on-write page reuse and measure append rewrite amplification;
 4. define complete-checkpoint bytes and evaluate whether progress checkpoints are justified;
 5. add HTTP-range, cold-cache, and realistic object-count benchmarks;
 6. evaluate narrower leaf locators and alternative object-identity widths;
-7. integrate concrete-byte findings into the primary threat model and FCP-0002 evidence section;
+7. pin invalid and interrupted vectors with stable cross-language expected outcomes and decide the public error-category contract;
 8. obtain a second independently maintained implementation rather than only an independent in-repository Python implementation;
 9. resolve remaining FCP-0002 questions before moving the proposal to Review.
 
