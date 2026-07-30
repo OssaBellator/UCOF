@@ -1,8 +1,11 @@
+use sha2::{Digest, Sha256};
 use ucof_experiments::immutable_successor::{
     append_replacement, build_genesis, scan_source_recovery, validate_source_at,
     validate_source_history, ImmutableError, ImmutableLimits, ImmutableObjectInput,
-    ImmutableReadAt, ImmutableSourceError, ImmutableSourceLimits, OBJECT_HEADER_LEN,
+    ImmutableReadAt, ImmutableSourceError, ImmutableSourceLimits, FOOTER_LEN, OBJECT_HEADER_LEN,
 };
+
+const COMMIT_DOMAIN: &[u8] = b"UCOF-IMMUTABLE-COMMIT\0";
 
 #[derive(Debug)]
 struct RecordingSource {
@@ -69,6 +72,15 @@ fn two_commit_file() -> (Vec<u8>, usize) {
     (appended, genesis_len)
 }
 
+fn reauthenticate_commit(bytes: &mut [u8], footer_offset: usize) {
+    let mut hasher = Sha256::new();
+    hasher.update(COMMIT_DOMAIN);
+    hasher.update(&bytes[..footer_offset]);
+    hasher.update(&bytes[footer_offset + 8..footer_offset + 80]);
+    let digest: [u8; 32] = hasher.finalize().into();
+    bytes[footer_offset + 80..footer_offset + 112].copy_from_slice(&digest);
+}
+
 #[test]
 fn validates_every_active_page_and_object_from_a_source() {
     let objects: Vec<_> = (1_u64..=400)
@@ -117,8 +129,11 @@ fn linked_source_history_revalidates_newest_to_oldest() {
 
 #[test]
 fn active_source_can_validate_while_history_rejects_a_corrupt_replaced_object() {
-    let (mut bytes, _) = two_commit_file();
+    let (mut bytes, genesis_len) = two_commit_file();
     bytes[64 + OBJECT_HEADER_LEN] ^= 0x01;
+    reauthenticate_commit(&mut bytes, genesis_len - FOOTER_LEN);
+    let active_footer_offset = bytes.len() - FOOTER_LEN;
+    reauthenticate_commit(&mut bytes, active_footer_offset);
 
     let mut active_source = RecordingSource::new(bytes.clone());
     let active = validate_source_at(&mut active_source, ImmutableSourceLimits::default())
