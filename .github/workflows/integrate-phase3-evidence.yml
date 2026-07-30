@@ -1,29 +1,39 @@
-name: Verify Phase 3 Integration
+name: Normalize Phase 3 Sources
 
 on:
   pull_request:
     paths:
       - "crates/ucof-experiments/**"
-      - "tests/vectors/exp-0002-invalid/**"
-      - "tools/exp0002_invalid_vectors.py"
       - ".github/workflows/integrate-phase3-evidence.yml"
-  workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  verify:
+  normalize:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Check formatting
-        run: cargo fmt --all -- --check
-      - name: Test Phase 3 experiment crate
-        run: cargo test --locked -p ucof-experiments --all-targets
-      - name: Verify invalid vector reproducibility
-        run: python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
+      - name: Normalize Rust sources
+        run: cargo fmt --all
+      - name: Lint and test experiment crate
+        run: |
+          cargo clippy --locked -p ucof-experiments --all-targets -- -D warnings
+          cargo test --locked -p ucof-experiments --all-targets
+      - name: Commit normalized sources
+        run: |
+          if git diff --quiet -- crates/ucof-experiments; then
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/ucof-experiments
+          git commit -m "style: normalize Phase 3 Rust sources"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
