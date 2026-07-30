@@ -1,64 +1,31 @@
-name: Normalize Phase 3 Sources
+name: Verify Phase 3 Integration
 
 on:
   pull_request:
     paths:
       - "crates/ucof-experiments/**"
+      - "tests/vectors/exp-0002-invalid/**"
+      - "tools/exp0002_invalid_vectors.py"
       - ".github/workflows/integrate-phase3-evidence.yml"
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  normalize:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]'
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Apply focused compile fixes
-        run: |
-          python3 - <<'PY'
-          from pathlib import Path
-
-          lib = Path("crates/ucof-experiments/src/lib.rs")
-          text = lib.read_text(encoding="utf-8")
-          old = "mod exp0002_source_strict;"
-          new = "#[allow(dead_code, unused_imports)]\nmod exp0002_source_strict;"
-          if new not in text:
-              if old not in text:
-                  raise SystemExit("strict-module anchor not found")
-              text = text.replace(old, new, 1)
-          lib.write_text(text, encoding="utf-8")
-
-          recovery = Path("crates/ucof-experiments/src/exp0002_source_recovery.rs")
-          text = recovery.read_text(encoding="utf-8")
-          old = '*b"recover-source-id"'
-          new = '*b"recover-src-id01"'
-          if new not in text:
-              if old not in text:
-                  raise SystemExit("recovery test ID anchor not found")
-              text = text.replace(old, new, 1)
-          recovery.write_text(text, encoding="utf-8")
-          PY
-      - name: Normalize Rust sources
-        run: cargo fmt --all
-      - name: Lint and test experiment crate
-        run: |
-          cargo clippy --locked -p ucof-experiments --all-targets -- -D warnings
-          cargo test --locked -p ucof-experiments --all-targets
-      - name: Commit normalized sources
-        run: |
-          if git diff --quiet -- crates/ucof-experiments; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/ucof-experiments
-          git commit -m "fix: finalize source-based validation and recovery"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint Phase 3 experiment crate
+        run: cargo clippy --locked -p ucof-experiments --all-targets -- -D warnings
+      - name: Test Phase 3 experiment crate
+        run: cargo test --locked -p ucof-experiments --all-targets
+      - name: Verify invalid vector reproducibility
+        run: python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
