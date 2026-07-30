@@ -223,7 +223,7 @@ The provisional 16 KiB page is a middle point, not an accepted constant. The 88-
 4. define complete-checkpoint bytes and evaluate whether progress checkpoints are justified;
 5. add HTTP-range, cold-cache, and realistic object-count benchmarks;
 6. evaluate narrower leaf locators and alternative object-identity widths;
-7. pin invalid and interrupted vectors with stable cross-language expected outcomes and decide the public error-category contract;
+7. define CLI assurance surfaces for root enumeration, recovery, repair, and compaction;
 8. obtain a second independently maintained implementation rather than only an independent in-repository Python implementation;
 9. resolve remaining FCP-0002 questions before moving the proposal to Review.
 
