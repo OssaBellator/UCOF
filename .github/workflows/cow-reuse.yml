@@ -1,0 +1,38 @@
+name: Copy-on-Write Reuse
+
+on:
+  pull_request:
+    paths:
+      - "crates/ucof-experiments/src/cow_reuse.rs"
+      - "crates/ucof-experiments/tests/cow_reuse_model.rs"
+      - "tools/experiment_exp0002_cow_reuse.py"
+      - "docs/experiments/0008-exp0002-copy-on-write-reuse.md"
+      - ".github/workflows/cow-reuse.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "crates/ucof-experiments/src/cow_reuse.rs"
+      - "crates/ucof-experiments/tests/cow_reuse_model.rs"
+      - "tools/experiment_exp0002_cow_reuse.py"
+      - ".github/workflows/cow-reuse.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint model
+        run: cargo clippy --locked -p ucof-experiments --test cow_reuse_model -- -D warnings
+      - name: Test persistent model
+        run: cargo test --locked -p ucof-experiments --test cow_reuse_model
+      - name: Reproduce independent calculation
+        run: python3 tools/experiment_exp0002_cow_reuse.py
