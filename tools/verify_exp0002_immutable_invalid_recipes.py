@@ -15,6 +15,7 @@ import experiment_exp0002_immutable_page_objects as objects
 
 ROOT = Path(__file__).resolve().parents[1]
 CORPUS = ROOT / "tests" / "vectors" / "exp-0002-immutable-invalid" / "cases.json"
+REQUIRED_CASE_FIELDS = {"name", "operation", "expected"}
 
 
 def load_base(contract: dict) -> bytes:
@@ -31,12 +32,6 @@ def load_base(contract: dict) -> bytes:
 
 def footer(data: bytes | bytearray) -> cow.FooterRecord:
     return cow.parse_footer(bytes(data), len(data) - cow.FOOTER_LEN)
-
-
-def root_offset(data: bytes | bytearray) -> int:
-    current = footer(data)
-    fields = cow.SNAPSHOT.unpack_from(data, current.snapshot_offset)
-    return fields[2]
 
 
 def reauthenticate_root_and_footer(data: bytearray) -> None:
@@ -161,9 +156,14 @@ def main() -> None:
     if contract["status"] != "non-normative successor invalid corpus recipes":
         raise AssertionError("invalid corpus status")
     cases = contract["cases"]
+    if any(set(case) != REQUIRED_CASE_FIELDS for case in cases):
+        raise AssertionError("invalid corpus case fields")
     names = [case["name"] for case in cases]
+    operations = [case["operation"] for case in cases]
     if len(cases) != 13 or len(names) != len(set(names)):
         raise AssertionError("invalid corpus case count or duplicate name")
+    if len(operations) != len(set(operations)):
+        raise AssertionError("duplicate invalid corpus operation")
 
     base = load_base(contract)
     aggregate = sha256()
