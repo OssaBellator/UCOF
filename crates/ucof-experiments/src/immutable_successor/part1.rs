@@ -55,6 +55,10 @@ pub struct ImmutableLimits {
     pub max_depth: u8,
     pub max_allocation_bytes: usize,
     pub max_output_bytes: usize,
+    pub max_history_entries: usize,
+    pub max_recovery_scan_bytes: usize,
+    pub max_recovery_attempts: usize,
+    pub max_recovery_candidates: usize,
 }
 
 impl Default for ImmutableLimits {
@@ -66,6 +70,10 @@ impl Default for ImmutableLimits {
             max_depth: 8,
             max_allocation_bytes: 128 * 1024 * 1024,
             max_output_bytes: 512 * 1024 * 1024,
+            max_history_entries: 1_024,
+            max_recovery_scan_bytes: 4 * 1024 * 1024,
+            max_recovery_attempts: 4_096,
+            max_recovery_candidates: 64,
         }
     }
 }
@@ -95,6 +103,36 @@ pub struct ImmutableReport {
     pub root_level: u8,
     pub snapshot_digest: [u8; 32],
     pub commit_digest: [u8; 32],
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImmutableHistoryEntry {
+    pub footer_offset: u64,
+    pub report: ImmutableReport,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImmutableHistoryReport {
+    /// Strictly validated entries ordered from newest to oldest.
+    pub entries: Vec<ImmutableHistoryEntry>,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImmutableRecoveryCandidate {
+    pub footer_offset: u64,
+    pub prefix_len: u64,
+    pub report: ImmutableReport,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ImmutableRecoveryReport {
+    pub scan_start: u64,
+    pub scanned_bytes: usize,
+    pub attempted_footers: usize,
+    pub attempts_truncated: bool,
+    pub candidates_truncated: bool,
+    /// Strictly validated prefixes ordered from newest to oldest. No candidate is selected.
+    pub candidates: Vec<ImmutableRecoveryCandidate>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
