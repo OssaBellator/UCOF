@@ -23,7 +23,7 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Apply focused history fix
+      - name: Apply focused history fixes
         run: |
           python3 - <<'PY'
           from pathlib import Path
@@ -33,6 +33,10 @@ jobs:
           text = text.replace(
               "Exp0002Error::PreviousFooterCycle",
               "Exp0002Error::InvalidPreviousFooter",
+          )
+          text = text.replace(
+              "let mut commits = Vec::new();",
+              "let mut commits: Vec<RecoveredExp0002SourcePrefix> = Vec::new();",
           )
           path.write_text(text, encoding="utf-8")
           PY
