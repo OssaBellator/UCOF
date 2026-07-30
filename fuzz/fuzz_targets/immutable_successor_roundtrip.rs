@@ -13,6 +13,7 @@ fuzz_target!(|data: &[u8]| {
         max_depth: 4,
         max_allocation_bytes: 2 << 20,
         max_output_bytes: 2 << 20,
+        ..ImmutableLimits::default()
     };
 
     let desired = data.first().map_or(1_usize, |byte| 1 + usize::from(*byte % 16));
@@ -43,7 +44,9 @@ fuzz_target!(|data: &[u8]| {
     assert_eq!(genesis_report.sequence, 0);
     assert_eq!(genesis_report.object_count, objects.len());
 
-    let selected = data.first().map_or(0_usize, |byte| usize::from(*byte) % objects.len());
+    let selected = data
+        .first()
+        .map_or(0_usize, |byte| usize::from(*byte) % objects.len());
     let mut replacement_payload = objects[selected].payload.clone();
     replacement_payload.reverse();
     replacement_payload.extend_from_slice(b":replacement");
