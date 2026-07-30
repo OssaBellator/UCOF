@@ -1,0 +1,30 @@
+name: Immutable Content Reversion
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_splits.py"
+      - "tools/experiment_exp0002_content_reversion.py"
+      - "docs/experiments/0026-exp0002-content-reversion.md"
+      - ".github/workflows/content-reversion.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_splits.py"
+      - "tools/experiment_exp0002_content_reversion.py"
+      - "docs/experiments/0026-exp0002-content-reversion.md"
+      - ".github/workflows/content-reversion.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reuse exact historical root after inverse update
+        run: python3 tools/experiment_exp0002_content_reversion.py
