@@ -1,0 +1,60 @@
+name: Patch Immutable Object Frontiers
+
+on:
+  push:
+    branches: ["phase-3/directory-snapshots-recovery"]
+    paths:
+      - ".github/workflows/patch-immutable-object-frontiers.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/directory-snapshots-recovery
+      - name: Apply focused object fixes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          objects = Path("tools/experiment_exp0002_immutable_page_objects.py")
+          text = objects.read_text(encoding="utf-8")
+          old = "            values[3] = footer.snapshot_offset\n"
+          new = "            values[3] = leaf_ref.offset\n"
+          if text.count(old) != 1:
+              raise SystemExit(f"overlap anchor count was {text.count(old)}")
+          objects.write_text(text.replace(old, new, 1), encoding="utf-8")
+
+          history = Path("tools/experiment_exp0002_immutable_page_object_history.py")
+          text = history.read_text(encoding="utf-8")
+          old = '''    try:
+              objects.validate_complete(interrupted)
+          except objects.ObjectError:
+              pass
+          '''.replace("          ", "    ")
+          new = '''    try:
+              objects.validate_complete(interrupted)
+          except cow.FormatError:
+              pass
+          '''.replace("          ", "    ")
+          if text.count(old) != 1:
+              raise SystemExit(f"interruption anchor count was {text.count(old)}")
+          history.write_text(text.replace(old, new, 1), encoding="utf-8")
+          PY
+      - name: Execute complete-object frontiers
+        run: |
+          python3 tools/experiment_exp0002_immutable_page_objects.py
+          python3 tools/experiment_exp0002_immutable_page_object_history.py
+      - name: Commit tested fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/experiment_exp0002_immutable_page_objects.py tools/experiment_exp0002_immutable_page_object_history.py
+          git diff --cached --check
+          git commit -m "fix: complete immutable object frontier checks"
+          git push origin HEAD:phase-3/directory-snapshots-recovery
