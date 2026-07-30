@@ -301,7 +301,7 @@ def forge_authenticated_structural_overlap(
         values = list(cow.LEAF_ENTRY.unpack_from(leaf, entry_offset))
         if values[0] == object_id:
             entry_index = index
-            values[3] = footer.snapshot_offset
+            values[3] = leaf_ref.offset
             values[4] = OBJECT_HEADER_LEN
             values[5] = 0
             values[6] = bytes(32)
@@ -392,7 +392,7 @@ def main() -> None:
     interrupted = appended[:-cow.FOOTER_LEN // 2]
     try:
         validate_complete(interrupted)
-    except ObjectError:
+    except cow.FormatError:
         pass
     else:
         raise AssertionError("interrupted object append validated")
