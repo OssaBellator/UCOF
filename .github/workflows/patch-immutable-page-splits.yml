@@ -1,0 +1,50 @@
+name: Patch Immutable Page Splits
+
+on:
+  push:
+    branches: ["phase-3/directory-snapshots-recovery"]
+    paths:
+      - ".github/workflows/patch-immutable-page-splits.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/directory-snapshots-recovery
+      - name: Fix append-before-freeze returns
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("tools/experiment_exp0002_immutable_page_splits.py")
+          text = path.read_text(encoding="utf-8")
+          replacements = {
+              "    return bytes(output), emit_internal(output, replacements, root.level + 1)\n":
+                  "    new_root = emit_internal(output, replacements, root.level + 1)\n    return bytes(output), new_root\n",
+              "        return bytes(output), emit_leaf(output, kept)\n":
+                  "        new_root = emit_leaf(output, kept)\n        return bytes(output), new_root\n",
+              "    return bytes(output), emit_internal(output, updated_children, 1)\n":
+                  "    new_root = emit_internal(output, updated_children, 1)\n    return bytes(output), new_root\n",
+          }
+          for old, new in replacements.items():
+              if text.count(old) != 1:
+                  raise SystemExit(f"return anchor count was {text.count(old)} for {old!r}")
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+      - name: Execute split and merge prototype
+        run: python3 tools/experiment_exp0002_immutable_page_splits.py
+      - name: Commit tested fix
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tools/experiment_exp0002_immutable_page_splits.py
+          git diff --cached --check
+          git commit -m "fix: complete immutable page split and merge prototype"
+          git push origin HEAD:phase-3/directory-snapshots-recovery
