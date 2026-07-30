@@ -1,0 +1,26 @@
+name: Profile Retention
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_profile_retention.py"
+      - "docs/experiments/0021-exp0002-profile-retention.md"
+      - ".github/workflows/profile-retention.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_profile_retention.py"
+      - "docs/experiments/0021-exp0002-profile-retention.md"
+      - ".github/workflows/profile-retention.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise dependency and snapshot retention policies
+        run: python3 tools/experiment_exp0002_profile_retention.py
