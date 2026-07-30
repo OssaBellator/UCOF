@@ -487,9 +487,13 @@ def main() -> None:
 
     update = locator(50_000, generation=1)
     appended = append_updates(genesis, [update])
-    appended_reverse = append_updates(genesis, list(reversed([update])))
-    assert appended == appended_reverse
     appended_report = validate_strict(appended)
+
+    batch = [locator(25_000, generation=1), locator(75_000, generation=1)]
+    batched = append_updates(genesis, batch)
+    batched_reverse = append_updates(genesis, list(reversed(batch)))
+    assert batched == batched_reverse
+    batched_report = validate_strict(batched)
 
     expected_levels = [ceil(OBJECTS / LEAF_CAPACITY)]
     while expected_levels[-1] > 1:
@@ -506,6 +510,14 @@ def main() -> None:
     assert len(new_pages) == depth
     assert len(retired_pages) == depth
     assert len(reused_pages) == expected_pages - depth
+
+    batch_new_pages = batched_report.reachable_pages - genesis_report.reachable_pages
+    batch_reused_pages = batched_report.reachable_pages & genesis_report.reachable_pages
+    batch_retired_pages = genesis_report.reachable_pages - batched_report.reachable_pages
+    expected_batch_pages = 5  # two leaves, two level-1 parents, one root
+    assert len(batch_new_pages) == expected_batch_pages
+    assert len(batch_retired_pages) == expected_batch_pages
+    assert len(batch_reused_pages) == expected_pages - expected_batch_pages
 
     # Historical reused pages lie outside the current commit digest, so their
     # own page digest must still detect mutation.
@@ -540,12 +552,15 @@ def main() -> None:
     print(f"append_new_pages={len(new_pages)}")
     print(f"append_reused_pages={len(reused_pages):,}")
     print(f"append_retired_pages={len(retired_pages)}")
+    print(f"batch_new_pages={len(batch_new_pages)}")
+    print(f"batch_reused_pages={len(batch_reused_pages):,}")
+    print(f"batch_retired_pages={len(batch_retired_pages)}")
     print(f"full_rebuild_page_bytes={full_rebuild_page_bytes:,}")
     print(f"cow_page_bytes={cow_page_bytes:,}")
     print(f"write_amplification={full_rebuild_page_bytes / cow_page_bytes:.2f}x")
     print(f"reused_page_corruption={corruption_error}")
     print("interrupted_append_previous_prefix=valid")
-    print("deterministic_update_order=pass")
+    print("deterministic_two_leaf_batch_order=pass")
     print("finding=immutable page bytes permit exact mixed-age copy-on-write traversal")
 
 
