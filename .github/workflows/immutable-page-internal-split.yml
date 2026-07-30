@@ -1,0 +1,30 @@
+name: Immutable Page Internal Split
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_splits.py"
+      - "tools/experiment_exp0002_immutable_page_internal_split.py"
+      - "docs/experiments/0025-exp0002-immutable-page-internal-split.md"
+      - ".github/workflows/immutable-page-internal-split.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_splits.py"
+      - "tools/experiment_exp0002_immutable_page_internal_split.py"
+      - "docs/experiments/0025-exp0002-immutable-page-internal-split.md"
+      - ".github/workflows/immutable-page-internal-split.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise recursive immutable-page split propagation
+        run: python3 tools/experiment_exp0002_immutable_page_internal_split.py
