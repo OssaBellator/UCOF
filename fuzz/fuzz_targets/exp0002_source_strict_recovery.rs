@@ -3,9 +3,7 @@
 use libfuzzer_sys::fuzz_target;
 use ucof_experiments::exp0002::ValidationLimits;
 use ucof_experiments::exp0002_source::{Exp0002SliceSource, Exp0002SourceLimits};
-use ucof_experiments::{
-    scan_valid_prefixes_at, validate_strict_at, Exp0002SourceRecoveryLimits,
-};
+use ucof_experiments::{scan_valid_prefixes_at, validate_strict_at, Exp0002SourceRecoveryLimits};
 
 fuzz_target!(|data: &[u8]| {
     let file_len = u64::try_from(data.len()).unwrap_or(u64::MAX);
@@ -42,9 +40,7 @@ fuzz_target!(|data: &[u8]| {
             max_magic_matches: 64,
             max_candidate_validations: 32,
             max_results: 8,
-            max_total_candidate_bytes_read: file_len
-                .saturating_mul(32)
-                .saturating_add(64 * 1024),
+            max_total_candidate_bytes_read: file_len.saturating_mul(32).saturating_add(64 * 1024),
         },
     );
 });
