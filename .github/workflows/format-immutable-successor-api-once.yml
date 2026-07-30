@@ -1,0 +1,87 @@
+name: Format Immutable Successor API Once
+
+on:
+  pull_request:
+    paths:
+      - "crates/ucof-experiments/src/immutable_successor.rs"
+      - "crates/ucof-experiments/src/lib.rs"
+      - "crates/ucof-experiments/tests/immutable_successor_api.rs"
+      - ".github/workflows/format-immutable-successor-api-once.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  format:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/directory-snapshots-recovery
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Add page-count cross-check and normalize source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/ucof-experiments/src/immutable_successor.rs")
+          text = path.read_text(encoding="utf-8")
+          needle = '''    while let Some(reference) = stack.pop() {
+        parse_page(
+            data,
+            &reference,
+            snapshot_offset,
+            limits,
+            &mut seen,
+            &mut stack,
+            &mut locators,
+            &mut structural_ranges,
+        )?;
+    }
+    if locators.is_empty()
+'''
+          replacement = '''    while let Some(reference) = stack.pop() {
+        parse_page(
+            data,
+            &reference,
+            snapshot_offset,
+            limits,
+            &mut seen,
+            &mut stack,
+            &mut locators,
+            &mut structural_ranges,
+        )?;
+    }
+    if footer.page_count_current != u64_from_usize(seen.len())? {
+        return Err(ImmutableError::Invalid("page count"));
+    }
+    if locators.is_empty()
+'''
+          if needle not in text:
+              raise SystemExit("page-count insertion point not found")
+          text = text.replace(needle, replacement, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+          cargo fmt --all
+      - name: Lint and test reusable successor API
+        run: |
+          cargo clippy --locked -p ucof-experiments --all-targets -- -D warnings
+          cargo test --locked -p ucof-experiments --test immutable_successor_api
+          cargo test --locked -p ucof-experiments --test exp0002_immutable_vector
+          cargo test --locked -p ucof-experiments --test exp0002_immutable_generated_vectors
+      - name: Commit tested source and remove helper
+        run: |
+          rm .github/workflows/format-immutable-successor-api-once.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add crates/ucof-experiments/src/immutable_successor.rs \
+            crates/ucof-experiments/src/lib.rs \
+            crates/ucof-experiments/tests/immutable_successor_api.rs \
+            .github/workflows/format-immutable-successor-api-once.yml
+          git diff --cached --check
+          git commit -m "feat: validate reusable immutable successor API"
+          git push origin HEAD:phase-3/directory-snapshots-recovery
