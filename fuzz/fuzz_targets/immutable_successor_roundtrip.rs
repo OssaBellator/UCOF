@@ -16,7 +16,9 @@ fuzz_target!(|data: &[u8]| {
         ..ImmutableLimits::default()
     };
 
-    let desired = data.first().map_or(1_usize, |byte| 1 + usize::from(*byte % 16));
+    let desired = data
+        .first()
+        .map_or(1_usize, |byte| 1 + usize::from(*byte % 16));
     let source = data.get(1..).unwrap_or_default();
     let mut objects = Vec::with_capacity(desired);
     for index in 0..desired {
@@ -55,8 +57,8 @@ fuzz_target!(|data: &[u8]| {
         objects[selected].kind,
         replacement_payload,
     );
-    let appended = append_replacement(&genesis, &replacement, limits)
-        .expect("bounded replacement append");
+    let appended =
+        append_replacement(&genesis, &replacement, limits).expect("bounded replacement append");
     let append_report = validate(&appended, limits).expect("replacement append validates");
     assert_eq!(append_report.sequence, 1);
     assert_eq!(append_report.object_count, objects.len());
