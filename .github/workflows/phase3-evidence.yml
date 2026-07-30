@@ -1,0 +1,38 @@
+name: Phase 3 Evidence
+
+on:
+  pull_request:
+    paths:
+      - "crates/ucof-experiments/**"
+      - "tests/vectors/exp-0002-invalid/**"
+      - "tools/exp0002_invalid_vectors.py"
+      - "docs/experiments/0007-exp0002-invalid-vector-contract.md"
+      - ".github/workflows/phase3-evidence.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "crates/ucof-experiments/**"
+      - "tests/vectors/exp-0002-invalid/**"
+      - "tools/exp0002_invalid_vectors.py"
+      - ".github/workflows/phase3-evidence.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Check copy-on-write model
+        run: cargo test --locked -p ucof-experiments --test cow_reuse_model
+      - name: Reject pinned invalid vectors in Rust
+        run: cargo test --locked -p ucof-experiments --test exp0002_invalid_vectors
+      - name: Regenerate and verify invalid vectors in Python
+        run: python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
