@@ -1,0 +1,20 @@
+{
+  "status": "non-normative successor invalid corpus recipes",
+  "base_vector": "../exp-0002-immutable/genesis-four.hex",
+  "base_sha256": "94f9441339fb49ffef5b8c7b54307c20488bf2e09958fd805fd2addae65c2a23",
+  "cases": [
+    {"name": "header-magic", "operation": "header_magic", "expected": "header"},
+    {"name": "footer-reserved", "operation": "footer_reserved", "expected": "footer"},
+    {"name": "commit-digest", "operation": "commit_digest", "expected": "commit digest"},
+    {"name": "object-header-reserved", "operation": "object_header_reserved", "expected": "object header"},
+    {"name": "object-payload-digest", "operation": "object_payload_digest", "expected": "object digest"},
+    {"name": "leaf-order", "operation": "leaf_order", "expected": "leaf order"},
+    {"name": "leaf-padding", "operation": "leaf_padding", "expected": "leaf padding"},
+    {"name": "leaf-header-reserved", "operation": "leaf_header_reserved", "expected": "page header"},
+    {"name": "object-overlaps-page", "operation": "object_overlaps_page", "expected": "object structural overlap"},
+    {"name": "snapshot-root-digest", "operation": "snapshot_root_digest", "expected": "page digest"},
+    {"name": "genesis-parent-nonzero", "operation": "genesis_parent_nonzero", "expected": "genesis linkage"},
+    {"name": "strict-trailing-byte", "operation": "trailing_byte", "expected": "footer"},
+    {"name": "interrupted-footer-half", "operation": "interrupted_footer_half", "expected": "footer"}
+  ]
+}
