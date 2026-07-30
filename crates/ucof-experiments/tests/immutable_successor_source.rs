@@ -2,8 +2,8 @@ use std::io::Cursor;
 
 use ucof_experiments::immutable_successor::{
     append_replacement, build_genesis, lookup_at, ImmutableLookupResult, ImmutableObjectInput,
-    ImmutableReadAt, ImmutableSeekSource, ImmutableSourceError, ImmutableSourceLimits,
-    ImmutableSliceSource, OBJECT_HEADER_LEN,
+    ImmutableReadAt, ImmutableSeekSource, ImmutableSliceSource, ImmutableSourceError,
+    ImmutableSourceLimits, OBJECT_HEADER_LEN,
 };
 
 #[derive(Debug)]
@@ -87,18 +87,17 @@ fn slice_and_seek_sources_return_equivalent_found_and_absent_evidence() {
     assert_eq!(found.sequence, 0);
 
     let mut seek = ImmutableSeekSource::new(Cursor::new(bytes.clone()));
-    let equivalent = lookup_at(&mut seek, 2, ImmutableSourceLimits::default())
-        .expect("seek lookup");
+    let equivalent =
+        lookup_at(&mut seek, 2, ImmutableSourceLimits::default()).expect("seek lookup");
     assert_eq!(found, equivalent);
 
     let mut absent_source = ImmutableSliceSource::new(&bytes);
-    let absent = lookup_at(
-        &mut absent_source,
-        99,
-        ImmutableSourceLimits::default(),
-    )
-    .expect("absence lookup");
-    assert_eq!(absent.result, ImmutableLookupResult::Absent { object_id: 99 });
+    let absent = lookup_at(&mut absent_source, 99, ImmutableSourceLimits::default())
+        .expect("absence lookup");
+    assert_eq!(
+        absent.result,
+        ImmutableLookupResult::Absent { object_id: 99 }
+    );
 }
 
 #[test]
@@ -161,13 +160,12 @@ fn targeted_lookup_does_not_upgrade_unrelated_historical_damage() {
     appended[64 + OBJECT_HEADER_LEN] ^= 0x01;
 
     let mut selected_source = ImmutableSliceSource::new(&appended);
-    let selected = lookup_at(
-        &mut selected_source,
-        2,
-        ImmutableSourceLimits::default(),
-    )
-    .expect("selected object remains path-authenticated");
-    assert!(matches!(selected.result, ImmutableLookupResult::Found { object_id: 2, .. }));
+    let selected = lookup_at(&mut selected_source, 2, ImmutableSourceLimits::default())
+        .expect("selected object remains path-authenticated");
+    assert!(matches!(
+        selected.result,
+        ImmutableLookupResult::Found { object_id: 2, .. }
+    ));
 
     let mut damaged_source = ImmutableSliceSource::new(&appended);
     assert_eq!(
