@@ -150,6 +150,17 @@ def main() -> None:
     tampered = bytearray(deleted)
     tampered[transient_locator.record_offset + objects.OBJECT_HEADER_LEN] ^= 1
 
+    # Recompute only the exact sequence-1 commit digest. The active sequence-2
+    # commit begins after that footer and authenticates the parent's snapshot
+    # identity, not the parent's commit digest. This drives verified history past
+    # the ancestor commit check to the stale locator's object-digest check.
+    ancestor_end = inserted_report.structural.footer_offset + cow.FOOTER_LEN
+    ancestor = bytearray(tampered[:ancestor_end])
+    objects.reauthenticate_footer(ancestor)
+    tampered[
+        inserted_report.structural.footer_offset : ancestor_end
+    ] = ancestor[inserted_report.structural.footer_offset : ancestor_end]
+
     # The latest active snapshot no longer references the deleted object. Active
     # validation therefore remains valid, while verified history must reject the
     # corrupted ancestor prefix.
