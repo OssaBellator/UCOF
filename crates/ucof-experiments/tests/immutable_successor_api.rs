@@ -60,7 +60,7 @@ fn four_objects() -> Vec<ImmutableObjectInput> {
         ImmutableObjectInput::new(1, 1, b"alpha".to_vec()),
         ImmutableObjectInput::new(2, 2, b"bravo".to_vec()),
         ImmutableObjectInput::new(3, 3, b"charlie".to_vec()),
-        ImmutableObjectInput::new(4, 4, b"delta".to_vec()),
+        ImmutableObjectInput::new(4, 1, b"delta".to_vec()),
     ]
 }
 
