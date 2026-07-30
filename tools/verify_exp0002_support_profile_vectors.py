@@ -8,6 +8,7 @@ from hashlib import sha256
 import importlib.util
 import json
 from pathlib import Path
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
 VECTOR = ROOT / "tests/vectors/exp-0002-immutable-support-profiles/profile-boundaries.json"
@@ -15,10 +16,12 @@ MODEL = ROOT / "tools/experiment_exp0002_support_profiles.py"
 
 
 def load_model():
-    specification = importlib.util.spec_from_file_location("support_profiles", MODEL)
+    module_name = "support_profiles"
+    specification = importlib.util.spec_from_file_location(module_name, MODEL)
     if specification is None or specification.loader is None:
         raise AssertionError("support profile model could not be loaded")
     module = importlib.util.module_from_spec(specification)
+    sys.modules[module_name] = module
     specification.loader.exec_module(module)
     return module
 
