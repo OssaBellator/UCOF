@@ -1,0 +1,101 @@
+name: Export Formatted Immutable Successor
+
+on:
+  pull_request:
+    paths:
+      - "crates/ucof-experiments/src/immutable_successor.rs"
+      - "crates/ucof-experiments/src/lib.rs"
+      - "crates/ucof-experiments/tests/immutable_successor_api.rs"
+      - ".github/workflows/export-formatted-immutable-successor.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Add structural cross-checks and format source
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("crates/ucof-experiments/src/immutable_successor.rs")
+          text = path.read_text(encoding="utf-8")
+
+          overlap_needle = '''    if end > snapshot_offset {
+        return Err(ImmutableError::Invalid("page range"));
+    }
+    if seen.len() >= limits.max_pages {
+'''
+          overlap_replacement = '''    if end > snapshot_offset {
+        return Err(ImmutableError::Invalid("page range"));
+    }
+    if structural_ranges
+        .iter()
+        .any(|(start, stop)| offset < *stop && *start < end)
+    {
+        return Err(ImmutableError::Invalid("page overlap"));
+    }
+    if seen.len() >= limits.max_pages {
+'''
+          if overlap_needle not in text:
+              raise SystemExit("page-overlap insertion point not found")
+          text = text.replace(overlap_needle, overlap_replacement, 1)
+
+          count_needle = '''    while let Some(reference) = stack.pop() {
+        parse_page(
+            data,
+            &reference,
+            snapshot_offset,
+            limits,
+            &mut seen,
+            &mut stack,
+            &mut locators,
+            &mut structural_ranges,
+        )?;
+    }
+    if locators.is_empty()
+'''
+          count_replacement = '''    while let Some(reference) = stack.pop() {
+        parse_page(
+            data,
+            &reference,
+            snapshot_offset,
+            limits,
+            &mut seen,
+            &mut stack,
+            &mut locators,
+            &mut structural_ranges,
+        )?;
+    }
+    let current_pages = seen
+        .iter()
+        .filter(|offset| **offset >= commit_start)
+        .count();
+    if footer.page_count_current != u64_from_usize(current_pages)? {
+        return Err(ImmutableError::Invalid("page count"));
+    }
+    if locators.is_empty()
+'''
+          if count_needle not in text:
+              raise SystemExit("page-count insertion point not found")
+          text = text.replace(count_needle, count_replacement, 1)
+          path.write_text(text, encoding="utf-8")
+          PY
+          cargo fmt --all
+          cargo fmt --all -- --check
+      - name: Export normalized files
+        uses: actions/upload-artifact@v4
+        with:
+          name: formatted-immutable-successor
+          path: |
+            crates/ucof-experiments/src/immutable_successor.rs
+            crates/ucof-experiments/src/lib.rs
+            crates/ucof-experiments/tests/immutable_successor_api.rs
+          if-no-files-found: error
