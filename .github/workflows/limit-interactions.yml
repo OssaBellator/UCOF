@@ -5,6 +5,8 @@ on:
     paths:
       - "tools/experiment_exp0002_limit_interactions.py"
       - "tools/experiment_exp0002_support_profiles.py"
+      - "tools/verify_exp0002_support_profile_vectors.py"
+      - "tests/vectors/exp-0002-immutable-support-profiles/**"
       - "docs/experiments/0019-exp0002-limit-interactions.md"
       - "docs/experiments/0040-exp0002-support-profiles.md"
       - ".github/workflows/limit-interactions.yml"
@@ -13,6 +15,8 @@ on:
     paths:
       - "tools/experiment_exp0002_limit_interactions.py"
       - "tools/experiment_exp0002_support_profiles.py"
+      - "tools/verify_exp0002_support_profile_vectors.py"
+      - "tests/vectors/exp-0002-immutable-support-profiles/**"
       - "docs/experiments/0019-exp0002-limit-interactions.md"
       - "docs/experiments/0040-exp0002-support-profiles.md"
       - ".github/workflows/limit-interactions.yml"
@@ -30,3 +34,5 @@ jobs:
         run: python3 tools/experiment_exp0002_limit_interactions.py
       - name: Verify jointly satisfiable successor support profiles
         run: python3 tools/experiment_exp0002_support_profiles.py
+      - name: Verify support-profile boundary vectors
+        run: python3 tools/verify_exp0002_support_profile_vectors.py
