@@ -1,0 +1,25 @@
+name: Complete Checkpoint Cadence
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_checkpoint_cadence.py"
+      - "docs/decisions/0012-exp0002-complete-checkpoints-only.md"
+      - "docs/experiments/0009-exp0002-checkpoint-cadence.md"
+      - ".github/workflows/checkpoint-cadence.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_checkpoint_cadence.py"
+      - ".github/workflows/checkpoint-cadence.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reproduce checkpoint cadence
+        run: python3 tools/experiment_exp0002_checkpoint_cadence.py
