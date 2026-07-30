@@ -172,3 +172,10 @@ path = "fuzz_targets/immutable_successor_roundtrip.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "immutable_successor_history_recovery"
+path = "fuzz_targets/immutable_successor_history_recovery.rs"
+test = false
+doc = false
+bench = false
