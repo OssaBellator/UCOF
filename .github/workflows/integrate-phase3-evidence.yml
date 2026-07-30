@@ -28,8 +28,8 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path("crates/ucof-experiments/src/exp0002_source_chain.rs")
-          text = path.read_text(encoding="utf-8")
+          chain = Path("crates/ucof-experiments/src/exp0002_source_chain.rs")
+          text = chain.read_text(encoding="utf-8")
           text = text.replace(
               "Exp0002Error::PreviousFooterCycle",
               "Exp0002Error::InvalidPreviousFooter",
@@ -38,7 +38,15 @@ jobs:
               "let mut commits = Vec::new();",
               "let mut commits: Vec<RecoveredExp0002SourcePrefix> = Vec::new();",
           )
-          path.write_text(text, encoding="utf-8")
+          chain.write_text(text, encoding="utf-8")
+
+          cli = Path("crates/ucof-experiments/src/bin/ucof-exp0002.rs")
+          text = cli.read_text(encoding="utf-8")
+          text = text.replace(
+              "use ucof_experiments::exp0002::{FileHeader, ValidationLimits};",
+              "use ucof_experiments::exp0002::FileHeader;",
+          )
+          cli.write_text(text, encoding="utf-8")
           PY
       - name: Normalize Rust sources
         run: cargo fmt --all
