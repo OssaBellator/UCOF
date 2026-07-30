@@ -17,6 +17,7 @@ pub mod exp0002_source;
 pub mod exp0002_source_recovery;
 #[allow(dead_code, unused_imports)]
 mod exp0002_source_strict;
+pub mod exp0002_source_version;
 mod publication;
 mod recovery;
 mod repair;
@@ -36,6 +37,9 @@ pub use exp0002_source_recovery::{
     RecoveredExp0002SourcePrefix,
 };
 pub use exp0002_source_strict::{validate_strict_at, VerifiedExp0002Source};
+pub use exp0002_source_version::{
+    Exp0002SourceVersion, Exp0002StableSource, Exp0002VersionedReadAt,
+};
 pub use publication::{
     PublicationError, PublicationLimits, PublicationModel, PublicationReport, PublicationStage,
     PublishedCheckpoint,
