@@ -3,8 +3,6 @@ name: Finalize Immutable Successor API Once
 on:
   push:
     branches: ["phase-3/directory-snapshots-recovery"]
-    paths:
-      - ".github/workflows/rust.yml"
   workflow_dispatch:
 
 permissions:
