@@ -198,7 +198,8 @@ def validate_complete(data: bytes) -> CompleteReport:
         payloads[locator.object_id] = parse_object(data, locator)
         object_ranges.append((locator.record_offset, end, locator.object_id))
 
-    for left, right in zip(sorted(object_ranges), sorted(object_ranges)[1:]):
+    ordered_ranges = sorted(object_ranges)
+    for left, right in zip(ordered_ranges, ordered_ranges[1:]):
         if left[1] > right[0]:
             raise ObjectError("object overlap")
 
@@ -235,6 +236,94 @@ def append_replacement(data: bytes, value: ObjectInput) -> bytes:
         verified.structural.footer_offset,
         page_count,
     )
+    return bytes(output)
+
+
+def reauthenticate_footer(data: bytearray) -> None:
+    offset = len(data) - cow.FOOTER_LEN
+    footer = cow.parse_footer(bytes(data), offset)
+    snapshot = bytes(data[footer.snapshot_offset : footer.snapshot_offset + footer.snapshot_len])
+    snapshot_digest = cow.digest(cow.SNAPSHOT_DOMAIN, snapshot)
+    semantics = cow.footer_semantics(
+        footer.sequence,
+        footer.snapshot_offset,
+        footer.snapshot_len,
+        footer.previous_footer_offset,
+        footer.page_count_current,
+        snapshot_digest,
+    )
+    commit_start = (
+        0
+        if footer.previous_footer_offset == cow.ABSENT_OFFSET
+        else footer.previous_footer_offset + cow.FOOTER_LEN
+    )
+    commit_digest = cow.digest(
+        cow.COMMIT_DOMAIN, bytes(data[commit_start:offset]) + semantics
+    )
+    cow.FOOTER.pack_into(
+        data,
+        offset,
+        cow.FOOTER_MAGIC,
+        footer.sequence,
+        footer.snapshot_offset,
+        footer.snapshot_len,
+        footer.previous_footer_offset,
+        footer.page_count_current,
+        snapshot_digest,
+        commit_digest,
+        bytes(16),
+    )
+
+
+def forge_authenticated_structural_overlap(
+    data: bytes, report: CompleteReport, object_id: int
+) -> bytes:
+    output = bytearray(data)
+    footer = cow.parse_footer(data, len(data) - cow.FOOTER_LEN)
+    root = report.structural.root
+    if root.level != 1:
+        raise AssertionError("overlap fixture expects a height-one root")
+    kind, root_entries = cow.decode_page(data, root)
+    if kind != 2:
+        raise AssertionError("root is not internal")
+    children = [entry for entry in root_entries if isinstance(entry, cow.PageRef)]
+    child_index = next(
+        index
+        for index, child in enumerate(children)
+        if child.minimum <= object_id <= child.maximum
+    )
+    leaf_ref = children[child_index]
+    leaf = bytearray(data[leaf_ref.offset : leaf_ref.offset + cow.PAGE_SIZE])
+    _magic, _kind, _level, _reserved, count, _entry_size, _minimum, _maximum, _tail = cow.PAGE_HEADER.unpack_from(leaf)
+    entry_index = None
+    for index in range(count):
+        entry_offset = cow.PAGE_HEADER_LEN + index * cow.LEAF_ENTRY_LEN
+        values = list(cow.LEAF_ENTRY.unpack_from(leaf, entry_offset))
+        if values[0] == object_id:
+            entry_index = index
+            values[3] = footer.snapshot_offset
+            values[4] = OBJECT_HEADER_LEN
+            values[5] = 0
+            values[6] = bytes(32)
+            cow.LEAF_ENTRY.pack_into(leaf, entry_offset, *values)
+            break
+    if entry_index is None:
+        raise AssertionError("object was not found in leaf")
+    output[leaf_ref.offset : leaf_ref.offset + cow.PAGE_SIZE] = leaf
+    leaf_digest = cow.digest(cow.PAGE_DOMAIN, bytes(leaf))
+
+    root_page = bytearray(data[root.offset : root.offset + cow.PAGE_SIZE])
+    child_entry_offset = cow.PAGE_HEADER_LEN + child_index * cow.INTERNAL_ENTRY_LEN
+    child_values = list(cow.INTERNAL_ENTRY.unpack_from(root_page, child_entry_offset))
+    child_values[4] = leaf_digest
+    cow.INTERNAL_ENTRY.pack_into(root_page, child_entry_offset, *child_values)
+    output[root.offset : root.offset + cow.PAGE_SIZE] = root_page
+    root_digest = cow.digest(cow.PAGE_DOMAIN, bytes(root_page))
+
+    snapshot_values = list(cow.SNAPSHOT.unpack_from(output, footer.snapshot_offset))
+    snapshot_values[4] = root_digest
+    cow.SNAPSHOT.pack_into(output, footer.snapshot_offset, *snapshot_values)
+    reauthenticate_footer(output)
     return bytes(output)
 
 
@@ -275,7 +364,7 @@ def main() -> None:
 
     old_object_offset = genesis_report.objects[0].record_offset
     new_object_offset = appended_report.objects[0].record_offset
-    assert new_object_offset > len(genesis)
+    assert new_object_offset == len(genesis)
     assert old_object_offset != new_object_offset
 
     corrupted_historical = bytearray(appended)
@@ -289,25 +378,16 @@ def main() -> None:
         raise AssertionError("historical object corruption was not detected")
     assert corruption_error == "object digest"
 
-    forged_overlap = bytearray(appended)
-    # Repoint object 2 into the active snapshot and reauthenticate its leaf/path
-    # is intentionally left for the successor invalid-vector corpus. This focused
-    # test exercises the validator's direct overlap guard by calling the parser
-    # against a forged locator.
-    forged = cow.Locator(
-        object_id=2,
-        kind=appended_report.objects[1].kind,
-        record_offset=appended_report.structural.footer_offset - cow.SNAPSHOT_LEN,
-        record_len=OBJECT_HEADER_LEN,
-        logical_len=0,
-        digest=bytes(32),
+    forged_overlap = forge_authenticated_structural_overlap(
+        appended, appended_report, 2
     )
     try:
-        parse_object(bytes(forged_overlap), forged)
-    except ObjectError:
-        pass
+        validate_complete(forged_overlap)
+    except ObjectError as error:
+        overlap_error = str(error)
     else:
-        raise AssertionError("forged structural locator was not rejected")
+        raise AssertionError("authenticated structural overlap validated")
+    assert overlap_error == "object structural overlap"
 
     interrupted = appended[:-cow.FOOTER_LEN // 2]
     try:
@@ -328,6 +408,7 @@ def main() -> None:
     print(f"old_object_offset={old_object_offset}")
     print(f"new_object_offset={new_object_offset}")
     print(f"historical_object_corruption={corruption_error}")
+    print(f"authenticated_overlap_rejection={overlap_error}")
     print("deterministic_replacement=pass")
     print("object_page_structural_overlap_checks=pass")
     print("interrupted_replacement_previous_prefix=valid")
