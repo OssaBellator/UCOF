@@ -10,9 +10,7 @@ use ucof_experiments::exp0002_rewrite::{
 use ucof_experiments::exp0002_source::{
     lookup_authenticated_at, Exp0002SeekSource, Exp0002SourceLimits,
 };
-use ucof_experiments::{
-    scan_valid_prefixes_at, validate_strict_at, Exp0002SourceRecoveryLimits,
-};
+use ucof_experiments::{scan_valid_prefixes_at, validate_strict_at, Exp0002SourceRecoveryLimits};
 
 fn main() {
     if let Err(error) = run() {
@@ -145,10 +143,7 @@ fn command_lookup(path: &Path, object_id: u64) -> Result<(), Box<dyn Error>> {
 fn command_recover(path: &Path) -> Result<(), Box<dyn Error>> {
     let file = File::open(path)?;
     let mut source = Exp0002SeekSource::new(file);
-    let report = scan_valid_prefixes_at(
-        &mut source,
-        &Exp0002SourceRecoveryLimits::default(),
-    )?;
+    let report = scan_valid_prefixes_at(&mut source, &Exp0002SourceRecoveryLimits::default())?;
     println!("assurance: explicitly requested bounded recovery; each result is a strict prefix");
     println!("file_len: {}", report.file_len);
     println!("scan_start: {}", report.scan_start);
@@ -163,11 +158,15 @@ fn command_recover(path: &Path) -> Result<(), Box<dyn Error>> {
     println!("verified_prefixes: {}", report.results.len());
     for candidate in report.results {
         println!(
-            "prefix={} footer={} sequence={} snapshot_digest={}",
+            "prefix={} footer={} sequence={} previous_footer={} roots={} parent_snapshot_digest={} snapshot_digest={} commit_digest={}",
             candidate.prefix_len,
             candidate.footer_offset,
             candidate.sequence,
-            hex(&candidate.snapshot_digest)
+            candidate.previous_footer_offset,
+            join_ids(&candidate.roots),
+            hex(&candidate.parent_snapshot_digest),
+            hex(&candidate.snapshot_digest),
+            hex(&candidate.commit_digest)
         );
     }
     Ok(())
@@ -194,13 +193,8 @@ fn command_rewrite_selected(
     roots: &[u64],
 ) -> Result<(), Box<dyn Error>> {
     let source = fs::read(input)?;
-    let report = rewrite_selected_to_new_file(
-        &source,
-        header,
-        retained,
-        roots,
-        &RewriteLimits::default(),
-    )?;
+    let report =
+        rewrite_selected_to_new_file(&source, header, retained, roots, &RewriteLimits::default())?;
     write_new_output(output, &report.output)?;
     println!("assurance: caller-selected verified rewrite to a new genesis file");
     println!("semantic_compaction_claim: false");
@@ -221,13 +215,22 @@ fn print_rewrite_report(report: &RewriteReport, output: &Path) {
         "output_snapshot_digest: {}",
         hex(&report.output_snapshot_digest)
     );
-    println!("source_commit_digest: {}", hex(&report.source_commit_digest));
-    println!("output_commit_digest: {}", hex(&report.output_commit_digest));
+    println!(
+        "source_commit_digest: {}",
+        hex(&report.source_commit_digest)
+    );
+    println!(
+        "output_commit_digest: {}",
+        hex(&report.output_commit_digest)
+    );
     println!(
         "snapshot_digest_preserved: {}",
         report.snapshot_digest_preserved
     );
-    println!("commit_digest_preserved: {}", report.commit_digest_preserved);
+    println!(
+        "commit_digest_preserved: {}",
+        report.commit_digest_preserved
+    );
     println!(
         "byte_scoped_signatures_preserved: {}",
         report.byte_scoped_signatures_preserved
@@ -305,10 +308,7 @@ fn parse_object_id(value: &str) -> Result<u64, Box<dyn Error>> {
     Ok(parsed)
 }
 
-fn required(
-    args: &mut impl Iterator<Item = String>,
-    name: &str,
-) -> Result<String, Box<dyn Error>> {
+fn required(args: &mut impl Iterator<Item = String>, name: &str) -> Result<String, Box<dyn Error>> {
     args.next()
         .ok_or_else(|| invalid_input(format!("missing {name}")).into())
 }
@@ -363,10 +363,7 @@ mod tests {
 
     #[test]
     fn fixed_hex_parser_requires_exact_length() {
-        assert_eq!(
-            parse_fixed_hex::<2>("00ff", "test").expect("hex"),
-            [0, 255]
-        );
+        assert_eq!(parse_fixed_hex::<2>("00ff", "test").expect("hex"), [0, 255]);
         assert!(parse_fixed_hex::<2>("00", "test").is_err());
         assert!(parse_fixed_hex::<2>("00zz", "test").is_err());
     }
