@@ -151,3 +151,10 @@ path = "fuzz_targets/exp0002_source_strict_recovery.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "exp0002_source_history"
+path = "fuzz_targets/exp0002_source_history.rs"
+test = false
+doc = false
+bench = false
