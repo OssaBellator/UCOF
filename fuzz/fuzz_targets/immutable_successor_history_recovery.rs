@@ -20,7 +20,9 @@ fuzz_target!(|data: &[u8]| {
         max_recovery_candidates: 8,
     };
 
-    let desired = data.first().map_or(1_usize, |byte| 1 + usize::from(*byte % 8));
+    let desired = data
+        .first()
+        .map_or(1_usize, |byte| 1 + usize::from(*byte % 8));
     let source = data.get(1..).unwrap_or_default();
     let mut objects = Vec::with_capacity(desired);
     for index in 0..desired {
