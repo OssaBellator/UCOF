@@ -29,7 +29,9 @@ def update_status() -> None:
         "1. move authenticated lookup and recovery onto a bounded random-access source abstraction without materialising the whole file;":
             "1. move full strict validation and recovery scanning onto bounded random-access sources without materialising the whole file;",
         "7. integrate concrete-byte findings into the primary threat model and FCP-0002 evidence section;":
-            "7. pin invalid and interrupted vectors with stable cross-language expected outcomes and decide the public error-category contract;",
+            "7. define CLI assurance surfaces for root enumeration, recovery, repair, and compaction;",
+        "7. pin invalid and interrupted vectors with stable cross-language expected outcomes and decide the public error-category contract;":
+            "7. define CLI assurance surfaces for root enumeration, recovery, repair, and compaction;",
     }
     for old, new in replacements.items():
         if old in text:
