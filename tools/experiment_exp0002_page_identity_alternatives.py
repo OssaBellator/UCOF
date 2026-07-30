@@ -168,7 +168,7 @@ def main() -> None:
     single_update_pages = batched_path_pages(tree, 1)
     assert single_update_pages == tree.depth
     assert tree.full_rebuild_bytes == 8_891_121_664
-    assert tree.full_rebuild_bytes // (single_update_pages * PAGE_BYTES) == 135_668
+    assert tree.full_rebuild_bytes // (single_update_pages * PAGE_BYTES) == 135_667
 
     all_update_pages = batched_path_pages(tree, OBJECTS)
     assert all_update_pages == tree.total_pages
