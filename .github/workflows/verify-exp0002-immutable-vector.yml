@@ -44,8 +44,8 @@ jobs:
           rm -rf /tmp/source-full
           mkdir -p /tmp/source-full
           unzip -q /tmp/source-full.zip -d /tmp/source-full
-          test "$(git hash-object /tmp/source-full/src/immutable_successor/source_full.rs)" = "68bae39d568e70fda718aa9ae771b2597cdcadd8"
-          test "$(git hash-object /tmp/source-full/tests/immutable_successor_source_history.rs)" = "29a9ad589743185b2db4628d2799b01a4b745d9c"
+          test "$(git hash-object /tmp/source-full/src/immutable_successor/source_full.rs)" = "c7efc35b67183468abb78df856abb9512034ac47"
+          test "$(git hash-object /tmp/source-full/tests/immutable_successor_source_history.rs)" = "d5699442ebfc3e0f36c3254b2127d5a4a9661efd"
           cp /tmp/source-full/src/immutable_successor/source_full.rs crates/ucof-experiments/src/immutable_successor/source_full.rs
           cp /tmp/source-full/tests/immutable_successor_source_history.rs crates/ucof-experiments/tests/immutable_successor_source_history.rs
           rm -f tools/patch_immutable_source_full.py
