@@ -1,0 +1,114 @@
+{
+  "candidate": 1,
+  "contract": {
+    "layer": "diagnostic intent only; exact error categories remain implementation-local",
+    "outcome": "strict rejection"
+  },
+  "epoch": "UCOF-EXP-0002",
+  "vectors": {
+    "append-cut-after-object-header": {
+      "description": "append is truncated at deterministic byte offset 16931",
+      "expectation": "invalid",
+      "hex_file": "append-cut-after-object-header.hex",
+      "layer": "publication",
+      "length": 16931,
+      "sha256": "09835149c0f75233f0b4e059831475ac1c0daca89626ca00280e98cb05c3bead"
+    },
+    "append-cut-before-snapshot-complete": {
+      "description": "append is truncated at deterministic byte offset 33495",
+      "expectation": "invalid",
+      "hex_file": "append-cut-before-snapshot-complete.hex",
+      "layer": "publication",
+      "length": 33495,
+      "sha256": "937faa125f7e6355e8d49859f338e3be0d8b293b48dc1cee91b113bb4f789803"
+    },
+    "append-cut-footer-prefix": {
+      "description": "append is truncated at deterministic byte offset 33528",
+      "expectation": "invalid",
+      "hex_file": "append-cut-footer-prefix.hex",
+      "layer": "publication",
+      "length": 33528,
+      "sha256": "b9e5e9dbdf0bd0e2c60b5880fb3ac12f318a719d4ecf70d83bda2ceb4f6bb321"
+    },
+    "footer-truncated-one-byte": {
+      "description": "the exact-end footer is missing its final byte",
+      "expectation": "invalid",
+      "hex_file": "footer-truncated-one-byte.hex",
+      "layer": "publication",
+      "length": 16882,
+      "sha256": "440d690f8608d80c38a89b6b511dee1d8fc1cdd80ac822a32ad3bcc29e525d5f"
+    },
+    "header-reserved-nonzero": {
+      "description": "file-header reserved byte is non-zero",
+      "expectation": "invalid",
+      "hex_file": "header-reserved-nonzero.hex",
+      "layer": "bootstrap",
+      "length": 16883,
+      "sha256": "aa39626cc121b84e45df3449cb20e007253eca50c3c37da9875777413b2fbbe7"
+    },
+    "internal-child-range-overlap": {
+      "description": "authenticated internal page contains overlapping child ranges",
+      "expectation": "invalid",
+      "hex_file": "internal-child-range-overlap.hex",
+      "layer": "directory-page",
+      "length": 85528,
+      "sha256": "21662ef2d4546be613904b32b8802ce3c24e9bd7a85bca9a4322c2e6662a829f"
+    },
+    "leaf-padding-nonzero": {
+      "description": "authenticated leaf page has non-zero unused padding",
+      "expectation": "invalid",
+      "hex_file": "leaf-padding-nonzero.hex",
+      "layer": "directory-page",
+      "length": 16883,
+      "sha256": "6c68eb31891bafe954941cd587f8f7f310de3c474599dd24b8e655ddf0e72b25"
+    },
+    "object-logical-length-mismatch": {
+      "description": "object logical length differs from payload length after a valid outer commit digest",
+      "expectation": "invalid",
+      "hex_file": "object-logical-length-mismatch.hex",
+      "layer": "object",
+      "length": 16883,
+      "sha256": "886e7408afef915ef8a8b39ffb396c40abd0a64a1a5e5bd7dbf3c608f7966992"
+    },
+    "object-overlaps-directory-page": {
+      "description": "leaf object locator points into its authenticating directory page",
+      "expectation": "invalid",
+      "hex_file": "object-overlaps-directory-page.hex",
+      "layer": "physical-layout",
+      "length": 16883,
+      "sha256": "7b6a60025ea809511e480b683644a860472a3e5ebc655f99d573c55caff23a1e"
+    },
+    "parent-snapshot-digest-mismatch": {
+      "description": "child snapshot names a parent digest that does not match the previous footer",
+      "expectation": "invalid",
+      "hex_file": "parent-snapshot-digest-mismatch.hex",
+      "layer": "parent-chain",
+      "length": 33656,
+      "sha256": "9864b72893165cc6cf341d8baf32c22323d66396664400b190f7715c7fc32c6b"
+    },
+    "previous-footer-forward-pointer": {
+      "description": "snapshot and footer agree on a previous-footer pointer that points forward",
+      "expectation": "invalid",
+      "hex_file": "previous-footer-forward-pointer.hex",
+      "layer": "parent-chain",
+      "length": 33656,
+      "sha256": "ac9cdac7264d3197e511670a92ac8e0fd395e2ef6cda6f87c085213101c9a006"
+    },
+    "snapshot-reserved-nonzero": {
+      "description": "snapshot reserved byte is non-zero under refreshed snapshot and commit digests",
+      "expectation": "invalid",
+      "hex_file": "snapshot-reserved-nonzero.hex",
+      "layer": "snapshot",
+      "length": 16883,
+      "sha256": "0e1fb033edee7198a2854ad80cb6b9f67323edb2dc1be1c9438bdbe75482da5d"
+    },
+    "strict-trailing-bytes": {
+      "description": "valid genesis bytes are followed by an unpublished tail",
+      "expectation": "invalid",
+      "hex_file": "strict-trailing-bytes.hex",
+      "layer": "exact-end",
+      "length": 16887,
+      "sha256": "b6d4f0cef38033de367c496beae76a3624636c0b4c8b6616fb4dbbefb8601d94"
+    }
+  }
+}
