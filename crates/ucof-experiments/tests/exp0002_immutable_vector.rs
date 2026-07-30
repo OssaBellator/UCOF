@@ -83,6 +83,10 @@ fn usize_at(bytes: &[u8], offset: usize) -> usize {
     usize::try_from(u64_at(bytes, offset)).expect("usize field")
 }
 
+fn u64_from_usize(value: usize) -> u64 {
+    u64::try_from(value).expect("u64 field")
+}
+
 fn sha256(parts: &[&[u8]]) -> [u8; 32] {
     let mut hasher = Sha256::new();
     for part in parts {
@@ -105,10 +109,17 @@ fn parse_page(
         .checked_add(PAGE_SIZE)
         .expect("page range overflow");
     assert!(page_end <= snapshot_offset, "page after snapshot start");
-    assert!(seen.insert(reference.offset), "page cycle or duplicate reference");
+    assert!(
+        seen.insert(reference.offset),
+        "page cycle or duplicate reference"
+    );
 
     let page = checked(bytes, reference.offset, PAGE_SIZE);
-    assert_eq!(sha256(&[PAGE_DOMAIN, page]), reference.digest, "page digest");
+    assert_eq!(
+        sha256(&[PAGE_DOMAIN, page]),
+        reference.digest,
+        "page digest"
+    );
     assert_eq!(checked(page, 0, 8), PAGE_MAGIC, "page magic");
 
     let kind = page[8];
@@ -180,7 +191,10 @@ fn parse_page(
             assert_eq!(children.first().expect("child first").minimum, minimum);
             assert_eq!(children.last().expect("child last").maximum, maximum);
             let used = PAGE_HEADER_LEN + count * INTERNAL_ENTRY_LEN;
-            assert!(page[used..].iter().all(|byte| *byte == 0), "internal padding");
+            assert!(
+                page[used..].iter().all(|byte| *byte == 0),
+                "internal padding"
+            );
             for child in children {
                 parse_page(
                     bytes,
@@ -232,10 +246,10 @@ fn independently_parses_and_hashes_pinned_immutable_vector() {
 
     let mut semantics = Vec::with_capacity(72);
     semantics.extend_from_slice(&sequence.to_le_bytes());
-    semantics.extend_from_slice(&(snapshot_offset as u64).to_le_bytes());
-    semantics.extend_from_slice(&(snapshot_len as u64).to_le_bytes());
+    semantics.extend_from_slice(&u64_from_usize(snapshot_offset).to_le_bytes());
+    semantics.extend_from_slice(&u64_from_usize(snapshot_len).to_le_bytes());
     semantics.extend_from_slice(&previous_footer_offset.to_le_bytes());
-    semantics.extend_from_slice(&(page_count_current as u64).to_le_bytes());
+    semantics.extend_from_slice(&u64_from_usize(page_count_current).to_le_bytes());
     semantics.extend_from_slice(&snapshot_digest);
     assert_eq!(semantics.len(), 72);
     assert_eq!(
@@ -271,8 +285,14 @@ fn independently_parses_and_hashes_pinned_immutable_vector() {
     assert!(locators
         .windows(2)
         .all(|pair| pair[0].object_id < pair[1].object_id));
-    assert_eq!(locators.first().expect("first object").object_id, root.minimum);
-    assert_eq!(locators.last().expect("last object").object_id, root.maximum);
+    assert_eq!(
+        locators.first().expect("first object").object_id,
+        root.minimum
+    );
+    assert_eq!(
+        locators.last().expect("last object").object_id,
+        root.maximum
+    );
 
     let mut object_ranges = Vec::new();
     let mut payloads = Vec::new();
@@ -295,18 +315,14 @@ fn independently_parses_and_hashes_pinned_immutable_vector() {
         assert_eq!(u64_at(record, 16), locator.object_id);
         let payload_len = usize_at(record, 24);
         assert_eq!(u64_at(record, 32), locator.logical_len);
-        assert_eq!(payload_len as u64, locator.logical_len);
+        assert_eq!(u64_from_usize(payload_len), locator.logical_len);
         assert_eq!(OBJECT_HEADER_LEN + payload_len, locator.record_len);
-        assert!(record[40..OBJECT_HEADER_LEN]
-            .iter()
-            .all(|byte| *byte == 0));
+        assert!(record[40..OBJECT_HEADER_LEN].iter().all(|byte| *byte == 0));
         assert_eq!(sha256(&[OBJECT_DOMAIN, record]), locator.digest);
         payloads.push((locator.object_id, record[OBJECT_HEADER_LEN..].to_vec()));
     }
     object_ranges.sort_unstable();
-    assert!(object_ranges
-        .windows(2)
-        .all(|pair| pair[0].1 <= pair[1].0));
+    assert!(object_ranges.windows(2).all(|pair| pair[0].1 <= pair[1].0));
     assert_eq!(
         payloads,
         vec![
