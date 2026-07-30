@@ -1,36 +1,29 @@
-name: Integrate Phase 3 Evidence
+name: Verify Phase 3 Integration
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    paths:
+      - "crates/ucof-experiments/**"
+      - "tests/vectors/exp-0002-invalid/**"
+      - "tools/exp0002_invalid_vectors.py"
+      - ".github/workflows/integrate-phase3-evidence.yml"
+  workflow_dispatch:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  integrate:
-    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'github-actions[bot]'
+  verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.ref }}
       - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
-      - name: Normalize and generate evidence
-        run: |
-          cargo fmt --all
-          rm -rf tests/vectors/exp-0002-invalid
-          python3 tools/exp0002_invalid_vectors.py --write-vectors tests/vectors/exp-0002-invalid
-          python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
-      - name: Commit evidence
-        run: |
-          if [[ -z "$(git status --porcelain -- crates/ucof-experiments tests/vectors/exp-0002-invalid)" ]]; then
-            exit 0
-          fi
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/ucof-experiments tests/vectors/exp-0002-invalid
-          git commit -m "test: normalize copy-on-write model and pin invalid vectors"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Test Phase 3 experiment crate
+        run: cargo test --locked -p ucof-experiments --all-targets
+      - name: Verify invalid vector reproducibility
+        run: python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
