@@ -34,13 +34,18 @@ def validate_tree(data: bytes, root: cow.PageRef) -> TreeReport:
         seen.add(reference.offset)
         kind, entries = cow.decode_page(data, reference)
         if kind == 1:
-            identifiers.extend(entry.object_id for entry in entries if isinstance(entry, cow.Locator))
+            identifiers.extend(
+                entry.object_id for entry in entries if isinstance(entry, cow.Locator)
+            )
         else:
             children = [entry for entry in entries if isinstance(entry, cow.PageRef)]
             stack.extend(reversed(children))
     if any(left >= right for left, right in zip(identifiers, identifiers[1:])):
         raise cow.FormatError("tree identifier order")
-    if not identifiers or (identifiers[0], identifiers[-1]) != (root.minimum, root.maximum):
+    if not identifiers or (identifiers[0], identifiers[-1]) != (
+        root.minimum,
+        root.maximum,
+    ):
         raise cow.FormatError("tree root range")
     return TreeReport(root, frozenset(seen), tuple(identifiers))
 
@@ -49,7 +54,9 @@ def emit_leaf(output: bytearray, entries: list[cow.Locator]) -> cow.PageRef:
     return cow.append_page(output, cow.encode_leaf(entries))
 
 
-def emit_internal(output: bytearray, children: list[cow.PageRef], level: int) -> cow.PageRef:
+def emit_internal(
+    output: bytearray, children: list[cow.PageRef], level: int
+) -> cow.PageRef:
     return cow.append_page(output, cow.encode_internal(children, level))
 
 
@@ -76,16 +83,13 @@ def insert_node(
 
     children = [entry for entry in entries if isinstance(entry, cow.PageRef)]
     child_index = next(
-        (index for index, child in enumerate(children) if child.minimum <= value.object_id <= child.maximum),
-        None,
+        (
+            index
+            for index, child in enumerate(children)
+            if value.object_id <= child.maximum
+        ),
+        len(children) - 1,
     )
-    if child_index is None:
-        if value.object_id < children[0].minimum:
-            child_index = 0
-        elif value.object_id > children[-1].maximum:
-            child_index = len(children) - 1
-        else:
-            raise ValueError("insertion falls into an unowned child gap")
     replacements = insert_node(output, source, children[child_index], value)
     updated = children[:child_index] + replacements + children[child_index + 1 :]
     if len(updated) <= cow.INTERNAL_FANOUT:
@@ -96,7 +100,9 @@ def insert_node(
     return [left, right]
 
 
-def insert(data: bytes, root: cow.PageRef, value: cow.Locator) -> tuple[bytes, cow.PageRef]:
+def insert(
+    data: bytes, root: cow.PageRef, value: cow.Locator
+) -> tuple[bytes, cow.PageRef]:
     output = bytearray(data)
     replacements = insert_node(output, data, root, value)
     if len(replacements) == 1:
@@ -112,7 +118,9 @@ def leaf_entries(data: bytes, reference: cow.PageRef) -> list[cow.Locator]:
     return [entry for entry in entries if isinstance(entry, cow.Locator)]
 
 
-def delete_from_height_one(data: bytes, root: cow.PageRef, object_id: int) -> tuple[bytes, cow.PageRef]:
+def delete_from_height_one(
+    data: bytes, root: cow.PageRef, object_id: int
+) -> tuple[bytes, cow.PageRef]:
     if root.level == 0:
         entries = leaf_entries(data, root)
         kept = [entry for entry in entries if entry.object_id != object_id]
@@ -131,7 +139,11 @@ def delete_from_height_one(data: bytes, root: cow.PageRef, object_id: int) -> tu
         raise ValueError("root kind")
     children = [entry for entry in decoded if isinstance(entry, cow.PageRef)]
     index = next(
-        (position for position, child in enumerate(children) if child.minimum <= object_id <= child.maximum),
+        (
+            position
+            for position, child in enumerate(children)
+            if child.minimum <= object_id <= child.maximum
+        ),
         None,
     )
     if index is None:
@@ -151,18 +163,26 @@ def delete_from_height_one(data: bytes, root: cow.PageRef, object_id: int) -> tu
     else:
         sibling_index = index + 1 if index + 1 < len(children) else index - 1
         sibling = leaf_entries(data, children[sibling_index])
-        combined = updated_target + sibling if index < sibling_index else sibling + updated_target
+        combined = (
+            updated_target + sibling
+            if index < sibling_index
+            else sibling + updated_target
+        )
         combined.sort(key=lambda entry: entry.object_id)
         left_index = min(index, sibling_index)
         right_index = max(index, sibling_index)
         if len(combined) <= LEAF_CAPACITY:
             merged = emit_leaf(output, combined)
-            updated_children = children[:left_index] + [merged] + children[right_index + 1 :]
+            updated_children = (
+                children[:left_index] + [merged] + children[right_index + 1 :]
+            )
         else:
             split = (len(combined) + 1) // 2
             left = emit_leaf(output, combined[:split])
             right = emit_leaf(output, combined[split:])
-            updated_children = children[:left_index] + [left, right] + children[right_index + 1 :]
+            updated_children = (
+                children[:left_index] + [left, right] + children[right_index + 1 :]
+            )
 
     if len(updated_children) == 1:
         return bytes(output), updated_children[0]
@@ -179,7 +199,9 @@ def main() -> None:
     assert len(original.reachable) == 3
 
     inserted_bytes, inserted_root = insert(bytes(genesis), root, make_locator(101, 1))
-    inserted_again_bytes, inserted_again_root = insert(bytes(genesis), root, make_locator(101, 1))
+    inserted_again_bytes, inserted_again_root = insert(
+        bytes(genesis), root, make_locator(101, 1)
+    )
     assert inserted_bytes == inserted_again_bytes
     assert inserted_root == inserted_again_root
     inserted = validate_tree(inserted_bytes, inserted_root)
@@ -188,8 +210,18 @@ def main() -> None:
     assert len(inserted.reachable & original.reachable) == 1
     assert len(original.reachable - inserted.reachable) == 2
 
-    deleted_bytes, deleted_root = delete_from_height_one(inserted_bytes, inserted_root, 101)
-    deleted_again_bytes, deleted_again_root = delete_from_height_one(inserted_bytes, inserted_root, 101)
+    # A key in the numeric gap between adjacent sparse child ranges is routed
+    # deterministically to the first child whose maximum is at least the key.
+    gap_bytes, gap_root = insert(bytes(genesis), root, make_locator(187, 1))
+    gap_report = validate_tree(gap_bytes, gap_root)
+    assert 187 in gap_report.identifiers
+
+    deleted_bytes, deleted_root = delete_from_height_one(
+        inserted_bytes, inserted_root, 101
+    )
+    deleted_again_bytes, deleted_again_root = delete_from_height_one(
+        inserted_bytes, inserted_root, 101
+    )
     assert deleted_bytes == deleted_again_bytes
     assert deleted_root == deleted_again_root
     deleted = validate_tree(deleted_bytes, deleted_root)
@@ -197,18 +229,26 @@ def main() -> None:
     assert len(deleted.reachable - inserted.reachable) == 2
     assert len(deleted.reachable & original.reachable) == 1
 
-    full_leaf_entries = [make_locator(object_id) for object_id in range(2, 2 * LEAF_CAPACITY + 1, 2)]
+    full_leaf_entries = [
+        make_locator(object_id) for object_id in range(2, 2 * LEAF_CAPACITY + 1, 2)
+    ]
     full_leaf_bytes = bytearray()
     full_leaf_root = cow.build_tree(full_leaf_bytes, full_leaf_entries)
     assert full_leaf_root.level == 0
-    raised_bytes, raised_root = insert(bytes(full_leaf_bytes), full_leaf_root, make_locator(101, 1))
+    raised_bytes, raised_root = insert(
+        bytes(full_leaf_bytes), full_leaf_root, make_locator(101, 1)
+    )
     raised = validate_tree(raised_bytes, raised_root)
     assert raised_root.level == 1
     assert len(raised.reachable) == 3
-    collapsed_bytes, collapsed_root = delete_from_height_one(raised_bytes, raised_root, 101)
+    collapsed_bytes, collapsed_root = delete_from_height_one(
+        raised_bytes, raised_root, 101
+    )
     collapsed = validate_tree(collapsed_bytes, collapsed_root)
     assert collapsed_root.level == 0
-    assert collapsed.identifiers == tuple(entry.object_id for entry in full_leaf_entries)
+    assert collapsed.identifiers == tuple(
+        entry.object_id for entry in full_leaf_entries
+    )
 
     try:
         insert(bytes(genesis), root, make_locator(100, 1))
@@ -222,6 +262,7 @@ def main() -> None:
     print("split_insert_new_pages=3")
     print("split_insert_reused_pages=1")
     print("merge_delete_new_pages=2")
+    print("gap_insertion_routing=pass")
     print("root_height_increase=pass")
     print("root_height_collapse=pass")
     print("deterministic_insert_bytes=pass")
