@@ -19,6 +19,7 @@ pub mod exp0002_source_recovery;
 #[allow(dead_code, unused_imports)]
 mod exp0002_source_strict;
 pub mod exp0002_source_version;
+pub mod immutable_successor;
 mod publication;
 mod recovery;
 mod repair;
