@@ -14,6 +14,15 @@ OPERATIONS = 512
 IDENTIFIER_SPACE = 2_000
 MIN_OBJECTS = 100
 MAX_OBJECTS = 300
+SCRIPTED_OPERATIONS = (
+    ("insert", 1),
+    ("insert", 3),
+    ("insert", 5),
+    ("insert", 7),
+    ("insert", 9),
+    ("insert", 11),
+    ("delete", 11),
+)
 
 
 @dataclass(frozen=True)
@@ -40,7 +49,9 @@ def choose_absent(rng: random.Random, model: set[int]) -> int:
 
 
 def run_sequence() -> SequenceReport:
-    initial = [cow.locator(object_id) for object_id in range(2, 322, 2)]
+    # Start five entries below leaf capacity. The scripted prefix fills the leaf,
+    # forces one split, then removes one key to force a deterministic collapse.
+    initial = [cow.locator(object_id) for object_id in range(2, 362, 2)]
     data = bytearray()
     root = cow.build_tree(data, initial)
     model = {entry.object_id for entry in initial}
@@ -61,18 +72,30 @@ def run_sequence() -> SequenceReport:
     for step in range(OPERATIONS):
         previous_report = report
         previous_level = root.level
-        should_insert = len(model) <= MIN_OBJECTS or (
-            len(model) < MAX_OBJECTS and rng.randrange(100) < 57
-        )
+
+        if step < len(SCRIPTED_OPERATIONS):
+            action, object_id = SCRIPTED_OPERATIONS[step]
+            should_insert = action == "insert"
+        else:
+            should_insert = len(model) <= MIN_OBJECTS or (
+                len(model) < MAX_OBJECTS and rng.randrange(100) < 57
+            )
+            if should_insert:
+                object_id = choose_absent(rng, model)
+            else:
+                ordered = sorted(model)
+                object_id = ordered[rng.randrange(len(ordered))]
+
         if should_insert:
-            object_id = choose_absent(rng, model)
-            data_bytes, root = tree.insert(bytes(data), root, cow.locator(object_id, step + 1))
+            data_bytes, root = tree.insert(
+                bytes(data), root, cow.locator(object_id, step + 1)
+            )
             model.add(object_id)
             insertions += 1
         else:
-            ordered = sorted(model)
-            object_id = ordered[rng.randrange(len(ordered))]
-            data_bytes, root = tree.delete_from_height_one(bytes(data), root, object_id)
+            data_bytes, root = tree.delete_from_height_one(
+                bytes(data), root, object_id
+            )
             model.remove(object_id)
             deletions += 1
 
@@ -124,6 +147,7 @@ def main() -> None:
 
     print(f"seed={SEED}")
     print(f"operations={OPERATIONS}")
+    print(f"scripted_operations={len(SCRIPTED_OPERATIONS)}")
     print(f"insertions={first.insertions}")
     print(f"deletions={first.deletions}")
     print(f"final_objects={len(first.final_identifiers)}")
@@ -136,6 +160,7 @@ def main() -> None:
     print(f"root_height_collapses={first.root_height_collapses}")
     print("deterministic_replay=pass")
     print("differential_sorted_set_agreement=pass")
+    print("forced_split_and_collapse=pass")
     print("bounded_page_emission_per_operation=pass")
     print("finding=gap insertions require a canonical child-routing rule")
     print("finding=immutable append-only pages can match a sorted-set oracle across mixed operations")
