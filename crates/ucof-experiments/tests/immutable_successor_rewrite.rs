@@ -60,8 +60,8 @@ fn rewrite_all_publishes_one_new_genesis_with_active_payloads() {
 #[test]
 fn caller_selected_rewrite_is_sorted_deterministic_and_bounded() {
     let (_, appended) = active_append();
-    let first = rewrite_selected(&appended, &[3, 1], ImmutableLimits::default())
-        .expect("selected rewrite");
+    let first =
+        rewrite_selected(&appended, &[3, 1], ImmutableLimits::default()).expect("selected rewrite");
     let second = rewrite_selected(&appended, &[1, 3], ImmutableLimits::default())
         .expect("canonical selected rewrite");
     let expected = build_genesis(
