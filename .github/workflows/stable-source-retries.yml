@@ -1,0 +1,28 @@
+name: Stable Source Retries
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_stable_source_retries.py"
+      - "docs/experiments/0018-exp0002-stable-source-retries.md"
+      - "docs/decisions/0014-exp0002-restart-whole-operation-on-version-change.md"
+      - ".github/workflows/stable-source-retries.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_stable_source_retries.py"
+      - "docs/experiments/0018-exp0002-stable-source-retries.md"
+      - "docs/decisions/0014-exp0002-restart-whole-operation-on-version-change.md"
+      - ".github/workflows/stable-source-retries.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise same-version retries and whole-operation restart
+        run: python3 tools/experiment_exp0002_stable_source_retries.py
