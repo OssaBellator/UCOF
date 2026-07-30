@@ -132,8 +132,6 @@ fn active_source_can_validate_while_history_rejects_a_corrupt_replaced_object() 
     let (mut bytes, genesis_len) = two_commit_file();
     bytes[64 + OBJECT_HEADER_LEN] ^= 0x01;
     reauthenticate_commit(&mut bytes, genesis_len - FOOTER_LEN);
-    let active_footer_offset = bytes.len() - FOOTER_LEN;
-    reauthenticate_commit(&mut bytes, active_footer_offset);
 
     let mut active_source = RecordingSource::new(bytes.clone());
     let active = validate_source_at(&mut active_source, ImmutableSourceLimits::default())
