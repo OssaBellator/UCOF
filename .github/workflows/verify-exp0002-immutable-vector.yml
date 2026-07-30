@@ -26,6 +26,28 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Inspect pinned vector bytes
+        run: |
+          python3 - <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+
+          encoded = Path("tests/vectors/exp-0002-immutable/genesis-four.hex").read_text(encoding="ascii")
+          data = bytes.fromhex(encoded)
+          magic = b"UCFTIM02"
+          offsets = []
+          cursor = 0
+          while True:
+              offset = data.find(magic, cursor)
+              if offset < 0:
+                  break
+              offsets.append(offset)
+              cursor = offset + 1
+          print(f"decoded_bytes={len(data)}")
+          print(f"sha256={sha256(data).hexdigest()}")
+          print(f"footer_magic_offsets={offsets}")
+          print(f"trailing_bytes_after_last_footer={len(data) - offsets[-1] - 128 if offsets else 'missing'}")
+          PY
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
