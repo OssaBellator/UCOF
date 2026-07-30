@@ -325,11 +325,8 @@ pub fn validate_strict_at<S: Exp0002ReadAt>(
     if footer.snapshot_len > limits.validation.max_snapshot_bytes {
         return Err(Exp0002Error::ResourceLimit("snapshot bytes").into());
     }
-    let snapshot_bytes = reader.read_vec(
-        footer.snapshot_offset,
-        footer.snapshot_len,
-        "snapshot",
-    )?;
+    let snapshot_bytes =
+        reader.read_vec(footer.snapshot_offset, footer.snapshot_len, "snapshot")?;
     reader.add_hashed(footer.snapshot_len)?;
     if digest_bytes(SNAPSHOT_DOMAIN, &snapshot_bytes) != footer.snapshot_digest {
         return Err(Exp0002Error::DigestMismatch("snapshot").into());
@@ -347,12 +344,7 @@ pub fn validate_strict_at<S: Exp0002ReadAt>(
         u64::try_from(FOOTER_LEN).map_err(|_| Exp0002Error::ArithmeticOverflow)?,
         file_len,
     )?;
-    let directory = validate_directory(
-        &mut reader,
-        &snapshot,
-        snapshot_range,
-        footer_range,
-    )?;
+    let directory = validate_directory(&mut reader, &snapshot, snapshot_range, footer_range)?;
     validate_objects(
         &mut reader,
         &directory.entries,
@@ -578,7 +570,9 @@ fn validate_parent_link<S: Exp0002ReadAt>(
         || footer.commit_start
             != footer
                 .previous_footer_offset
-                .checked_add(u64::try_from(FOOTER_LEN).map_err(|_| Exp0002Error::ArithmeticOverflow)?)
+                .checked_add(
+                    u64::try_from(FOOTER_LEN).map_err(|_| Exp0002Error::ArithmeticOverflow)?,
+                )
                 .ok_or(Exp0002Error::ArithmeticOverflow)?
     {
         return Err(Exp0002Error::InvalidPreviousFooter.into());
@@ -647,14 +641,19 @@ fn validate_directory<S: Exp0002ReadAt>(
             return Err(Exp0002Error::PhysicalOverlap.into());
         }
         let page = reader.read_array::<PAGE_SIZE>(expected.offset, "directory page")?;
-        reader.add_hashed(u64::try_from(PAGE_SIZE).map_err(|_| Exp0002Error::ArithmeticOverflow)?)?;
+        reader
+            .add_hashed(u64::try_from(PAGE_SIZE).map_err(|_| Exp0002Error::ArithmeticOverflow)?)?;
         if digest_bytes(PAGE_DOMAIN, &page) != expected.digest {
             return Err(Exp0002Error::DigestMismatch("page").into());
         }
         let parsed = parse_page(&page)?;
         if u16::from(parsed.level) != expected.level
-            || expected.minimum.is_some_and(|value| value != parsed.minimum)
-            || expected.maximum.is_some_and(|value| value != parsed.maximum)
+            || expected
+                .minimum
+                .is_some_and(|value| value != parsed.minimum)
+            || expected
+                .maximum
+                .is_some_and(|value| value != parsed.maximum)
             || parsed.sequence != snapshot.sequence
         {
             return Err(Exp0002Error::InvalidPageReference.into());
@@ -798,9 +797,9 @@ fn parse_page(bytes: &[u8; PAGE_SIZE]) -> Result<ParsedPage, Exp0002Error> {
                 || children
                     .windows(2)
                     .any(|pair| pair[0].maximum >= pair[1].minimum)
-                || children.iter().any(|child| {
-                    child.level.checked_add(1) != Some(u16::from(level))
-                })
+                || children
+                    .iter()
+                    .any(|child| child.level.checked_add(1) != Some(u16::from(level)))
             {
                 return Err(Exp0002Error::InvalidPageReference);
             }
@@ -880,8 +879,8 @@ fn validate_objects<S: Exp0002ReadAt>(
     let mut physical = Vec::with_capacity(entries.len());
     let mut payload_total = 0_u64;
     for entry in entries {
-        if entry.record_len < u64::try_from(OBJECT_HEADER_LEN)
-            .map_err(|_| Exp0002Error::ArithmeticOverflow)?
+        if entry.record_len
+            < u64::try_from(OBJECT_HEADER_LEN).map_err(|_| Exp0002Error::ArithmeticOverflow)?
         {
             return Err(Exp0002Error::InvalidLength("object record").into());
         }
@@ -892,7 +891,8 @@ fn validate_objects<S: Exp0002ReadAt>(
         {
             return Err(Exp0002Error::PhysicalOverlap.into());
         }
-        let header = reader.read_array::<OBJECT_HEADER_LEN>(entry.record_offset, "object header")?;
+        let header =
+            reader.read_array::<OBJECT_HEADER_LEN>(entry.record_offset, "object header")?;
         let parsed = parse_object_header(&header)?;
         let expected_len = u64::try_from(OBJECT_HEADER_LEN)
             .map_err(|_| Exp0002Error::ArithmeticOverflow)?
@@ -923,10 +923,7 @@ fn validate_objects<S: Exp0002ReadAt>(
         physical.push(range);
     }
     physical.sort_by_key(|range| range.start);
-    if physical
-        .windows(2)
-        .any(|pair| pair[0].overlaps(pair[1]))
-    {
+    if physical.windows(2).any(|pair| pair[0].overlaps(pair[1])) {
         return Err(Exp0002Error::PhysicalOverlap.into());
     }
     Ok(())
@@ -1067,29 +1064,25 @@ mod tests {
         .expect("append");
         let interrupted = &appended[..appended.len() - FOOTER_LEN / 2];
         let mut strict_source = Exp0002SliceSource::new(interrupted);
-        assert!(validate_strict_at(
-            &mut strict_source,
-            &Exp0002SourceLimits::default()
-        )
-        .is_err());
+        assert!(validate_strict_at(&mut strict_source, &Exp0002SourceLimits::default()).is_err());
 
         let mut recovery_source = Exp0002SliceSource::new(interrupted);
-        let report = scan_valid_prefixes_at(
-            &mut recovery_source,
-            &Exp0002RecoveryLimits::default(),
-        )
-        .expect("recovery");
+        let report =
+            scan_valid_prefixes_at(&mut recovery_source, &Exp0002RecoveryLimits::default())
+                .expect("recovery");
         assert!(report
             .results
             .iter()
             .any(|candidate| candidate.prefix_len == u64::try_from(genesis.len()).expect("len")));
-        assert!(report.results.iter().all(|candidate| candidate.sequence == 0));
+        assert!(report
+            .results
+            .iter()
+            .all(|candidate| candidate.sequence == 0));
     }
 
     #[test]
     fn recovery_magic_storm_is_bounded() {
-        let mut bytes = build_genesis(header(), vec![object(1, b"root", true)])
-            .expect("genesis");
+        let mut bytes = build_genesis(header(), vec![object(1, b"root", true)]).expect("genesis");
         for _ in 0..32 {
             bytes.extend_from_slice(FOOTER_MAGIC);
         }
@@ -1104,16 +1097,13 @@ mod tests {
         .expect_err("storm must fail");
         assert_eq!(
             error,
-            Exp0002SourceError::Format(Exp0002Error::ResourceLimit(
-                "recovery magic matches"
-            ))
+            Exp0002SourceError::Format(Exp0002Error::ResourceLimit("recovery magic matches"))
         );
     }
 
     #[test]
     fn strict_source_enforces_cumulative_read_budget() {
-        let bytes = build_genesis(header(), vec![object(1, &[7_u8; 1024], true)])
-            .expect("genesis");
+        let bytes = build_genesis(header(), vec![object(1, &[7_u8; 1024], true)]).expect("genesis");
         let mut source = Exp0002SliceSource::new(&bytes);
         let error = validate_strict_at(
             &mut source,
@@ -1125,9 +1115,7 @@ mod tests {
         .expect_err("read budget");
         assert_eq!(
             error,
-            Exp0002SourceError::Format(Exp0002Error::ResourceLimit(
-                "source bytes read"
-            ))
+            Exp0002SourceError::Format(Exp0002Error::ResourceLimit("source bytes read"))
         );
     }
 }

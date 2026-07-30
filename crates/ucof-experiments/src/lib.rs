@@ -15,6 +15,7 @@ pub mod exp0002_recovery;
 pub mod exp0002_rewrite;
 pub mod exp0002_source;
 pub mod exp0002_source_recovery;
+#[allow(dead_code, unused_imports)]
 mod exp0002_source_strict;
 mod publication;
 mod recovery;

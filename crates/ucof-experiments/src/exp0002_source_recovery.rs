@@ -71,17 +71,14 @@ pub fn scan_valid_prefixes_at<S: Exp0002ReadAt>(
     let scan_start = file_len
         .checked_sub(scan_len)
         .ok_or(Exp0002Error::ArithmeticOverflow)?;
-    let scan_len_usize =
-        usize::try_from(scan_len).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
+    let scan_len_usize = usize::try_from(scan_len).map_err(|_| Exp0002Error::ArithmeticOverflow)?;
     let mut scan = vec![0_u8; scan_len_usize];
     let mut scan_cursor = 0_usize;
     let mut scan_read_operations = 0_u64;
     while scan_cursor < scan.len() {
         let take = (scan.len() - scan_cursor).min(limits.candidate.max_read_request_bytes);
         let read_offset = scan_start
-            .checked_add(
-                u64::try_from(scan_cursor).map_err(|_| Exp0002Error::ArithmeticOverflow)?,
-            )
+            .checked_add(u64::try_from(scan_cursor).map_err(|_| Exp0002Error::ArithmeticOverflow)?)
             .ok_or(Exp0002Error::ArithmeticOverflow)?;
         source
             .read_exact_at(read_offset, &mut scan[scan_cursor..scan_cursor + take])
@@ -202,9 +199,7 @@ impl<S: Exp0002ReadAt> Exp0002ReadAt for CountingPrefixSource<'_, S> {
     }
 }
 
-fn validate_configuration(
-    limits: &Exp0002SourceRecoveryLimits,
-) -> Result<(), Exp0002SourceError> {
+fn validate_configuration(limits: &Exp0002SourceRecoveryLimits) -> Result<(), Exp0002SourceError> {
     if limits.max_scan_bytes == 0
         || limits.max_scan_read_operations == 0
         || limits.max_magic_matches == 0
@@ -222,14 +217,12 @@ fn validate_configuration(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::exp0002::{
-        build_append, build_genesis, FileHeader, ObjectInput, ValidationLimits,
-    };
+    use crate::exp0002::{build_append, build_genesis, FileHeader, ObjectInput, ValidationLimits};
     use crate::exp0002_source::Exp0002SliceSource;
 
     fn header() -> FileHeader {
         FileHeader {
-            file_id: *b"recover-source-id",
+            file_id: *b"recover-src-id01",
             creation_nonce: *b"recover-nonce002",
         }
     }
@@ -259,22 +252,21 @@ mod tests {
         .expect("append");
         let interrupted = &append[..append.len() - FOOTER_LEN / 2];
         let mut source = Exp0002SliceSource::new(interrupted);
-        let report = scan_valid_prefixes_at(
-            &mut source,
-            &Exp0002SourceRecoveryLimits::default(),
-        )
-        .expect("recovery");
+        let report = scan_valid_prefixes_at(&mut source, &Exp0002SourceRecoveryLimits::default())
+            .expect("recovery");
         assert!(report
             .results
             .iter()
             .any(|candidate| candidate.prefix_len == u64::try_from(genesis.len()).expect("len")));
-        assert!(report.results.iter().all(|candidate| candidate.sequence == 0));
+        assert!(report
+            .results
+            .iter()
+            .all(|candidate| candidate.sequence == 0));
     }
 
     #[test]
     fn failed_candidate_reads_are_charged() {
-        let mut bytes = build_genesis(header(), vec![object(1, b"root", true)])
-            .expect("genesis");
+        let mut bytes = build_genesis(header(), vec![object(1, b"root", true)]).expect("genesis");
         let mut fake_footer = [0_u8; FOOTER_LEN];
         fake_footer[..FOOTER_MAGIC.len()].copy_from_slice(FOOTER_MAGIC);
         bytes.extend_from_slice(&fake_footer);
@@ -289,16 +281,13 @@ mod tests {
         .expect_err("failed candidate work must be charged");
         assert_eq!(
             error,
-            Exp0002SourceError::Format(Exp0002Error::ResourceLimit(
-                "recovery validation bytes"
-            ))
+            Exp0002SourceError::Format(Exp0002Error::ResourceLimit("recovery validation bytes"))
         );
     }
 
     #[test]
     fn scan_requests_are_chunked_and_counted() {
-        let genesis = build_genesis(header(), vec![object(1, b"root", true)])
-            .expect("genesis");
+        let genesis = build_genesis(header(), vec![object(1, b"root", true)]).expect("genesis");
         let mut bytes = genesis.clone();
         bytes.resize(genesis.len() + PAGE_SIZE * 3, 0);
         let mut source = RequestBoundSource {
@@ -327,8 +316,7 @@ mod tests {
 
     #[test]
     fn magic_storm_fails_under_configured_limit() {
-        let mut bytes = build_genesis(header(), vec![object(1, b"root", true)])
-            .expect("genesis");
+        let mut bytes = build_genesis(header(), vec![object(1, b"root", true)]).expect("genesis");
         for _ in 0..32 {
             bytes.extend_from_slice(FOOTER_MAGIC);
         }
@@ -343,9 +331,7 @@ mod tests {
         .expect_err("storm");
         assert_eq!(
             error,
-            Exp0002SourceError::Format(Exp0002Error::ResourceLimit(
-                "recovery magic matches"
-            ))
+            Exp0002SourceError::Format(Exp0002Error::ResourceLimit("recovery magic matches"))
         );
     }
 
