@@ -3,7 +3,7 @@ use std::error::Error;
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::Path;
-use ucof_experiments::exp0002::{FileHeader, ValidationLimits};
+use ucof_experiments::exp0002::FileHeader;
 use ucof_experiments::exp0002_rewrite::{
     repair_all_to_new_file, rewrite_selected_to_new_file, RewriteLimits, RewriteReport,
 };
@@ -128,7 +128,9 @@ fn command_history(path: &Path) -> Result<(), Box<dyn Error>> {
     let file = File::open(path)?;
     let mut source = Exp0002SeekSource::new(file);
     let report = enumerate_previous_chain_at(&mut source, &Exp0002SourceChainLimits::default())?;
-    println!("assurance: exact-end active commit and every linked ancestor validated as a strict prefix");
+    println!(
+        "assurance: exact-end active commit and every linked ancestor validated as a strict prefix"
+    );
     println!("file_len: {}", report.file_len);
     println!("total_bytes_read: {}", report.total_bytes_read);
     println!("commits: {}", report.commits.len());

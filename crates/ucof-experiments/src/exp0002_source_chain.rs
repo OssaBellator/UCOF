@@ -48,7 +48,7 @@ pub fn enumerate_previous_chain_at<S: Exp0002ReadAt>(
         .map_err(|_| Exp0002SourceError::Io("source chain length"))?;
     let mut prefix_len = file_len;
     let mut total_bytes_read = 0_u64;
-    let mut commits = Vec::new();
+    let mut commits: Vec<RecoveredExp0002SourcePrefix> = Vec::new();
     let mut seen_footers = BTreeSet::new();
 
     loop {
@@ -72,7 +72,7 @@ pub fn enumerate_previous_chain_at<S: Exp0002ReadAt>(
         }
         let verified = validation?;
         if !seen_footers.insert(verified.footer_offset) {
-            return Err(Exp0002Error::PreviousFooterCycle.into());
+            return Err(Exp0002Error::InvalidPreviousFooter.into());
         }
 
         let current = RecoveredExp0002SourcePrefix {
@@ -150,9 +150,7 @@ impl<S: Exp0002ReadAt> Exp0002ReadAt for CountingPrefixSource<'_, S> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::exp0002::{
-        build_append, build_genesis, FileHeader, ObjectInput, ValidationLimits,
-    };
+    use crate::exp0002::{build_append, build_genesis, FileHeader, ObjectInput, ValidationLimits};
     use crate::exp0002_source::Exp0002SliceSource;
 
     fn object(id: u64, payload: &[u8], is_root: bool) -> ObjectInput {

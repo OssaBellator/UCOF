@@ -41,10 +41,8 @@ fn temporary_directory() -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("clock")
         .as_nanos();
-    let path = std::env::temp_dir().join(format!(
-        "ucof-exp0002-cli-{}-{stamp}",
-        std::process::id()
-    ));
+    let path =
+        std::env::temp_dir().join(format!("ucof-exp0002-cli-{}-{stamp}", std::process::id()));
     fs::create_dir(&path).expect("temporary directory");
     path
 }
@@ -108,9 +106,7 @@ fn recovery_reports_only_strict_prefixes() {
     let damaged = temporary.join("interrupted.ucof");
     fs::write(
         &damaged,
-        read_hex(
-            root.join("tests/vectors/exp-0002-invalid/append-cut-footer-prefix.hex"),
-        ),
+        read_hex(root.join("tests/vectors/exp-0002-invalid/append-cut-footer-prefix.hex")),
     )
     .expect("damaged vector");
 
