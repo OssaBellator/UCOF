@@ -1,50 +1,6 @@
 name: Verify Immutable Successor Vector
 
 on:
-  push:
-    branches: ["phase-3/directory-snapshots-recovery"]
-    paths:
-      - "crates/ucof-experiments/src/immutable_successor.rs"
-      - "crates/ucof-experiments/src/lib.rs"
-      - "crates/ucof-experiments/tests/immutable_successor_api.rs"
-      - "tools/prepare_immutable_successor_source.py"
-      - ".github/workflows/verify-exp0002-immutable-vector.yml"
-  workflow_dispatch:
-
-permissions:
-  contents: write
-
-jobs:
-  finalize:
-    if: github.actor != 'github-actions[bot]'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: phase-3/directory-snapshots-recovery
-      - uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-      - uses: Swatinem/rust-cache@v2
-      - name: Normalize and verify reusable immutable successor API
-        run: |
-          python3 tools/prepare_immutable_successor_source.py
-          cargo fmt --all
-          cargo fmt --all -- --check
-          cargo clippy --locked -p ucof-experiments --test exp0002_immutable_vector --test immutable_successor_api -- -D warnings
-          cargo test --locked -p ucof-experiments --test exp0002_immutable_vector
-          cargo test --locked -p ucof-experiments --test immutable_successor_api
-          cargo test --locked -p ucof-experiments --test exp0002_immutable_generated_vectors
-      - name: Commit normalized source and restore read-only verifier
-        run: |
-          rm -f tools/prepare_immutable_successor_source.py
-          rm -f .github/workflows/export-formatted-immutable-successor.yml
-          python3 - <<'PY'
-          from pathlib import Path
-
-          Path('.github/workflows/verify-exp0002-immutable-vector.yml').write_text('''name: Verify Immutable Successor Vector
-
-on:
   pull_request:
     paths:
       - "tests/vectors/exp-0002-immutable/**"
@@ -74,6 +30,37 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Verify pinned vector manifest and boundaries
+        run: |
+          python3 - <<'PY'
+          from hashlib import sha256
+          import json
+          from pathlib import Path
+
+          directory = Path("tests/vectors/exp-0002-immutable")
+          manifest = json.loads((directory / "manifest.json").read_text(encoding="utf-8"))
+          assert manifest["status"] == "non-normative successor microformat evidence"
+          assert len(manifest["vectors"]) == 1
+          vector = manifest["vectors"][0]
+          data = bytes.fromhex((directory / vector["file"]).read_text(encoding="ascii"))
+          digest = sha256(data).hexdigest()
+          assert len(data) == vector["decoded_bytes"]
+          assert digest == vector["sha256"]
+          magic = b"UCFTIM02"
+          offsets = []
+          cursor = 0
+          while True:
+              offset = data.find(magic, cursor)
+              if offset < 0:
+                  break
+              offsets.append(offset)
+              cursor = offset + 1
+          assert offsets == [len(data) - 128]
+          print(f"decoded_bytes={len(data)}")
+          print(f"sha256={digest}")
+          print(f"footer_magic_offsets={offsets}")
+          print("trailing_bytes_after_last_footer=0")
+          PY
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt, clippy
@@ -81,22 +68,9 @@ jobs:
       - name: Check formatting
         run: cargo fmt --all -- --check
       - name: Lint successor parser and reusable API
-        run: cargo clippy --locked -p ucof-experiments --test exp0002_immutable_vector --test immutable_successor_api -- -D warnings
+        run: cargo clippy --locked -p ucof-experiments --test exp0002_immutable_vector --test immutable_successor_api --test exp0002_immutable_generated_vectors -- -D warnings
       - name: Parse, generate, and validate successor vectors
         run: |
           cargo test --locked -p ucof-experiments --test exp0002_immutable_vector -- --nocapture
           cargo test --locked -p ucof-experiments --test immutable_successor_api -- --nocapture
           cargo test --locked -p ucof-experiments --test exp0002_immutable_generated_vectors -- --nocapture
-''', encoding='utf-8')
-          PY
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add crates/ucof-experiments/src/immutable_successor.rs \
-            crates/ucof-experiments/src/lib.rs \
-            crates/ucof-experiments/tests/immutable_successor_api.rs \
-            tools/prepare_immutable_successor_source.py \
-            .github/workflows/export-formatted-immutable-successor.yml \
-            .github/workflows/verify-exp0002-immutable-vector.yml
-          git diff --cached --check
-          git commit -m "feat: land reusable immutable successor API"
-          git push origin HEAD:phase-3/directory-snapshots-recovery
