@@ -38,6 +38,13 @@ def main() -> None:
             "        locators,\n        footer_offset,",
             1,
         )
+    if "#[allow(clippy::too_many_arguments)]\nfn parse_page(" not in text:
+        text = replace_once(
+            text,
+            "fn parse_page(\n",
+            "// The traversal state remains explicit so every bounded collection is visible.\n#[allow(clippy::too_many_arguments)]\nfn parse_page(\n",
+            "parse-page lint scope",
+        )
     if 'Invalid("page overlap")' not in text:
         text = replace_once(
             text,
