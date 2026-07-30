@@ -11,6 +11,7 @@ fuzz_target!(|data: &[u8]| {
         max_depth: 8,
         max_allocation_bytes: 2 << 20,
         max_output_bytes: 2 << 20,
+        ..ImmutableLimits::default()
     };
     let _ = validate(data, limits);
 });
