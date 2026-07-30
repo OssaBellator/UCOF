@@ -45,3 +45,5 @@ jobs:
           git diff --cached --check
           git commit -m "fix: validate immutable metadata root identifiers"
           git push origin HEAD:phase-3/directory-snapshots-recovery
+
+# Revision triggers the already-installed one-shot workflow.
