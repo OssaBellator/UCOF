@@ -1,0 +1,30 @@
+name: Patch Phase 3 Successor Ledgers
+
+on:
+  push:
+    branches: ["phase-3/directory-snapshots-recovery"]
+    paths:
+      - ".github/workflows/patch-phase3-successor-ledgers.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/directory-snapshots-recovery
+      - name: Patch ledgers
+        run: |
+          python3 tools/patch_phase3_successor_ledgers.py
+          git diff --check
+      - name: Commit ledgers
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/PHASE_3_STATUS.md docs/PHASE_3_SUCCESSOR_EVIDENCE.md
+          git commit -m "docs: update reusable successor core status"
+          git push origin HEAD:phase-3/directory-snapshots-recovery
