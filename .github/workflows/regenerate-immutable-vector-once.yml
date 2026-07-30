@@ -1,0 +1,55 @@
+name: Regenerate Immutable Vector Once
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/regenerate-immutable-vector-once.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  regenerate:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/directory-snapshots-recovery
+      - name: Generate and validate exact-end vector
+        run: |
+          python3 - <<'PY'
+          from hashlib import sha256
+          from pathlib import Path
+          import sys
+
+          sys.path.insert(0, "tools")
+          import experiment_exp0002_immutable_page_objects as objects
+
+          values = [
+              objects.ObjectInput(1, 1, b"alpha"),
+              objects.ObjectInput(2, 2, b"bravo"),
+              objects.ObjectInput(3, 3, b"charlie"),
+              objects.ObjectInput(4, 1, b"delta"),
+          ]
+          data = objects.build_genesis(values)
+          report = objects.validate_complete(data)
+          assert len(data) == 16_886
+          assert report.structural.sequence == 0
+          assert tuple(locator.object_id for locator in report.objects) == (1, 2, 3, 4)
+          assert data[-128:-120] == b"UCFTIM02"
+          path = Path("tests/vectors/exp-0002-immutable/genesis-four.hex")
+          encoded = data.hex()
+          path.write_text("\n".join(encoded[index:index + 128] for index in range(0, len(encoded), 128)) + "\n", encoding="ascii")
+          print(f"decoded_bytes={len(data)}")
+          print(f"sha256={sha256(data).hexdigest()}")
+          PY
+      - name: Commit regenerated vector
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/vectors/exp-0002-immutable/genesis-four.hex
+          git diff --cached --check
+          git commit -m "test: regenerate exact-end immutable successor vector"
+          git push origin HEAD:phase-3/directory-snapshots-recovery
