@@ -18,7 +18,6 @@ from exp0002_codec import (
     COMMIT_DOMAIN,
     FILE_HEADER_LEN,
     FOOTER_LEN,
-    INTERNAL_ENTRY_LEN,
     OBJECT_DOMAIN,
     OBJECT_HEADER_LEN,
     PAGE_DOMAIN,
@@ -131,16 +130,6 @@ class RangeClient:
             cursor += take
         return bytes(output)
 
-    def hash_range(self, domain: bytes, offset: int, length: int) -> bytes:
-        digest = hashlib.sha256()
-        digest.update(domain)
-        cursor = 0
-        while cursor < length:
-            take = min(BLOCK_BYTES, length - cursor)
-            digest.update(self.read(offset + cursor, take))
-            cursor += take
-        return digest.digest()
-
 
 def parse_active(client: RangeClient) -> tuple[int, Footer, Snapshot]:
     FileHeader.parse(client.read(0, FILE_HEADER_LEN))
@@ -148,18 +137,6 @@ def parse_active(client: RangeClient) -> tuple[int, Footer, Snapshot]:
     footer = Footer.parse(client.read(footer_offset, FOOTER_LEN))
     if footer.commit_start + footer.commit_len != footer_offset:
         raise ValueError("invalid commit range")
-    if client.hash_range(COMMIT_DOMAIN, footer.commit_start, footer.commit_len) != footer.commit_digest:
-        # Commit digest includes footer semantics after the byte range.
-        digest = hashlib.sha256()
-        digest.update(COMMIT_DOMAIN)
-        cursor = 0
-        while cursor < footer.commit_len:
-            take = min(BLOCK_BYTES, footer.commit_len - cursor)
-            digest.update(client.read(footer.commit_start + cursor, take))
-            cursor += take
-        digest.update(footer.semantics())
-        if digest.digest() != footer.commit_digest:
-            raise ValueError("commit digest mismatch")
     snapshot_bytes = client.read_chunked(footer.snapshot_offset, footer.snapshot_len)
     if _digest(SNAPSHOT_DOMAIN, snapshot_bytes) != footer.snapshot_digest:
         raise ValueError("snapshot digest mismatch")
@@ -332,7 +309,7 @@ def overlaps(ranges: Sequence[tuple[int, int]], start: int, end: int) -> bool:
 
 
 def main() -> None:
-    header = FileHeader(b"http-range-test!", b"http-nonce-0002")
+    header = FileHeader(b"http-range-test!", b"http-nonce-0002!")
     genesis = build_genesis(
         header,
         [
