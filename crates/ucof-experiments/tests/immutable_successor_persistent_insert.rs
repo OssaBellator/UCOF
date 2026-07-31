@@ -115,14 +115,14 @@ fn insertion_is_deterministic_and_rejects_existing_identifiers() {
 }
 
 #[test]
-fn single_deletions_are_persistent_and_multi_insertions_remain_fallbacks() {
+fn single_deletions_and_multi_insertions_use_persistent_paths() {
     let limits = ImmutableLimits::default();
     let genesis = build_genesis(&even_objects(400), limits).expect("genesis");
     let deletion = append_persistent_batch(&genesis, &[ImmutableBatchOperation::Delete(2)], limits)
         .expect("persistent deletion");
     assert_eq!(deletion.mode, PersistentBatchMode::CopyOnWriteDeletion);
 
-    let mixed = append_persistent_batch(
+    let insertions = append_persistent_batch(
         &genesis,
         &[
             ImmutableBatchOperation::Put(ImmutableObjectInput::new(801, 9, b"insert-one".to_vec())),
@@ -130,6 +130,6 @@ fn single_deletions_are_persistent_and_multi_insertions_remain_fallbacks() {
         ],
         limits,
     )
-    .expect("multi-insertion fallback");
-    assert_eq!(mixed.mode, PersistentBatchMode::FullRebuildShapeChange);
+    .expect("persistent multi-insertion");
+    assert_eq!(insertions.mode, PersistentBatchMode::CopyOnWritePutBatch);
 }
