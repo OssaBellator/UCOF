@@ -181,6 +181,7 @@ fn source_rewrite_uses_one_cumulative_read_budget() {
     };
     assert!(matches!(
         rewrite_source_all(&mut source, limits),
-        Err(ImmutableSourceError::Limit("read bytes" | "read operations"))
+        Err(ImmutableSourceError::Limit("read bytes"))
+            | Err(ImmutableSourceError::Limit("read operations"))
     ));
 }
