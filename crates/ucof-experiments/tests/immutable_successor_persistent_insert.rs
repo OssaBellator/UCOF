@@ -123,16 +123,8 @@ fn deletions_and_multi_operation_insertions_remain_explicit_fallbacks() {
     let mixed = append_persistent_batch(
         &genesis,
         &[
-            ImmutableBatchOperation::Put(ImmutableObjectInput::new(
-                801,
-                9,
-                b"insert-one".to_vec(),
-            )),
-            ImmutableBatchOperation::Put(ImmutableObjectInput::new(
-                803,
-                9,
-                b"insert-two".to_vec(),
-            )),
+            ImmutableBatchOperation::Put(ImmutableObjectInput::new(801, 9, b"insert-one".to_vec())),
+            ImmutableBatchOperation::Put(ImmutableObjectInput::new(803, 9, b"insert-two".to_vec())),
         ],
         limits,
     )
