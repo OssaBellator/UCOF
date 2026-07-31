@@ -45,6 +45,8 @@ jobs:
         run: python3 tools/verify_exp0002_immutable_invalid_recipes.py
       - name: Regenerate immutable successor vector recipes
         run: python3 tools/verify_exp0002_immutable_generated_recipes.py
+      - name: Verify semantic compaction graph recipes
+        run: python3 tools/verify_exp0002_immutable_compaction_recipes.py
       - name: Reproduce framing experiments
         run: |
           python3 tools/experiment_framing_widths.py
