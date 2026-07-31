@@ -9,11 +9,12 @@
 |---|---|---|---|
 | Mixed byte-writer baseline | `phase-3/reusable-mixed-batch-baseline` / #4 | Deterministic insert, replace, and delete batch with strict revalidation | Persistent shape-changing updates |
 | Conditional source and freshness | `phase-3/conditional-source-freshness` / #5 | One strong source version per synchronous assurance operation; explicit trusted freshness checkpoint | Maintained HTTP/cloud adapters and native async cancellation |
-| Semantic compaction | `phase-3/semantic-compaction` / #6 | Dependency-complete active rewrite relative to caller resolver and unknown policy | Profile resolver contracts, history retention, source streaming, extension/provenance policy |
+| Semantic compaction | `phase-3/semantic-compaction` / #6 | Dependency-complete active rewrite relative to caller resolver and unknown policy | Profile resolver contracts, history retention, extension/provenance policy |
 | Persistent replacement writer | `phase-3/persistent-batch-writer` / #7 | Arbitrary-depth copy-on-write replacement paths with exact page reuse | Persistent insertion, split, redistribution, merge, underflow, and root collapse |
 | Successor convergence packet | `phase-3/successor-convergence-packet` / #8 | Draft epoch proposal, disposition, spill requirements, and independent review handoff | Maintainer and external review disposition |
+| Source rewrite and compaction | `phase-3/source-rewrite-compaction` / #14 | Bounded-source all/selected rewrite and dependency compaction without a whole-file input buffer | Constant-memory output, spill integration, historical retention, and concrete versioned adapters |
 
-These drafts intentionally share the Phase 3 baseline but do not depend on each other. They should be reviewed and landed independently, then rebased or combined only after their assurance boundaries remain clear.
+PRs #5–#8 intentionally share PR #4 as their review baseline. PR #14 stacks on PR #6 because it extends the semantic-compaction API. They should be reviewed and landed independently where possible, then rebased or combined only after their assurance boundaries remain clear.
 
 ## Frontier status
 
@@ -29,23 +30,23 @@ These drafts intentionally share the Phase 3 baseline but do not depend on each 
 
 **Open:** Integrate modeled insertion/deletion algorithms into byte emission. The shape-changing fallback rebuilds all active pages and cannot satisfy the final scale objective.
 
-### 3. Source history, recovery, and transport
+### 3. Source history, recovery, rewrite, and transport
 
-**Advanced:** Slice and bounded-source strict validation, lookup, history, and recovery exist. Conditional source adapter binds one operation to one strong version and checks cancellation/deadline before accepting returned bytes.
+**Advanced:** Slice and bounded-source strict validation, lookup, history, and recovery exist. Conditional source adapter binds one operation to one strong version and checks cancellation/deadline before accepting returned bytes. Source rewrite and semantic compaction strictly validate, inventory, and reread selected records under one cumulative budget without copying the complete source into one contiguous buffer.
 
-**Open:** Source-based rewrite/compaction, concrete authenticated HTTP/cloud adapters, operation-wide retry budgets, and native asynchronous cancellation.
+**Open:** Constant-memory output streaming, concrete authenticated HTTP/cloud adapters, operation-wide retry budgets, native asynchronous cancellation, and source-based selected historical retention.
 
 ### 4. Repair and semantic compaction
 
-**Advanced:** Strict verified-source rewrite-all, caller-selected rewrite, and policy-driven dependency traversal exist. Unknown dependency semantics either abort or retain the full active set.
+**Advanced:** Strict verified-source rewrite-all, caller-selected rewrite, policy-driven dependency traversal, and source-backed equivalents exist. Unknown dependency semantics either abort or retain the full active set.
 
-**Open:** Profile-specific resolver conformance, selected historical snapshot retention, extension preservation, provenance reissuance, signatures, source streaming, and large-graph spill.
+**Open:** Profile-specific resolver conformance, selected historical snapshot retention, extension preservation, provenance reissuance, signatures, constant-memory output, and large-graph spill.
 
 ### 5. Vectors and fuzzing
 
 **Advanced:** Valid, invalid, interrupted, fork, recovery, support-profile, source, history, rewrite, and persistent-writer evidence exists across Rust and Python. Dedicated cargo-fuzz targets exercise successor assurance APIs.
 
-**Open:** Canonical shape-transition vectors for persistent insertion/deletion, semantic compaction vector generator with pinned identities, hostile conditional-source traces, spill fault corpora, and independently generated vectors.
+**Open:** Canonical shape-transition vectors for persistent insertion/deletion, semantic compaction vector generator with pinned identities, hostile conditional-source and source-rewrite traces, spill fault corpora, and independently generated vectors.
 
 ### 6. Spill and publication
 
