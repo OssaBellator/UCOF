@@ -1,0 +1,109 @@
+{
+  "status": "non-normative immutable successor semantic compaction recipes",
+  "aggregate_sha256": "16fc73ddfb909b92abba126271b19c7105591d8e2d375168251dda935dd7aa53",
+  "objects": [
+    {"object_id": 1, "kind": 1, "resolution": {"known": [2, 3]}},
+    {"object_id": 2, "kind": 1, "resolution": {"known": [4]}},
+    {"object_id": 3, "kind": 1, "resolution": {"known": [4, 5]}},
+    {"object_id": 4, "kind": 1, "resolution": {"known": [2]}},
+    {"object_id": 5, "kind": 1, "resolution": {"known": []}},
+    {"object_id": 6, "kind": 9, "resolution": {"unknown": true}},
+    {"object_id": 7, "kind": 1, "resolution": {"known": [8, 99]}},
+    {"object_id": 8, "kind": 1, "resolution": {"error": "resolver-failure"}}
+  ],
+  "cases": [
+    {
+      "name": "reachable-cycle",
+      "roots": [1],
+      "unknown_policy": "reject",
+      "limits": {"max_roots": 8, "max_nodes": 8, "max_edges": 16, "max_depth": 8},
+      "expected": {
+        "retained": [1, 2, 3, 4, 5],
+        "discarded": [6, 7, 8],
+        "edges_visited": 6,
+        "maximum_depth": 2
+      }
+    },
+    {
+      "name": "cycle-root",
+      "roots": [2],
+      "unknown_policy": "reject",
+      "limits": {"max_roots": 8, "max_nodes": 8, "max_edges": 16, "max_depth": 8},
+      "expected": {
+        "retained": [2, 4],
+        "discarded": [1, 3, 5, 6, 7, 8],
+        "edges_visited": 2,
+        "maximum_depth": 1
+      }
+    },
+    {
+      "name": "canonical-roots",
+      "roots": [3, 1, 3],
+      "unknown_policy": "reject",
+      "limits": {"max_roots": 8, "max_nodes": 8, "max_edges": 16, "max_depth": 8},
+      "expected": {
+        "selected_roots": [1, 3],
+        "retained": [1, 2, 3, 4, 5],
+        "discarded": [6, 7, 8],
+        "edges_visited": 6,
+        "maximum_depth": 2
+      }
+    },
+    {
+      "name": "unknown-reject",
+      "roots": [6],
+      "unknown_policy": "reject",
+      "limits": {"max_roots": 8, "max_nodes": 8, "max_edges": 16, "max_depth": 8},
+      "expected": {"error": "unknown:6"}
+    },
+    {
+      "name": "unknown-retain-all",
+      "roots": [6],
+      "unknown_policy": "retain-all",
+      "limits": {"max_roots": 8, "max_nodes": 8, "max_edges": 16, "max_depth": 8},
+      "expected": {
+        "retained": [1, 2, 3, 4, 5, 6, 7, 8],
+        "discarded": [],
+        "edges_visited": 0,
+        "maximum_depth": 0,
+        "unknown_trigger": 6,
+        "conservative_full_retention": true
+      }
+    },
+    {
+      "name": "missing-dependency",
+      "roots": [7],
+      "unknown_policy": "reject",
+      "limits": {"max_roots": 8, "max_nodes": 8, "max_edges": 16, "max_depth": 8},
+      "expected": {"error": "missing:7->99"}
+    },
+    {
+      "name": "resolver-error",
+      "roots": [8],
+      "unknown_policy": "reject",
+      "limits": {"max_roots": 8, "max_nodes": 8, "max_edges": 16, "max_depth": 8},
+      "expected": {"error": "resolver:8:resolver-failure"}
+    },
+    {
+      "name": "node-limit",
+      "roots": [1],
+      "unknown_policy": "reject",
+      "limits": {"max_roots": 8, "max_nodes": 3, "max_edges": 16, "max_depth": 8},
+      "expected": {"error": "limit:node-count"}
+    },
+    {
+      "name": "edge-limit",
+      "roots": [1],
+      "unknown_policy": "reject",
+      "limits": {"max_roots": 8, "max_nodes": 8, "max_edges": 1, "max_depth": 8},
+      "expected": {"error": "limit:edge-count"}
+    },
+    {
+      "name": "depth-limit",
+      "roots": [1],
+      "unknown_policy": "reject",
+      "limits": {"max_roots": 8, "max_nodes": 8, "max_edges": 16, "max_depth": 1},
+      "expected": {"error": "limit:dependency-depth"}
+    }
+  ]
+}
