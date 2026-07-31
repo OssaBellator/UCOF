@@ -26,7 +26,9 @@ fn gap_insertion_rewrites_one_path_and_reuses_other_pages() {
     assert_eq!(original.root_level, 1);
     assert_eq!(original.page_count, 4);
 
-    let inserted = ImmutableObjectInput::new(187, 11, b"gap-insert".to_vec());
+    // The first two leaves are full (2..=370 and 372..=740). Identifier 741 routes into the
+    // sparse final leaf (742..=800), so this case exercises insertion without a split.
+    let inserted = ImmutableObjectInput::new(741, 11, b"gap-insert".to_vec());
     let result =
         append_persistent_insert(&genesis, &inserted, limits).expect("persistent gap insertion");
     assert_eq!(result.mode, PersistentBatchMode::CopyOnWriteInsertion);
