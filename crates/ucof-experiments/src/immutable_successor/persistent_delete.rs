@@ -178,7 +178,10 @@ fn merge_deletion_nodes(
     Ok(left)
 }
 
-fn increment_touched(touched_original: &mut usize, limits: ImmutableLimits) -> Result<(), ImmutableError> {
+fn increment_touched(
+    touched_original: &mut usize,
+    limits: ImmutableLimits,
+) -> Result<(), ImmutableError> {
     *touched_original = touched_original
         .checked_add(1)
         .ok_or(ImmutableError::Limit("page count"))?;
@@ -331,7 +334,7 @@ fn append_persistent_delete_from_previous(
             limits,
             &mut pages_written,
         )?,
-        PendingDeletionNode::Internal { level, children } if children.len() == 1 => children
+        PendingDeletionNode::Internal { level: _, children } if children.len() == 1 => children
             .into_iter()
             .next()
             .ok_or(ImmutableError::Invalid("deletion root collapse"))?,
