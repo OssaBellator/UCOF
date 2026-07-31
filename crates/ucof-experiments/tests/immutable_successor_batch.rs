@@ -20,17 +20,9 @@ fn mixed_batch_is_canonical_across_caller_order() {
     let limits = ImmutableLimits::default();
     let genesis = build_genesis(&modeled_objects(400), limits).expect("genesis");
     let operations = vec![
-        ImmutableBatchOperation::Put(ImmutableObjectInput::new(
-            401,
-            7,
-            b"inserted".to_vec(),
-        )),
+        ImmutableBatchOperation::Put(ImmutableObjectInput::new(401, 7, b"inserted".to_vec())),
         ImmutableBatchOperation::Delete(2),
-        ImmutableBatchOperation::Put(ImmutableObjectInput::new(
-            200,
-            9,
-            b"replacement".to_vec(),
-        )),
+        ImmutableBatchOperation::Put(ImmutableObjectInput::new(200, 9, b"replacement".to_vec())),
         ImmutableBatchOperation::Delete(399),
     ];
 
@@ -55,16 +47,8 @@ fn mixed_batch_applies_insert_replace_and_delete_semantics() {
     let genesis = build_genesis(&modeled_objects(400), limits).expect("genesis");
     let operations = vec![
         ImmutableBatchOperation::Delete(2),
-        ImmutableBatchOperation::Put(ImmutableObjectInput::new(
-            200,
-            9,
-            b"replacement".to_vec(),
-        )),
-        ImmutableBatchOperation::Put(ImmutableObjectInput::new(
-            401,
-            7,
-            b"inserted".to_vec(),
-        )),
+        ImmutableBatchOperation::Put(ImmutableObjectInput::new(200, 9, b"replacement".to_vec())),
+        ImmutableBatchOperation::Put(ImmutableObjectInput::new(401, 7, b"inserted".to_vec())),
         ImmutableBatchOperation::Delete(399),
     ];
     let appended = append_batch(&genesis, &operations, limits).expect("mixed append");
@@ -113,11 +97,7 @@ fn mixed_batch_rejects_ambiguous_or_invalid_changes() {
         Err(ImmutableError::DuplicateObject(1))
     );
     assert_eq!(
-        append_batch(
-            &genesis,
-            &[ImmutableBatchOperation::Delete(99)],
-            limits,
-        ),
+        append_batch(&genesis, &[ImmutableBatchOperation::Delete(99)], limits),
         Err(ImmutableError::MissingObject(99))
     );
     assert_eq!(
