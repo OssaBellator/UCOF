@@ -9,6 +9,7 @@ include!("immutable_successor/part3.rs");
 include!("immutable_successor/history.rs");
 include!("immutable_successor/part4.rs");
 include!("immutable_successor/part5.rs");
+include!("immutable_successor/batch.rs");
 include!("immutable_successor/rewrite.rs");
 
 #[allow(clippy::len_without_is_empty)]
