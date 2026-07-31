@@ -1,0 +1,121 @@
+{
+  "status": "non-normative Phase 3 spill publication transition traces",
+  "aggregate_sha256": "3e790a1ed79a7b7154a7a2464bc49fad6bf46304c423a24a34512302e887155c",
+  "cases": [
+    {
+      "name": "durable-publication-and-retirement",
+      "limits": {"max_staged_bytes": 10000, "max_staged_files": 2, "max_cleanup_actions": 2},
+      "events": [
+        {"op": "stage", "bytes": 4096},
+        {"op": "validate"},
+        {"op": "file-sync", "success": true},
+        {"op": "link", "result": "created"},
+        {"op": "dir-sync", "success": true},
+        {"op": "retire", "success": true}
+      ],
+      "expected": {"stage": "PrivateNameRetired", "outcome": "PublishedAndDurable", "staged_bytes": 4096, "staged_files": 1, "cleanup_actions": 1, "error": null}
+    },
+    {
+      "name": "destination-exists",
+      "limits": {"max_staged_bytes": 10000, "max_staged_files": 2, "max_cleanup_actions": 2},
+      "events": [
+        {"op": "stage", "bytes": 4096},
+        {"op": "validate"},
+        {"op": "file-sync", "success": true},
+        {"op": "link", "result": "destination-exists"}
+      ],
+      "expected": {"stage": "StagedFileSynchronized", "outcome": "NotPublished", "staged_bytes": 4096, "staged_files": 1, "cleanup_actions": 0, "error": "destination-exists"}
+    },
+    {
+      "name": "link-not-created",
+      "limits": {"max_staged_bytes": 10000, "max_staged_files": 2, "max_cleanup_actions": 2},
+      "events": [
+        {"op": "stage", "bytes": 4096},
+        {"op": "validate"},
+        {"op": "file-sync", "success": true},
+        {"op": "link", "result": "not-created"}
+      ],
+      "expected": {"stage": "StagedFileSynchronized", "outcome": "NotPublished", "staged_bytes": 4096, "staged_files": 1, "cleanup_actions": 0, "error": "not-published:destination-link"}
+    },
+    {
+      "name": "link-indeterminate",
+      "limits": {"max_staged_bytes": 10000, "max_staged_files": 2, "max_cleanup_actions": 2},
+      "events": [
+        {"op": "stage", "bytes": 4096},
+        {"op": "validate"},
+        {"op": "file-sync", "success": true},
+        {"op": "link", "result": "indeterminate"}
+      ],
+      "expected": {"stage": "StagedFileSynchronized", "outcome": "PublicationIndeterminate", "staged_bytes": 4096, "staged_files": 1, "cleanup_actions": 0, "error": "indeterminate:destination-link"}
+    },
+    {
+      "name": "directory-sync-indeterminate",
+      "limits": {"max_staged_bytes": 10000, "max_staged_files": 2, "max_cleanup_actions": 2},
+      "events": [
+        {"op": "stage", "bytes": 4096},
+        {"op": "validate"},
+        {"op": "file-sync", "success": true},
+        {"op": "link", "result": "created"},
+        {"op": "dir-sync", "success": false}
+      ],
+      "expected": {"stage": "DestinationLinked", "outcome": "PublicationIndeterminate", "staged_bytes": 4096, "staged_files": 1, "cleanup_actions": 0, "error": "indeterminate:destination-directory-sync"}
+    },
+    {
+      "name": "cleanup-failure-after-durable",
+      "limits": {"max_staged_bytes": 10000, "max_staged_files": 2, "max_cleanup_actions": 2},
+      "events": [
+        {"op": "stage", "bytes": 4096},
+        {"op": "validate"},
+        {"op": "file-sync", "success": true},
+        {"op": "link", "result": "created"},
+        {"op": "dir-sync", "success": true},
+        {"op": "retire", "success": false}
+      ],
+      "expected": {"stage": "DestinationDirectorySynchronized", "outcome": "PublishedAndDurable", "staged_bytes": 4096, "staged_files": 1, "cleanup_actions": 1, "error": "cleanup-failed:private-name-retirement"}
+    },
+    {
+      "name": "wrong-owner-before-mutation",
+      "limits": {"max_staged_bytes": 10000, "max_staged_files": 2, "max_cleanup_actions": 2},
+      "events": [{"op": "stage", "bytes": 4096, "owner": "wrong"}],
+      "expected": {"stage": "PrivateStaging", "outcome": "NotPublished", "staged_bytes": 0, "staged_files": 0, "cleanup_actions": 0, "error": "ownership-mismatch"}
+    },
+    {
+      "name": "staged-byte-limit",
+      "limits": {"max_staged_bytes": 10, "max_staged_files": 2, "max_cleanup_actions": 2},
+      "events": [{"op": "stage", "bytes": 10}, {"op": "stage", "bytes": 1}],
+      "expected": {"stage": "PrivateStaging", "outcome": "NotPublished", "staged_bytes": 10, "staged_files": 1, "cleanup_actions": 0, "error": "limit:byte-count"}
+    },
+    {
+      "name": "file-count-limit",
+      "limits": {"max_staged_bytes": 100, "max_staged_files": 1, "max_cleanup_actions": 2},
+      "events": [{"op": "stage", "bytes": 10}, {"op": "stage", "bytes": 10}],
+      "expected": {"stage": "PrivateStaging", "outcome": "NotPublished", "staged_bytes": 10, "staged_files": 1, "cleanup_actions": 0, "error": "limit:file-count"}
+    },
+    {
+      "name": "file-sync-failure",
+      "limits": {"max_staged_bytes": 100, "max_staged_files": 2, "max_cleanup_actions": 2},
+      "events": [{"op": "stage", "bytes": 10}, {"op": "validate"}, {"op": "file-sync", "success": false}],
+      "expected": {"stage": "OutputValidated", "outcome": "NotPublished", "staged_bytes": 10, "staged_files": 1, "cleanup_actions": 0, "error": "not-published:staged-file-sync"}
+    },
+    {
+      "name": "cleanup-budget-after-durable",
+      "limits": {"max_staged_bytes": 100, "max_staged_files": 2, "max_cleanup_actions": 1},
+      "events": [
+        {"op": "stage", "bytes": 10},
+        {"op": "validate"},
+        {"op": "file-sync", "success": true},
+        {"op": "link", "result": "created"},
+        {"op": "dir-sync", "success": true},
+        {"op": "cleanup", "success": true},
+        {"op": "retire", "success": true}
+      ],
+      "expected": {"stage": "DestinationDirectorySynchronized", "outcome": "PublishedAndDurable", "staged_bytes": 10, "staged_files": 1, "cleanup_actions": 1, "error": "limit:cleanup-work"}
+    },
+    {
+      "name": "invalid-transition",
+      "limits": {"max_staged_bytes": 100, "max_staged_files": 2, "max_cleanup_actions": 2},
+      "events": [{"op": "dir-sync", "success": true}],
+      "expected": {"stage": "PrivateStaging", "outcome": "NotPublished", "staged_bytes": 0, "staged_files": 0, "cleanup_actions": 0, "error": "invalid-transition"}
+    }
+  ]
+}
