@@ -27,6 +27,7 @@ mod conditional_source_api {
     use super::*;
 
     include!("immutable_successor/conditional_source.rs");
+    include!("immutable_successor/conditional_retry.rs");
 }
 
 pub use conditional_source_api::*;
