@@ -1,9 +1,9 @@
 use std::collections::BTreeMap;
 
 use ucof_experiments::immutable_successor::{
-    build_genesis, rewrite_all, semantic_compact, DependencyResolution,
-    ImmutableCompactionError, ImmutableCompactionLimits, ImmutableDependencyResolver,
-    ImmutableError, ImmutableLimits, ImmutableObjectInput, UnknownDependencyPolicy,
+    build_genesis, rewrite_all, semantic_compact, DependencyResolution, ImmutableCompactionError,
+    ImmutableCompactionLimits, ImmutableDependencyResolver, ImmutableError, ImmutableLimits,
+    ImmutableObjectInput, UnknownDependencyPolicy,
 };
 
 #[derive(Default)]
