@@ -11,24 +11,25 @@
 | Conditional source and freshness | `phase-3/conditional-source-freshness` / #5 | One strong source version per synchronous assurance operation; explicit trusted freshness checkpoint | Maintained HTTP/cloud adapters and native async cancellation |
 | Semantic compaction | `phase-3/semantic-compaction` / #6 | Dependency-complete active rewrite relative to caller resolver and unknown policy | Profile resolver contracts, history retention, extension/provenance policy |
 | Persistent replacement writer | `phase-3/persistent-batch-writer` / #7 | Arbitrary-depth copy-on-write replacement paths with exact page reuse | Persistent insertion, split, redistribution, merge, underflow, and root collapse |
-| Successor convergence packet | `phase-3/successor-convergence-packet` / #8 | Draft epoch proposal, disposition, spill requirements, and independent review handoff | Maintainer and external review disposition |
+| Successor convergence packet | `phase-3/successor-convergence-packet` / #8 | Draft epoch proposal, disposition, spill requirements, occupancy blocker, and independent review handoff | Maintainer and external review disposition |
 | Source rewrite and compaction | `phase-3/source-rewrite-compaction` / #14 | Bounded-source all/selected rewrite and dependency compaction without a whole-file input buffer | Constant-memory output, spill integration, historical retention, and concrete versioned adapters |
+| Persistent insertion writer | `phase-3/persistent-insertion-writer` / #15 | One absent object through a persistent arbitrary-depth path with leaf/internal split propagation and root-height increase | Canonical multi-insertion planner and persistent deletion |
 
-PRs #5–#8 intentionally share PR #4 as their review baseline. PR #14 stacks on PR #6 because it extends the semantic-compaction API. They should be reviewed and landed independently where possible, then rebased or combined only after their assurance boundaries remain clear.
+PRs #5–#8 intentionally share PR #4 as their review baseline. PR #14 stacks on PR #6. PR #15 stacks on PR #7. They should be reviewed and landed independently where possible, then rebased or combined only after their assurance boundaries remain clear.
 
 ## Frontier status
 
 ### 1. Successor epoch and normative policy
 
-**Advanced:** FCP-0003 Draft proposes an immutable-page successor, 128-bit opaque identifiers, compact authenticated locators, fixed page geometry, deterministic occupancy/split/deletion rules, batch semantics, and acceptance evidence.
+**Advanced:** FCP-0003 Draft proposes an immutable-page successor, 128-bit opaque identifiers, compact authenticated locators, fixed page geometry, deterministic occupancy/split/deletion rules, batch semantics, and acceptance evidence. Experiment 0054 records that the current maximum-packing writer and pinned 400-object vector do not satisfy the proposed half-full non-root occupancy rule.
 
-**Open:** Review may revise every proposed byte and policy. The current executable microformat still uses earlier research widths and is not yet the proposed epoch specification.
+**Open:** Review may revise every proposed byte and policy. Selecting half-full occupancy requires canonical final-two-page redistribution, new Rust/Python construction, regenerated vectors, and deletion integration against the accepted invariant. The current executable microformat is not yet the proposed epoch specification.
 
 ### 2. Persistent mixed writer
 
-**Advanced:** Reusable writer supports deterministic complete mixed batches and copy-on-write arbitrary-depth replacement paths.
+**Advanced:** Reusable writer supports deterministic complete mixed batches, copy-on-write arbitrary-depth replacement batches, and one persistent absent-object insertion with leaf/internal split propagation and root-height increase.
 
-**Open:** Integrate modeled insertion/deletion algorithms into byte emission. The shape-changing fallback rebuilds all active pages and cannot satisfy the final scale objective.
+**Open:** Integrate a shared-path planner for multiple insertions and replacements. Persistent deletion must wait for, or explicitly isolate itself from, the occupancy-policy convergence because current research genesis may contain a sparse final page below the proposed minimum.
 
 ### 3. Source history, recovery, rewrite, and transport
 
@@ -44,9 +45,9 @@ PRs #5–#8 intentionally share PR #4 as their review baseline. PR #14 stacks on
 
 ### 5. Vectors and fuzzing
 
-**Advanced:** Valid, invalid, interrupted, fork, recovery, support-profile, source, history, rewrite, and persistent-writer evidence exists across Rust and Python. Dedicated cargo-fuzz targets exercise successor assurance APIs.
+**Advanced:** Valid, invalid, interrupted, fork, recovery, support-profile, source, history, rewrite, persistent-replacement, and persistent-insertion evidence exists across Rust and Python research layers. Dedicated cargo-fuzz targets exercise successor assurance and writer APIs.
 
-**Open:** Canonical shape-transition vectors for persistent insertion/deletion, semantic compaction vector generator with pinned identities, hostile conditional-source and source-rewrite traces, spill fault corpora, and independently generated vectors.
+**Open:** Cross-language canonical shape-transition vectors under the selected occupancy policy, semantic-compaction vector generator with pinned identities, hostile conditional-source and source-rewrite traces, spill fault corpora, and independently generated vectors.
 
 ### 6. Spill and publication
 
