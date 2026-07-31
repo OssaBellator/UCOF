@@ -21,6 +21,7 @@ mod source_api {
     include!("immutable_successor/source_full.rs");
     include!("immutable_successor/source_rewrite.rs");
     include!("immutable_successor/source_rewrite_conversions.rs");
+    include!("immutable_successor/source_history_rewrite.rs");
 }
 
 pub use source_api::*;
