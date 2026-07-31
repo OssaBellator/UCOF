@@ -211,7 +211,9 @@ impl SpillPublicationSession {
             return Err(SpillPublicationError::InvalidTransition);
         }
         if !succeeded {
-            return Err(SpillPublicationError::NotPublished("staged file synchronization"));
+            return Err(SpillPublicationError::NotPublished(
+                "staged file synchronization",
+            ));
         }
         self.stage = SpillPublicationStage::StagedFileSynchronized;
         Ok(())
@@ -377,10 +379,7 @@ mod tests {
         let ownership = token();
         let mut session = ready_session();
         assert_eq!(
-            session.record_no_overwrite_link(
-                &ownership,
-                NoOverwriteLinkResult::DestinationExists,
-            ),
+            session.record_no_overwrite_link(&ownership, NoOverwriteLinkResult::DestinationExists,),
             Err(SpillPublicationError::DestinationExists)
         );
         assert_eq!(session.outcome(), SpillPublicationOutcome::NotPublished);
@@ -437,10 +436,7 @@ mod tests {
         let ownership = token();
         let mut session = ready_session();
         assert_eq!(
-            session.record_no_overwrite_link(
-                &ownership,
-                NoOverwriteLinkResult::Indeterminate,
-            ),
+            session.record_no_overwrite_link(&ownership, NoOverwriteLinkResult::Indeterminate,),
             Err(SpillPublicationError::PublicationIndeterminate(
                 "destination link"
             ))
