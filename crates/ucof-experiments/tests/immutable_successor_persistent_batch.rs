@@ -58,8 +58,8 @@ fn multiple_replacement_paths_share_rewritten_ancestors() {
             b"replacement-first".to_vec(),
         )),
     ];
-    let result = append_persistent_batch(&genesis, &operations, limits)
-        .expect("persistent replacements");
+    let result =
+        append_persistent_batch(&genesis, &operations, limits).expect("persistent replacements");
     assert_eq!(result.mode, PersistentBatchMode::CopyOnWriteReplacements);
     assert_eq!(result.pages_written, 3);
     assert_eq!(result.pages_reused, 1);
@@ -112,11 +112,7 @@ fn insertions_and_deletions_report_full_rebuild_fallback() {
         &genesis,
         &[
             ImmutableBatchOperation::Delete(2),
-            ImmutableBatchOperation::Put(ImmutableObjectInput::new(
-                401,
-                10,
-                b"inserted".to_vec(),
-            )),
+            ImmutableBatchOperation::Put(ImmutableObjectInput::new(401, 10, b"inserted".to_vec())),
         ],
         limits,
     )
