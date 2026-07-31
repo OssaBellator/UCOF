@@ -2,9 +2,9 @@
 
 use libfuzzer_sys::fuzz_target;
 use ucof_experiments::immutable_successor::{
-    append_persistent_batch, append_persistent_delete, build_genesis,
-    validate_canonical_occupancy, ImmutableBatchOperation, ImmutableLimits, ImmutableObjectInput,
-    PersistentBatchMode, LEAF_CAPACITY,
+    append_persistent_batch, append_persistent_delete, build_genesis, validate_canonical_occupancy,
+    ImmutableBatchOperation, ImmutableLimits, ImmutableObjectInput, PersistentBatchMode,
+    LEAF_CAPACITY,
 };
 
 fuzz_target!(|data: &[u8]| {
