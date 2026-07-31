@@ -38,6 +38,14 @@ Integration tests compare source and slice operations for:
 
 The tracing source enforces 4 KiB maximum read requests and confirms that no individual request materializes the complete input file.
 
+A dedicated `immutable_successor_source_rewrite` cargo-fuzz target:
+
+- generates bounded canonical object sets and selected identifier subsets;
+- compares source-selected rewrite bytes with slice-selected rewrite bytes;
+- enforces a 256-byte maximum source request;
+- mutates one arbitrary source byte and requires source rewrite to reject it;
+- runs in the permanent fuzz build and smoke matrix.
+
 ## Findings
 
 1. Whole-file source materialization is not required for strict validation, authenticated inventory, selected rewrite, or dependency traversal.
@@ -53,5 +61,5 @@ The tracing source enforces 4 KiB maximum read requests and confirms that no ind
 - bind the operation to concrete conditional HTTP/cloud adapters;
 - source-based historical-snapshot retention;
 - preservation of unknown optional extensions and provenance policy;
-- hostile mutable-source and failure-injection fuzzing;
+- mutation-during-operation and injected transport-failure fuzzing;
 - output cancellation and no-overwrite durable publication.
