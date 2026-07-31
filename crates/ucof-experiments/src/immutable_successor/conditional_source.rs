@@ -7,7 +7,10 @@ use std::time::Instant;
 /// Failures specific to a strong-version conditional range operation.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ConditionalSourceError {
+    /// A terminal client or transport failure that must not be retried automatically.
     Client(&'static str),
+    /// A transient transport failure that a bounded retry wrapper may retry.
+    RetryableClient(&'static str),
     InvalidVersionToken,
     VersionChanged,
     Protocol(&'static str),
@@ -20,6 +23,9 @@ impl fmt::Display for ConditionalSourceError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Client(label) => write!(formatter, "conditional source client failed: {label}"),
+            Self::RetryableClient(label) => {
+                write!(formatter, "conditional source client transient failure: {label}")
+            }
             Self::InvalidVersionToken => write!(formatter, "strong version token required"),
             Self::VersionChanged => write!(formatter, "source version changed"),
             Self::Protocol(label) => write!(formatter, "conditional range protocol error: {label}"),
@@ -237,7 +243,8 @@ impl<C: ConditionalRangeClient> ConditionalReadAt<C> {
 
 fn map_conditional_error(error: ConditionalSourceError) -> ImmutableSourceError {
     match error {
-        ConditionalSourceError::Client(label) => ImmutableSourceError::Io(label),
+        ConditionalSourceError::Client(label)
+        | ConditionalSourceError::RetryableClient(label) => ImmutableSourceError::Io(label),
         ConditionalSourceError::InvalidVersionToken => {
             ImmutableSourceError::Io("strong version token")
         }
