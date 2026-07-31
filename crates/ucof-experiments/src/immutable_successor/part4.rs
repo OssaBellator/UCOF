@@ -164,15 +164,33 @@ fn build_tree(
                 .unwrap_or(0),
         ));
     }
+
     let mut pages = 0_usize;
-    let mut level = Vec::new();
-    for chunk in locators.chunks(LEAF_CAPACITY) {
+    let leaf_sizes = canonical_group_sizes(
+        locators.len(),
+        LEAF_CAPACITY,
+        LEAF_MIN_OCCUPANCY,
+        limits,
+    )?;
+    let mut level = Vec::with_capacity(leaf_sizes.len());
+    allocation_check::<PageRef>(leaf_sizes.len(), limits)?;
+    let mut start = 0_usize;
+    for size in leaf_sizes {
         if pages >= limits.max_pages {
             return Err(ImmutableError::Limit("page count"));
         }
-        level.push(append_page(output, &encode_leaf(chunk)?, limits)?);
+        let end = start
+            .checked_add(size)
+            .ok_or(ImmutableError::Limit("object count"))?;
+        level.push(append_page(
+            output,
+            &encode_leaf(&locators[start..end])?,
+            limits,
+        )?);
         pages += 1;
+        start = end;
     }
+
     while level.len() > 1 {
         let parent_level = level[0]
             .level
@@ -181,17 +199,29 @@ fn build_tree(
         if parent_level > limits.max_depth {
             return Err(ImmutableError::Limit("page depth"));
         }
-        let mut next = Vec::new();
-        for chunk in level.chunks(INTERNAL_FANOUT) {
+        let group_sizes = canonical_group_sizes(
+            level.len(),
+            INTERNAL_FANOUT,
+            INTERNAL_MIN_OCCUPANCY,
+            limits,
+        )?;
+        allocation_check::<PageRef>(group_sizes.len(), limits)?;
+        let mut next = Vec::with_capacity(group_sizes.len());
+        let mut start = 0_usize;
+        for size in group_sizes {
             if pages >= limits.max_pages {
                 return Err(ImmutableError::Limit("page count"));
             }
+            let end = start
+                .checked_add(size)
+                .ok_or(ImmutableError::Limit("page count"))?;
             next.push(append_page(
                 output,
-                &encode_internal(chunk, parent_level)?,
+                &encode_internal(&level[start..end], parent_level)?,
                 limits,
             )?);
             pages += 1;
+            start = end;
         }
         level = next;
     }

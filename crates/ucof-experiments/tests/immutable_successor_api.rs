@@ -1,7 +1,7 @@
 use sha2::{Digest, Sha256};
 use ucof_experiments::immutable_successor::{
-    append_replacement, build_genesis, validate, ImmutableError, ImmutableLimits,
-    ImmutableObjectInput, FOOTER_LEN,
+    append_replacement, build_genesis, validate, validate_canonical_occupancy, ImmutableError,
+    ImmutableLimits, ImmutableObjectInput, FOOTER_LEN,
 };
 
 const COMMIT_DOMAIN: &[u8] = b"UCOF-IMMUTABLE-COMMIT\0";
@@ -121,7 +121,8 @@ fn reproduces_pinned_append_and_multi_level_recipes() {
         })
         .collect();
     let multi = build_genesis(&objects, ImmutableLimits::default()).expect("multi-level genesis");
-    let multi_report = validate(&multi, ImmutableLimits::default()).expect("multi-level validates");
+    let multi_report =
+        validate_canonical_occupancy(&multi, ImmutableLimits::default()).expect("canonical tree");
     assert_eq!(multi.len(), 89_316);
     assert_eq!(multi_report.sequence, 0);
     assert_eq!(multi_report.object_count, 400);
@@ -129,7 +130,7 @@ fn reproduces_pinned_append_and_multi_level_recipes() {
     assert_eq!(multi_report.root_level, 1);
     assert_eq!(
         sha256_hex(&multi),
-        "d4cdc721028a8abad2f381328a0bcd605ef19d26fea30c1b214f094a16ba3f70"
+        "374210581f17647f783acc66bb0c137ac624d083ee5c39f9d71a54eb72120792"
     );
 }
 

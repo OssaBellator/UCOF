@@ -10,6 +10,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import experiment_exp0002_immutable_canonical_occupancy as canonical
 import experiment_exp0002_immutable_page_cow as cow
 import experiment_exp0002_immutable_page_objects as objects
 
@@ -28,6 +29,7 @@ def load_base(contract: dict) -> bytes:
             f"base SHA-256 mismatch: expected {contract['base_sha256']}, received {actual}"
         )
     objects.validate_complete(data)
+    canonical.validate_canonical_occupancy(data)
     return data
 
 
@@ -53,12 +55,13 @@ def generate(recipe: dict, base: bytes) -> bytes:
             )
             for object_id in range(first, last + 1)
         ]
-        return objects.build_genesis(values)
+        return canonical.build_genesis(values)
     raise AssertionError(f"unknown generated-vector operation: {operation}")
 
 
 def verify_recipe(recipe: dict, data: bytes) -> None:
     report = objects.validate_complete(data)
+    canonical.validate_canonical_occupancy(data)
     actual_sha = sha256(data).hexdigest()
     facts = {
         "decoded_bytes": len(data),
@@ -109,6 +112,7 @@ def main() -> None:
     print(f"aggregate_sha256={aggregate.hexdigest()}")
     print("deterministic_generation=pass")
     print("strict_python_validation=pass")
+    print("canonical_occupancy=pass")
 
 
 if __name__ == "__main__":

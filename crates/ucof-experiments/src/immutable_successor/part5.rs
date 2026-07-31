@@ -90,7 +90,7 @@ pub fn build_genesis(
         pages,
         limits,
     )?;
-    validate(&output, limits)?;
+    validate_canonical_occupancy(&output, limits)?;
     Ok(output)
 }
 
@@ -99,7 +99,7 @@ pub fn append_replacement(
     replacement: &ImmutableObjectInput,
     limits: ImmutableLimits,
 ) -> Result<Vec<u8>, ImmutableError> {
-    let previous = validate_internal(data, limits)?;
+    let previous = validate_canonical_internal(data, limits)?;
     let index = previous
         .locators
         .iter()
@@ -119,6 +119,6 @@ pub fn append_replacement(
         pages,
         limits,
     )?;
-    validate(&output, limits)?;
+    validate_canonical_occupancy(&output, limits)?;
     Ok(output)
 }

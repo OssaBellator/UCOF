@@ -39,7 +39,7 @@ pub fn append_batch(
         return Err(ImmutableError::Limit("output"));
     }
 
-    let previous = validate_internal(data, limits)?;
+    let previous = validate_canonical_internal(data, limits)?;
     let next_sequence = previous
         .public
         .sequence
@@ -131,6 +131,6 @@ pub fn append_batch(
         pages,
         limits,
     )?;
-    validate(&output, limits)?;
+    validate_canonical_occupancy(&output, limits)?;
     Ok(output)
 }
