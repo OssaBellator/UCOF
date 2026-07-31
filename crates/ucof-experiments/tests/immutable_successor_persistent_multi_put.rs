@@ -97,7 +97,10 @@ fn two_full_leaf_splits_propagate_through_one_new_root() {
     assert_eq!(original.root_level, 1);
     assert_eq!(original.page_count, INTERNAL_FANOUT + 1);
 
-    let inputs = vec![object(1), object(u64::try_from(count).expect("count") * 2 + 1)];
+    let inputs = vec![
+        object(1),
+        object(u64::try_from(count).expect("count") * 2 + 1),
+    ];
     let result = append_persistent_put_batch(&genesis, &inputs, limits).expect("double split");
     assert_eq!(result.report.root_level, 2);
     assert_eq!(result.report.object_count, count + 2);
