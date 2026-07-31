@@ -1,6 +1,4 @@
 use std::collections::BTreeSet;
-use std::error::Error;
-use std::fmt;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ImmutableCompactionLimits {
@@ -143,12 +141,12 @@ pub fn semantic_compact<R: ImmutableDependencyResolver>(
         return Err(ImmutableCompactionError::Limit("root count"));
     }
 
+    allocation_check::<u64>(source.locators.len(), format_limits)?;
     let all_ids: Vec<u64> = source
         .locators
         .iter()
         .map(|locator| locator.object_id)
         .collect();
-    allocation_check::<u64>(all_ids.len(), format_limits)?;
     for root in &roots {
         if source
             .locators
