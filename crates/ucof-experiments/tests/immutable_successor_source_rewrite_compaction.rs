@@ -169,8 +169,8 @@ fn source_semantic_compaction_matches_slice_result() {
 #[test]
 fn source_rewrite_uses_one_cumulative_read_budget() {
     let format = ImmutableLimits::default();
-    let bytes = build_genesis(&(1_u64..=20).map(object).collect::<Vec<_>>(), format)
-        .expect("genesis");
+    let bytes =
+        build_genesis(&(1_u64..=20).map(object).collect::<Vec<_>>(), format).expect("genesis");
     let mut source = TracingSource::new(bytes);
     let limits = ImmutableSourceLimits {
         max_total_bytes_read: 1,
