@@ -1,0 +1,81 @@
+{
+  "status": "non-normative immutable successor conditional retry traces",
+  "cases": [
+    {
+      "name": "metadata-and-range-success-at-limit",
+      "max_attempts": 5,
+      "metadata": ["retryable", "retryable", "success"],
+      "ranges": [{"length": 4, "outcomes": ["retryable", "success"]}],
+      "expected": {"result": "success", "transport_attempts": 5, "logical_requests": 1, "accepted_bytes": 4}
+    },
+    {
+      "name": "metadata-exhaustion",
+      "max_attempts": 2,
+      "metadata": ["retryable", "retryable", "success"],
+      "ranges": [],
+      "expected": {"result": "attempt-limit", "transport_attempts": 2, "logical_requests": 0, "accepted_bytes": 0}
+    },
+    {
+      "name": "range-exhaustion-after-metadata",
+      "max_attempts": 3,
+      "metadata": ["success"],
+      "ranges": [{"length": 8, "outcomes": ["retryable", "retryable", "success"]}],
+      "expected": {"result": "attempt-limit", "transport_attempts": 3, "logical_requests": 1, "accepted_bytes": 0}
+    },
+    {
+      "name": "terminal-range-no-retry",
+      "max_attempts": 8,
+      "metadata": ["success"],
+      "ranges": [{"length": 4, "outcomes": ["terminal", "success"]}],
+      "expected": {"result": "terminal", "transport_attempts": 2, "logical_requests": 1, "accepted_bytes": 0}
+    },
+    {
+      "name": "version-change-no-retry",
+      "max_attempts": 8,
+      "metadata": ["success"],
+      "ranges": [{"length": 4, "outcomes": ["version-change", "success"]}],
+      "expected": {"result": "version-change", "transport_attempts": 2, "logical_requests": 1, "accepted_bytes": 0}
+    },
+    {
+      "name": "protocol-error-no-retry",
+      "max_attempts": 8,
+      "metadata": ["success"],
+      "ranges": [{"length": 4, "outcomes": ["protocol", "success"]}],
+      "expected": {"result": "protocol", "transport_attempts": 2, "logical_requests": 1, "accepted_bytes": 0}
+    },
+    {
+      "name": "cancelled-before-range",
+      "max_attempts": 8,
+      "metadata": ["success"],
+      "control_events": [{"before_range": 0, "state": "cancelled"}],
+      "ranges": [{"length": 4, "outcomes": ["success"]}],
+      "expected": {"result": "cancelled", "transport_attempts": 1, "logical_requests": 1, "accepted_bytes": 0}
+    },
+    {
+      "name": "deadline-before-metadata",
+      "max_attempts": 8,
+      "control_events": [{"before_metadata": true, "state": "deadline"}],
+      "metadata": ["success"],
+      "ranges": [],
+      "expected": {"result": "deadline", "transport_attempts": 0, "logical_requests": 0, "accepted_bytes": 0}
+    },
+    {
+      "name": "multiple-ranges-share-budget",
+      "max_attempts": 6,
+      "metadata": ["success"],
+      "ranges": [
+        {"length": 3, "outcomes": ["retryable", "success"]},
+        {"length": 5, "outcomes": ["retryable", "success"]}
+      ],
+      "expected": {"result": "success", "transport_attempts": 5, "logical_requests": 2, "accepted_bytes": 8}
+    },
+    {
+      "name": "zero-budget-invalid",
+      "max_attempts": 0,
+      "metadata": ["success"],
+      "ranges": [],
+      "expected": {"result": "invalid-policy", "transport_attempts": 0, "logical_requests": 0, "accepted_bytes": 0}
+    }
+  ],
+  "aggregate_sha256": "b8efa6b7772fb018afc0ca6e763fe794b1b86140d01edc6f4be3d8cf2db19ced"
+}
