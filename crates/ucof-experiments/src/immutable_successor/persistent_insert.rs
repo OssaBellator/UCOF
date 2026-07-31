@@ -127,7 +127,7 @@ fn insert_persistent_path(
                 pages_written,
             )?]);
         }
-        let split = (entries.len() + 1) / 2;
+        let split = entries.len().div_ceil(2);
         let left = append_cow_page(
             output,
             &encode_leaf(&entries[..split])?,
@@ -175,7 +175,7 @@ fn insert_persistent_path(
             pages_written,
         )?]);
     }
-    let split = (updated.len() + 1) / 2;
+    let split = updated.len().div_ceil(2);
     let left = append_cow_page(
         output,
         &encode_internal(&updated[..split], reference.level)?,
