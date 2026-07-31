@@ -11,6 +11,7 @@ include!("immutable_successor/part4.rs");
 include!("immutable_successor/part5.rs");
 include!("immutable_successor/batch.rs");
 include!("immutable_successor/rewrite.rs");
+include!("immutable_successor/freshness.rs");
 
 #[allow(clippy::len_without_is_empty)]
 mod source_api {
@@ -21,6 +22,14 @@ mod source_api {
 }
 
 pub use source_api::*;
+
+mod conditional_source_api {
+    use super::*;
+
+    include!("immutable_successor/conditional_source.rs");
+}
+
+pub use conditional_source_api::*;
 
 /// Convenience methods completing the synchronous random-access source contract.
 pub trait ImmutableReadAtExt: ImmutableReadAt {
