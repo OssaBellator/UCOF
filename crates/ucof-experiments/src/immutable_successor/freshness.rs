@@ -1,6 +1,3 @@
-use std::error::Error;
-use std::fmt;
-
 /// Trusted application state kept outside the UCOF file.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct TrustedFreshnessCheckpoint {
