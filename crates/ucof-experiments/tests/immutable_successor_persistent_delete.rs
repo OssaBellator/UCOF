@@ -27,12 +27,8 @@ fn root_leaf_deletion_rewrites_only_the_root() {
         result.report
     );
 
-    let general = append_persistent_batch(
-        &genesis,
-        &[ImmutableBatchOperation::Delete(5)],
-        limits,
-    )
-    .expect("general deletion");
+    let general = append_persistent_batch(&genesis, &[ImmutableBatchOperation::Delete(5)], limits)
+        .expect("general deletion");
     assert_eq!(general, result);
 }
 
