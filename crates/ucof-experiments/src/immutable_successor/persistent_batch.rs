@@ -7,10 +7,12 @@ pub enum PersistentBatchMode {
     /// One absent identifier: append its object and propagate deterministic splits through one
     /// leaf-to-root path.
     CopyOnWriteInsertion,
+    /// Multiple insertions and replacements: rewrite each affected page once and share ancestors.
+    CopyOnWritePutBatch,
     /// One active identifier: rewrite its path, repair underflow, and collapse the root when needed.
     CopyOnWriteDeletion,
-    /// A multi-operation shape-changing batch still uses the deterministic full rebuild baseline
-    /// until a shared insert/delete planner is integrated.
+    /// A batch containing deletion plus another operation still uses the deterministic full rebuild
+    /// baseline until a shared mixed insert/delete repair planner is integrated.
     FullRebuildShapeChange,
 }
 
@@ -160,9 +162,9 @@ fn rewrite_replacement_path(
 /// persistent algorithm supports the operation shape.
 ///
 /// Replacement-only batches use copy-on-write leaf-to-root updates at arbitrary depth. One absent
-/// `Put` uses persistent insertion and split propagation. One `Delete` uses persistent underflow
-/// repair and root collapse. Multi-operation batches containing insertions or deletions currently
-/// use [`append_batch`] rather than falsely claiming shared-path reuse.
+/// `Put` uses persistent insertion and split propagation. Multi-operation `Put` batches use one
+/// shared path planner. One `Delete` uses persistent underflow repair and root collapse. Batches
+/// combining deletion with another operation currently use [`append_batch`].
 pub fn append_persistent_batch(
     data: &[u8],
     operations: &[ImmutableBatchOperation],
@@ -207,6 +209,29 @@ pub fn append_persistent_batch(
             }
             ImmutableBatchOperation::Put(_) => {}
         }
+    }
+
+    let all_puts = order
+        .iter()
+        .all(|index| matches!(operations[*index], ImmutableBatchOperation::Put(_)));
+    let any_insertion = all_puts
+        && order.iter().any(|index| match &operations[*index] {
+            ImmutableBatchOperation::Put(input) => previous
+                .locators
+                .binary_search_by_key(&input.object_id, |locator| locator.object_id)
+                .is_err(),
+            ImmutableBatchOperation::Delete(_) => false,
+        });
+    if any_insertion {
+        allocation_check::<&ImmutableObjectInput>(operations.len(), limits)?;
+        let inputs: Vec<&ImmutableObjectInput> = order
+            .iter()
+            .filter_map(|index| match &operations[*index] {
+                ImmutableBatchOperation::Put(input) => Some(input),
+                ImmutableBatchOperation::Delete(_) => None,
+            })
+            .collect();
+        return append_persistent_put_refs_from_previous(data, &inputs, previous, limits);
     }
 
     let replacement_only = order.iter().all(|index| match &operations[*index] {
