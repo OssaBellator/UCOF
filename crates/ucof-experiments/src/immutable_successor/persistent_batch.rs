@@ -4,8 +4,11 @@ use std::collections::BTreeMap;
 pub enum PersistentBatchMode {
     /// Existing identifiers only: append new objects and rewrite affected leaf-to-root paths.
     CopyOnWriteReplacements,
-    /// At least one insertion or deletion changes tree shape; use the deterministic full rebuild
-    /// baseline until split, redistribution, merge, and underflow algorithms are integrated.
+    /// One absent identifier: append its object and propagate deterministic splits through one
+    /// leaf-to-root path.
+    CopyOnWriteInsertion,
+    /// A deletion or a multi-operation shape-changing batch still uses the deterministic full
+    /// rebuild baseline until deletion repair and a shared batch planner are integrated.
     FullRebuildShapeChange,
 }
 
@@ -151,12 +154,13 @@ fn rewrite_replacement_path(
     }
 }
 
-/// Appends a deterministic batch while preserving unchanged page identities when tree shape is
-/// unchanged.
+/// Appends a deterministic batch while preserving unchanged page identities where the selected
+/// persistent algorithm supports the operation shape.
 ///
-/// Replacement-only batches use copy-on-write leaf-to-root updates at arbitrary depth. Batches
-/// containing insertion or deletion currently use [`append_batch`] and report the full-rebuild
-/// mode rather than falsely claiming page reuse.
+/// Replacement-only batches use copy-on-write leaf-to-root updates at arbitrary depth. One absent
+/// `Put` uses persistent insertion and split propagation. Deletions and multi-operation batches
+/// containing insertions currently use [`append_batch`] and report the full-rebuild mode rather than
+/// falsely claiming page reuse.
 pub fn append_persistent_batch(
     data: &[u8],
     operations: &[ImmutableBatchOperation],
@@ -179,6 +183,18 @@ pub fn append_persistent_batch(
         return Err(ImmutableError::DuplicateObject(
             operations[pair[0]].object_id(),
         ));
+    }
+
+    if operations.len() == 1 {
+        if let ImmutableBatchOperation::Put(input) = &operations[order[0]] {
+            if previous
+                .locators
+                .binary_search_by_key(&input.object_id, |locator| locator.object_id)
+                .is_err()
+            {
+                return append_persistent_insert_from_previous(data, input, previous, limits);
+            }
+        }
     }
 
     let replacement_only = order.iter().all(|index| match &operations[*index] {
