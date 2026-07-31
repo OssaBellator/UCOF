@@ -27,8 +27,8 @@ fn gap_insertion_rewrites_one_path_and_reuses_other_pages() {
     assert_eq!(original.page_count, 4);
 
     let inserted = ImmutableObjectInput::new(187, 11, b"gap-insert".to_vec());
-    let result = append_persistent_insert(&genesis, &inserted, limits)
-        .expect("persistent gap insertion");
+    let result =
+        append_persistent_insert(&genesis, &inserted, limits).expect("persistent gap insertion");
     assert_eq!(result.mode, PersistentBatchMode::CopyOnWriteInsertion);
     assert_eq!(result.report.sequence, 1);
     assert_eq!(result.report.object_count, 401);
@@ -37,12 +37,9 @@ fn gap_insertion_rewrites_one_path_and_reuses_other_pages() {
     assert_eq!(result.pages_reused, 2);
     assert_eq!(result.report.page_count, 4);
 
-    let general = append_persistent_batch(
-        &genesis,
-        &[ImmutableBatchOperation::Put(inserted)],
-        limits,
-    )
-    .expect("general persistent insertion");
+    let general =
+        append_persistent_batch(&genesis, &[ImmutableBatchOperation::Put(inserted)], limits)
+            .expect("general persistent insertion");
     assert_eq!(general, result);
 }
 
@@ -119,12 +116,8 @@ fn insertion_is_deterministic_and_rejects_existing_identifiers() {
 fn deletions_and_multi_operation_insertions_remain_explicit_fallbacks() {
     let limits = ImmutableLimits::default();
     let genesis = build_genesis(&even_objects(400), limits).expect("genesis");
-    let deletion = append_persistent_batch(
-        &genesis,
-        &[ImmutableBatchOperation::Delete(2)],
-        limits,
-    )
-    .expect("deletion fallback");
+    let deletion = append_persistent_batch(&genesis, &[ImmutableBatchOperation::Delete(2)], limits)
+        .expect("deletion fallback");
     assert_eq!(deletion.mode, PersistentBatchMode::FullRebuildShapeChange);
 
     let mixed = append_persistent_batch(
