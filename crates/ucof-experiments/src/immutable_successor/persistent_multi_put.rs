@@ -202,9 +202,9 @@ fn finish_put_roots(
         .ok_or(ImmutableError::Invalid("persistent put root"))
 }
 
-fn append_persistent_put_batch_from_previous(
+fn append_persistent_put_refs_from_previous(
     data: &[u8],
-    inputs: &[ImmutableObjectInput],
+    inputs: &[&ImmutableObjectInput],
     previous: InternalReport,
     limits: ImmutableLimits,
 ) -> Result<PersistentBatchResult, ImmutableError> {
@@ -223,7 +223,7 @@ fn append_persistent_put_batch_from_previous(
 
     let mut absent = 0_usize;
     for index in &order {
-        let input = &inputs[*index];
+        let input = inputs[*index];
         if input.object_id == 0 || input.kind == 0 {
             return Err(ImmutableError::Invalid("object input"));
         }
@@ -250,7 +250,7 @@ fn append_persistent_put_batch_from_previous(
     let mut output = data.to_vec();
     let mut updates = Vec::with_capacity(inputs.len());
     for index in order {
-        updates.push(append_object(&mut output, &inputs[index], limits)?);
+        updates.push(append_object(&mut output, inputs[index], limits)?);
     }
 
     let footer = parse_footer(data, previous.footer_offset)?;
@@ -313,6 +313,8 @@ pub fn append_persistent_put_batch(
     if data.len() > limits.max_output_bytes {
         return Err(ImmutableError::Limit("output"));
     }
+    allocation_check::<&ImmutableObjectInput>(inputs.len(), limits)?;
+    let input_refs: Vec<&ImmutableObjectInput> = inputs.iter().collect();
     let previous = validate_canonical_internal(data, limits)?;
-    append_persistent_put_batch_from_previous(data, inputs, previous, limits)
+    append_persistent_put_refs_from_previous(data, &input_refs, previous, limits)
 }
