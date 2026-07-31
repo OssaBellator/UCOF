@@ -3,10 +3,10 @@ use std::time::Instant;
 
 use ucof_experiments::immutable_successor::{
     append_replacement, build_genesis, evaluate_freshness, validate, validate_source_at,
-    ConditionalObjectMetadata, ConditionalRangeClient, ConditionalRangeResponse,
-    ConditionalReadAt, ConditionalSourceError, FreshnessDecision, FreshnessError,
-    ImmutableLimits, ImmutableObjectInput, ImmutableOperationControl, ImmutableSourceLimits,
-    StrongVersionToken, TrustedFreshnessCheckpoint,
+    ConditionalObjectMetadata, ConditionalRangeClient, ConditionalRangeResponse, ConditionalReadAt,
+    ConditionalSourceError, FreshnessDecision, FreshnessError, ImmutableLimits,
+    ImmutableObjectInput, ImmutableOperationControl, ImmutableSourceLimits, StrongVersionToken,
+    TrustedFreshnessCheckpoint,
 };
 
 #[derive(Clone, Copy, Debug)]
@@ -22,7 +22,6 @@ struct State {
     bytes: Vec<u8>,
     version: String,
     fault: Option<Fault>,
-    requests: usize,
 }
 
 #[derive(Clone, Debug)]
@@ -37,7 +36,6 @@ impl FakeStore {
                 bytes,
                 version: version.to_owned(),
                 fault: None,
-                requests: 0,
             })),
         }
     }
@@ -55,7 +53,10 @@ impl FakeStore {
 
 impl ConditionalRangeClient for FakeStore {
     fn metadata(&mut self) -> Result<ConditionalObjectMetadata, ConditionalSourceError> {
-        let state = self.state.lock().map_err(|_| ConditionalSourceError::Client("lock"))?;
+        let state = self
+            .state
+            .lock()
+            .map_err(|_| ConditionalSourceError::Client("lock"))?;
         Ok(ConditionalObjectMetadata {
             length: u64::try_from(state.bytes.len())
                 .map_err(|_| ConditionalSourceError::Limit("length"))?,
@@ -69,13 +70,15 @@ impl ConditionalRangeClient for FakeStore {
         offset: u64,
         length: usize,
     ) -> Result<ConditionalRangeResponse, ConditionalSourceError> {
-        let mut state = self.state.lock().map_err(|_| ConditionalSourceError::Client("lock"))?;
-        state.requests += 1;
+        let mut state = self
+            .state
+            .lock()
+            .map_err(|_| ConditionalSourceError::Client("lock"))?;
         if expected.as_str() != state.version {
             return Err(ConditionalSourceError::VersionChanged);
         }
-        let start = usize::try_from(offset)
-            .map_err(|_| ConditionalSourceError::Protocol("offset"))?;
+        let start =
+            usize::try_from(offset).map_err(|_| ConditionalSourceError::Protocol("offset"))?;
         let end = start
             .checked_add(length)
             .ok_or(ConditionalSourceError::Protocol("range"))?;
