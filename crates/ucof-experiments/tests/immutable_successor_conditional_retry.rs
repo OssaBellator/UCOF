@@ -1,9 +1,8 @@
 use std::sync::{Arc, Mutex};
 
 use ucof_experiments::immutable_successor::{
-    ConditionalObjectMetadata, ConditionalRangeClient, ConditionalRangeResponse,
-    ConditionalReadAt, ConditionalRetryPolicy, ConditionalSourceError, ImmutableOperationControl,
-    StrongVersionToken,
+    ConditionalObjectMetadata, ConditionalRangeClient, ConditionalRangeResponse, ConditionalReadAt,
+    ConditionalRetryPolicy, ConditionalSourceError, ImmutableOperationControl, StrongVersionToken,
 };
 
 #[derive(Clone, Debug)]
@@ -124,12 +123,9 @@ fn retries_metadata_and_ranges_under_one_attempt_budget() {
     store.metadata_failures(2);
     store.range_failures(1);
     let policy = ConditionalRetryPolicy::new(5).expect("retry policy");
-    let mut source = ConditionalReadAt::new_with_retry(
-        store,
-        ImmutableOperationControl::unlimited(),
-        policy,
-    )
-    .expect("metadata succeeds on third attempt");
+    let mut source =
+        ConditionalReadAt::new_with_retry(store, ImmutableOperationControl::unlimited(), policy)
+            .expect("metadata succeeds on third attempt");
     assert_eq!(source.transport_attempts(), 3);
 
     let mut bytes = [0_u8; 4];
@@ -147,12 +143,9 @@ fn exhaustion_is_fail_closed_and_does_not_copy_partial_bytes() {
     let store = RetryStore::new(vec![7_u8; 16]);
     store.range_failures(4);
     let policy = ConditionalRetryPolicy::new(3).expect("retry policy");
-    let mut source = ConditionalReadAt::new_with_retry(
-        store,
-        ImmutableOperationControl::unlimited(),
-        policy,
-    )
-    .expect("metadata consumes one attempt");
+    let mut source =
+        ConditionalReadAt::new_with_retry(store, ImmutableOperationControl::unlimited(), policy)
+            .expect("metadata consumes one attempt");
     let mut bytes = [0_u8; 4];
     assert_eq!(
         source.read_exact_controlled(0, &mut bytes),
