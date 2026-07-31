@@ -1,7 +1,7 @@
 /// Minimum entries in a non-root leaf page under the canonical half-full policy.
-pub const LEAF_MIN_OCCUPANCY: usize = (LEAF_CAPACITY + 1) / 2;
+pub const LEAF_MIN_OCCUPANCY: usize = LEAF_CAPACITY.div_ceil(2);
 /// Minimum children in a non-root internal page under the canonical half-full policy.
-pub const INTERNAL_MIN_OCCUPANCY: usize = (INTERNAL_FANOUT + 1) / 2;
+pub const INTERNAL_MIN_OCCUPANCY: usize = INTERNAL_FANOUT.div_ceil(2);
 
 fn canonical_group_sizes(
     total: usize,
