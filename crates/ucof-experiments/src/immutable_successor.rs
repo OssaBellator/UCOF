@@ -19,6 +19,7 @@ mod source_api {
 
     include!("immutable_successor/source.rs");
     include!("immutable_successor/source_full.rs");
+    include!("immutable_successor/source_rewrite.rs");
 }
 
 pub use source_api::*;
