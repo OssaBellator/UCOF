@@ -8,9 +8,9 @@ use ucof_experiments::immutable_successor::{
 };
 
 fuzz_target!(|data: &[u8]| {
-    let count = data.first().map_or(1_usize, |byte| {
-        1 + usize::from(*byte) % LEAF_CAPACITY
-    });
+    let count = data
+        .first()
+        .map_or(1_usize, |byte| 1 + usize::from(*byte) % LEAF_CAPACITY);
     let limits = ImmutableLimits {
         max_file_bytes: 2 * 1024 * 1024,
         max_objects: LEAF_CAPACITY + 8,
