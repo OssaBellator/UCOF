@@ -200,3 +200,10 @@ path = "fuzz_targets/immutable_successor_source_history_recovery.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_batch"
+path = "fuzz_targets/immutable_successor_persistent_batch.rs"
+test = false
+doc = false
+bench = false
