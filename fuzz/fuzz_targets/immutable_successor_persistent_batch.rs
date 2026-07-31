@@ -57,8 +57,8 @@ fuzz_target!(|data: &[u8]| {
         )));
     }
 
-    let result = append_persistent_batch(&genesis, &operations, limits)
-        .expect("bounded persistent batch");
+    let result =
+        append_persistent_batch(&genesis, &operations, limits).expect("bounded persistent batch");
     let report = validate(&result.bytes, limits).expect("persistent batch validates");
     assert_eq!(report, result.report);
     assert_eq!(
