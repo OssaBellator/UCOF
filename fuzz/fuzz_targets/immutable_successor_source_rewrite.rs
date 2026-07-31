@@ -67,14 +67,21 @@ fn source_limits() -> ImmutableSourceLimits {
 }
 
 fuzz_target!(|data: &[u8]| {
-    let count = data.first().map_or(1_usize, |byte| 1 + usize::from(*byte % 8));
+    let count = data
+        .first()
+        .map_or(1_usize, |byte| 1 + usize::from(*byte % 8));
     let mut objects = Vec::with_capacity(count);
     for index in 0..count {
         let seed = data.get(index + 1).copied().unwrap_or(index as u8);
         objects.push(ImmutableObjectInput::new(
             u64::try_from(index + 1).expect("small object identifier"),
             u16::from(1 + seed % 31),
-            vec![seed, seed.rotate_left(1), seed.rotate_left(2), seed.rotate_left(3)],
+            vec![
+                seed,
+                seed.rotate_left(1),
+                seed.rotate_left(2),
+                seed.rotate_left(3),
+            ],
         ));
     }
 
