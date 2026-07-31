@@ -23,7 +23,7 @@ PRs #5–#8 intentionally share PR #4 as their review baseline. PR #14 stacks on
 
 **Advanced:** FCP-0003 Draft proposes an immutable-page successor, 128-bit opaque identifiers, compact authenticated locators, fixed page geometry, deterministic occupancy/split/deletion rules, batch semantics, and acceptance evidence. Experiment 0054 records that the current maximum-packing writer and pinned 400-object vector do not satisfy the proposed half-full non-root occupancy rule.
 
-**Open:** Review may revise every proposed byte and policy. Selecting half-full occupancy requires canonical final-two-page redistribution, new Rust/Python construction, regenerated vectors, and deletion integration against the accepted invariant. The current executable microformat is not yet the proposed epoch specification.
+**Open:** Issue #16 tracks canonical occupancy convergence. Selecting half-full occupancy requires final-two-page redistribution, new Rust/Python construction, regenerated vectors, and deletion integration against the accepted invariant. Review may revise every proposed byte and policy; the current executable microformat is not yet the proposed epoch specification.
 
 ### 2. Persistent mixed writer
 
