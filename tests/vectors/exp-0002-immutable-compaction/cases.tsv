@@ -1,0 +1,4 @@
+# name	roots	unknown_policy	expected_retained	expected_error
+reachable	1	reject	1,2,3,4	-
+unknown-reject	5	reject	-	unknown:5
+unknown-retain-all	5	retain-all	1,2,3,4,5,6	-
