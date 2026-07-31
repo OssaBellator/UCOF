@@ -7,8 +7,10 @@ pub enum PersistentBatchMode {
     /// One absent identifier: append its object and propagate deterministic splits through one
     /// leaf-to-root path.
     CopyOnWriteInsertion,
-    /// A deletion or a multi-operation shape-changing batch still uses the deterministic full
-    /// rebuild baseline until deletion repair and a shared batch planner are integrated.
+    /// One active identifier: rewrite its path, repair underflow, and collapse the root when needed.
+    CopyOnWriteDeletion,
+    /// A multi-operation shape-changing batch still uses the deterministic full rebuild baseline
+    /// until a shared insert/delete planner is integrated.
     FullRebuildShapeChange,
 }
 
@@ -158,9 +160,9 @@ fn rewrite_replacement_path(
 /// persistent algorithm supports the operation shape.
 ///
 /// Replacement-only batches use copy-on-write leaf-to-root updates at arbitrary depth. One absent
-/// `Put` uses persistent insertion and split propagation. Deletions and multi-operation batches
-/// containing insertions currently use [`append_batch`] and report the full-rebuild mode rather than
-/// falsely claiming page reuse.
+/// `Put` uses persistent insertion and split propagation. One `Delete` uses persistent underflow
+/// repair and root collapse. Multi-operation batches containing insertions or deletions currently
+/// use [`append_batch`] rather than falsely claiming shared-path reuse.
 pub fn append_persistent_batch(
     data: &[u8],
     operations: &[ImmutableBatchOperation],
@@ -173,7 +175,7 @@ pub fn append_persistent_batch(
         return Err(ImmutableError::Limit("output"));
     }
 
-    let previous = validate_internal(data, limits)?;
+    let previous = validate_canonical_internal(data, limits)?;
     allocation_check::<usize>(operations.len(), limits)?;
     let mut order: Vec<usize> = (0..operations.len()).collect();
     order.sort_unstable_by_key(|index| operations[*index].object_id());
@@ -186,14 +188,24 @@ pub fn append_persistent_batch(
     }
 
     if operations.len() == 1 {
-        if let ImmutableBatchOperation::Put(input) = &operations[order[0]] {
-            if previous
-                .locators
-                .binary_search_by_key(&input.object_id, |locator| locator.object_id)
-                .is_err()
+        match &operations[order[0]] {
+            ImmutableBatchOperation::Put(input)
+                if previous
+                    .locators
+                    .binary_search_by_key(&input.object_id, |locator| locator.object_id)
+                    .is_err() =>
             {
                 return append_persistent_insert_from_previous(data, input, previous, limits);
             }
+            ImmutableBatchOperation::Delete(object_id) => {
+                return append_persistent_delete_from_previous(
+                    data,
+                    *object_id,
+                    previous,
+                    limits,
+                );
+            }
+            ImmutableBatchOperation::Put(_) => {}
         }
     }
 
@@ -211,7 +223,7 @@ pub fn append_persistent_batch(
 
     if !replacement_only {
         let bytes = append_batch(data, operations, limits)?;
-        let report = validate(&bytes, limits)?;
+        let report = validate_canonical_occupancy(&bytes, limits)?;
         return Ok(PersistentBatchResult {
             pages_written: report.page_count,
             pages_reused: 0,
@@ -262,7 +274,7 @@ pub fn append_persistent_batch(
         pages_written,
         limits,
     )?;
-    let report = validate(&output, limits)?;
+    let report = validate_canonical_occupancy(&output, limits)?;
     let pages_reused = previous
         .public
         .page_count
