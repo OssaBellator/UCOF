@@ -11,6 +11,7 @@ include!("immutable_successor/part4.rs");
 include!("immutable_successor/part5.rs");
 include!("immutable_successor/batch.rs");
 include!("immutable_successor/persistent_batch.rs");
+include!("immutable_successor/persistent_insert.rs");
 include!("immutable_successor/rewrite.rs");
 
 #[allow(clippy::len_without_is_empty)]
