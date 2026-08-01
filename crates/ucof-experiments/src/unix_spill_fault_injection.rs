@@ -159,7 +159,9 @@ pub fn run_fault_injected_unix_publication(
 
     if fault == Some(UnixSpillFaultPoint::BeforeDestinationLink) {
         let removed = fs::remove_file(&staged_path).is_ok();
-        let policy_failure = session.record_owned_cleanup(&ownership_token, removed).err();
+        let policy_failure = session
+            .record_owned_cleanup(&ownership_token, removed)
+            .err();
         return Ok(report(
             &session,
             fault,
