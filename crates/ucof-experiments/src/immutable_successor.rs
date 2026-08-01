@@ -27,6 +27,15 @@ mod source_api {
     include!("immutable_successor/source.rs");
     include!("immutable_successor/source_full.rs");
     include!("immutable_successor/source_inventory_conversion.rs");
+
+    mod source_to_sink_api {
+        use super::*;
+
+        include!("immutable_successor/source_to_sink.rs");
+    }
+
+    pub use source_to_sink_api::*;
+
     include!("immutable_successor/source_inventory.rs");
 }
 
