@@ -12,9 +12,9 @@
 | Mixed planning and authenticated bytes | #27, #30, #34, #37 | Simultaneous mixed leaf repair, recursive shape, exact page identity, canonical final locator regrouping, exact current-page-body reuse, changed-page authentication, and one linked commit | Minimal-rewrite comparison and bounded streaming output for persistent updates |
 | Independent mixed transition evidence | #40 | Clean-room Python regeneration of stable-height, root-collapse, and root-growth transitions with pinned per-vector and aggregate SHA-256 identities | Complete proposed-epoch transition corpus and external interoperability review |
 | Bounded canonical output | #35, #36 | Canonical genesis bytes through bounded sequential sinks from owned and strongly versioned payload sources, with incremental hashing and version-change failure | Atomic staging integration |
-| Active and selected active rewrites | #38, #39 | Strict active-file validation, borrowed authenticated payload ranges, inactive-history skipping, caller-selected output, exact selected read accounting, and untouched-sink selection failures | Historical semantic selection |
-| Dependency-aware streaming compaction | #22, #28, #41 | Bounded graph closure, independent graph/profile codecs, selected authenticated streaming, exact reachable/orphan accounting, and fail-before-output graph errors | Application-profile adoption, profile rewrite-byte vectors, large-graph spill, historical-state composition, and provenance/extension policy |
-| Versioned bounded-source inventory and output | #42, #43, #44 | Strict active inventory plus canonical latest-state or exact linked-history-sequence output over one non-ABA versioned source handle, one cumulative budget, authenticated descriptors, per-object version checks, and digest equality | Maintained provider adapter, historical semantic selection, multi-snapshot output, retry/auth integration, and atomic publication staging |
+| Active and selected active rewrites | #38, #39 | Strict active-file validation, borrowed authenticated payload ranges, inactive-history skipping, caller-selected output, exact selected read accounting, and untouched-sink selection failures | Atomic staging integration |
+| Dependency-aware streaming compaction | #22, #28, #41, #45 | Bounded graph closure, independent graph/profile codecs, selected authenticated streaming for active or exact historical states, exact reachable/orphan accounting, and fail-before-source/output errors | Application-profile adoption, profile rewrite-byte vectors, large-graph spill, multi-snapshot composition, and provenance/extension policy |
+| Versioned bounded-source inventory and output | #42, #43, #44, #45 | Strict active inventory plus canonical latest-state, exact-history, and dependency-selected historical output over one non-ABA versioned source handle and one cumulative budget | Maintained provider adapter, multi-snapshot output, retry/auth integration, and atomic publication staging |
 | Source history and measurements | #14, #24, #32 | Bounded-source strict/history/recovery/rewrite APIs, selected historical reissuance, hostile-source fuzzing, and reproducible read/hash/allocation counters | Real provider measurements, extension policy, and provenance/signature policy |
 | Retry and freshness | #5, #19, #25, #31 | Strong-version operation binding, operation-wide attempt budgets, independent retry traces, bounded delay/deadline planning, and explicit freshness authorization guidance | Maintained provider adapters, real waits, jitter/authentication policy, native async cancellation, and application checkpoint stores |
 | Spill publication | #20, #26, #29, #33 | Publication authority model, independent traces, real Unix no-overwrite hard-link publication, directory synchronization, and authority-boundary fault injection | Encryption, descriptor-relative hardening, restart/power-loss evidence, network-filesystem policy, and platform qualification |
@@ -26,7 +26,7 @@ All “verified” claims above refer to the current research layout. They do no
 
 - PRs #5–#8 share PR #4 as their review baseline.
 - Writer chain: #7 → #15 → #17 → #21 → #23 → #27 → #30 → #34 → #37 → #40.
-- Output/source chain: #23 → #35 → #36 → #38 → #39 → #41 → #42 → #43 → #44.
+- Output/source chain: #23 → #35 → #36 → #38 → #39 → #41 → #42 → #43 → #44 → #45.
 - Source/history chain: #6 → #14 → #24 → #32.
 - Semantic-policy chain: #6 → #22 → #28.
 - Retry chain: #5 → #19 → #25 → #31.
@@ -55,21 +55,21 @@ PR #40 independently reproduces three byte-significant transitions. Its pinned a
 
 PRs #42 and #43 close the latest-active bounded-source gap: one non-ABA versioned `ReadAt` source can be strictly inventoried and streamed to canonical output under one cumulative budget without materializing the complete input or output. All active descriptors are authenticated, payload digests are rechecked, and version changes are terminal.
 
-PR #44 validates the complete linked history under the same version, selects one exact sequence by authenticated footer boundary, applies the remaining cumulative budget to that prefix, and emits its active state as a new canonical genesis file. Missing sequences and history-time version changes fail before output.
+PR #44 validates the complete linked history under the same version, selects one exact sequence by authenticated footer boundary, applies the remaining cumulative budget to that prefix, and emits its active state as a new canonical genesis file. PR #45 composes that path with selected-object output and bounded dependency closure: graph failure occurs before source access, missing historical objects fail before output, and only reachable payloads are reread for emission after strict inventory.
 
-**Open:** Compose semantic selection inside the chosen historical state and define whether multiple retained snapshots should become one reissued history chain. Add maintained authenticated HTTP/cloud adapters, provider-specific retry classification, real waits, jitter/authentication policy, native asynchronous cancellation, and realistic provider latency/billing/cache/concurrency measurements. Integrate private staging and publication for atomic visibility.
+**Open:** Define whether multiple retained snapshots should become one reissued history chain. Add maintained authenticated HTTP/cloud adapters, provider-specific retry classification, real waits, jitter/authentication policy, native asynchronous cancellation, and realistic provider latency/billing/cache/concurrency measurements. Integrate private staging and publication for atomic visibility.
 
 ### 4. Repair and semantic compaction
 
-**Advanced:** Generic graph traversal has bounded node, edge, and depth work. One reference-list profile has Rust and independent Python codecs. PR #41 composes dependency closure with selected authenticated streaming so graph planning finishes before output and only reachable active payloads are read. Compaction failures remain distinct from source/output failures.
+**Advanced:** Generic graph traversal has bounded node, edge, and depth work. One reference-list profile has Rust and independent Python codecs. PR #41 composes dependency closure with selected authenticated active-file streaming. PR #45 extends the same fail-before-source graph policy to one exact authenticated historical prefix under one version and cumulative budget. Compaction failures remain distinct from history/source/output failures.
 
-**Open:** Obtain application-profile adoption and root-selection policy. Pin cross-language rewrite bytes for profile-defined cases. Define extension preservation, provenance and signature reissuance, large-graph spill, versioned bounded-source semantic streaming, and historical-state semantic compaction.
+**Open:** Obtain application-profile adoption and root-selection policy. Pin cross-language rewrite bytes for profile-defined cases. Define extension preservation, provenance and signature reissuance, large-graph spill, and multi-snapshot historical semantic output.
 
 ### 5. Vectors and fuzzing
 
-**Advanced:** Valid, invalid, interrupted, fork, recovery, source, history, rewrite, occupancy, persistent replacement/insertion/deletion/multi-`Put`/mixed, compaction, retry, spill, active streaming, selected streaming, semantic-streaming, versioned inventory, direct source-to-sink, and selected-history source-to-sink evidence exists. PR #40 adds independently generated mixed transition bytes rather than treating Rust output as the oracle.
+**Advanced:** Valid, invalid, interrupted, fork, recovery, source, history, rewrite, occupancy, persistent replacement/insertion/deletion/multi-`Put`/mixed, compaction, retry, spill, active streaming, selected streaming, semantic streaming, versioned inventory, direct source-to-sink, selected-history source-to-sink, and historical-semantic source-to-sink evidence exists. PR #40 adds independently generated mixed transition bytes rather than treating Rust output as the oracle.
 
-**Open:** Produce a complete cross-language corpus for the eventually selected epoch geometry, including all structural transition boundaries. Add provider-specific retry/source traces, fresh-process restart and physical power-loss corpora, historical semantic source-to-sink traces, and hostile concrete-provider traces.
+**Open:** Produce a complete cross-language corpus for the eventually selected epoch geometry, including all structural transition boundaries. Add provider-specific retry/source traces, fresh-process restart and physical power-loss corpora, profile-defined rewrite bytes, and hostile concrete-provider traces.
 
 ### 6. Spill and publication
 
