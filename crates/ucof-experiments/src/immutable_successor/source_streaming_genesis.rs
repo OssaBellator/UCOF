@@ -89,6 +89,13 @@ struct SourceStreamingPreflight {
     version_checks: u64,
 }
 
+#[derive(Default)]
+struct SourceStreamingCounters {
+    source_read_operations: u64,
+    source_bytes_read: u64,
+    version_checks: u64,
+}
+
 fn preflight_source_streaming<S: ImmutableStreamingPayloadSource>(
     sources: &mut [S],
     options: ImmutableSourceStreamingWriteOptions,
@@ -178,7 +185,7 @@ fn preflight_source_streaming<S: ImmutableStreamingPayloadSource>(
 fn checked_source_version<S: ImmutableStreamingPayloadSource>(
     source: &mut S,
     expected: [u8; 32],
-    version_checks: &mut u64,
+    counters: &mut SourceStreamingCounters,
 ) -> Result<(), ImmutableSourceStreamingWriteError> {
     let object_id = source.object_id();
     let actual = source
@@ -187,7 +194,8 @@ fn checked_source_version<S: ImmutableStreamingPayloadSource>(
             object_id,
             label,
         })?;
-    *version_checks = version_checks
+    counters.version_checks = counters
+        .version_checks
         .checked_add(1)
         .ok_or(ImmutableError::Limit("version checks"))?;
     if actual != expected {
@@ -204,11 +212,9 @@ fn write_source_streaming_object<W: Write, S: ImmutableStreamingPayloadSource>(
     expected_version: [u8; 32],
     logical_len: usize,
     buffer: &mut [u8],
-    source_read_operations: &mut u64,
-    source_bytes_read: &mut u64,
-    version_checks: &mut u64,
+    counters: &mut SourceStreamingCounters,
 ) -> Result<Locator, ImmutableSourceStreamingWriteError> {
-    checked_source_version(source, expected_version, version_checks)?;
+    checked_source_version(source, expected_version, counters)?;
     let object_id = source.object_id();
     let kind = source.kind();
     let mut header = [0_u8; OBJECT_HEADER_LEN];
@@ -245,17 +251,19 @@ fn write_source_streaming_object<W: Write, S: ImmutableStreamingPayloadSource>(
                 object_id,
                 label,
             })?;
-        *source_read_operations = source_read_operations
+        counters.source_read_operations = counters
+            .source_read_operations
             .checked_add(1)
             .ok_or(ImmutableError::Limit("read operations"))?;
-        *source_bytes_read = source_bytes_read
+        counters.source_bytes_read = counters
+            .source_bytes_read
             .checked_add(u64_from_usize(take)?)
             .ok_or(ImmutableError::Limit("read bytes"))?;
         object_hasher.update(&buffer[..take]);
         sink.write_commit_bytes(&buffer[..take])?;
         completed += take;
     }
-    checked_source_version(source, expected_version, version_checks)?;
+    checked_source_version(source, expected_version, counters)?;
 
     Ok(Locator {
         object_id,
@@ -287,9 +295,10 @@ pub fn write_genesis_sources_to<W: Write, S: ImmutableStreamingPayloadSource>(
 
     let mut buffer = vec![0_u8; preflight.largest_source_buffer];
     let mut locators = Vec::with_capacity(preflight.order.len());
-    let mut source_read_operations = 0_u64;
-    let mut source_bytes_read = 0_u64;
-    let mut version_checks = preflight.version_checks;
+    let mut counters = SourceStreamingCounters {
+        version_checks: preflight.version_checks,
+        ..SourceStreamingCounters::default()
+    };
     for index in preflight.order {
         locators.push(write_source_streaming_object(
             &mut sink,
@@ -297,9 +306,7 @@ pub fn write_genesis_sources_to<W: Write, S: ImmutableStreamingPayloadSource>(
             preflight.versions[index],
             preflight.lengths[index],
             &mut buffer,
-            &mut source_read_operations,
-            &mut source_bytes_read,
-            &mut version_checks,
+            &mut counters,
         )?);
     }
 
@@ -320,9 +327,9 @@ pub fn write_genesis_sources_to<W: Write, S: ImmutableStreamingPayloadSource>(
             largest_write_request: sink.largest_write_request,
             locator_entries: locators.len(),
         },
-        source_read_operations,
-        source_bytes_read,
-        version_checks,
+        source_read_operations: counters.source_read_operations,
+        source_bytes_read: counters.source_bytes_read,
+        version_checks: counters.version_checks,
         largest_source_buffer: buffer.len(),
     })
 }
