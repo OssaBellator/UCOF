@@ -74,9 +74,8 @@ fn restart_child_process() {
         return;
     }
     let staged = PathBuf::from(std::env::var_os("UCOF_RESTART_STAGED").expect("staged path"));
-    let destination = PathBuf::from(
-        std::env::var_os("UCOF_RESTART_DESTINATION").expect("destination path"),
-    );
+    let destination =
+        PathBuf::from(std::env::var_os("UCOF_RESTART_DESTINATION").expect("destination path"));
     let journal = SpillRestartJournalEvidence {
         phase: phase(&std::env::var("UCOF_RESTART_PHASE").expect("phase")),
         authenticated: true,
@@ -87,13 +86,9 @@ fn restart_child_process() {
         length: u64::try_from(BYTES.len()).expect("length"),
         sha256: Sha256::digest(BYTES).into(),
     };
-    let inspection = inspect_unix_spill_after_restart(
-        &staged,
-        &destination,
-        Some(expected),
-        Some(journal),
-    )
-    .expect("fresh process inspection");
+    let inspection =
+        inspect_unix_spill_after_restart(&staged, &destination, Some(expected), Some(journal))
+            .expect("fresh process inspection");
     assert_eq!(
         inspection.disposition,
         expected_disposition(&std::env::var("UCOF_RESTART_EXPECTED").expect("expected"))
