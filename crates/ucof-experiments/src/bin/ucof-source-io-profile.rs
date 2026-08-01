@@ -38,11 +38,7 @@ fn objects(count: usize) -> Vec<ImmutableObjectInput> {
     (1..=u64::try_from(count).expect("bounded object count"))
         .map(|object_id| {
             let seed = u8::try_from(object_id % 251).expect("seed");
-            ImmutableObjectInput::new(
-                object_id,
-                u16::from(1 + seed % 31),
-                vec![seed; 64],
-            )
+            ImmutableObjectInput::new(object_id, u16::from(1 + seed % 31), vec![seed; 64])
         })
         .collect()
 }
