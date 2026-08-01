@@ -89,7 +89,7 @@ mod tests {
     use crate::immutable_successor::{
         append_replacement, build_genesis, rewrite_selected, validate_history, ImmutableLimits,
         ImmutableObjectInput, ImmutableReadAt, ImmutableSourceError,
-        ImmutableStreamingWriteOptions,
+        ImmutableStreamingWriteOptions, FOOTER_LEN,
     };
 
     #[derive(Clone, Debug)]
@@ -177,7 +177,7 @@ mod tests {
             .iter()
             .find(|entry| entry.report.sequence == 0)
             .expect("sequence zero");
-        let prefix_len = entry.footer_offset + 192;
+        let prefix_len = entry.footer_offset + u64::try_from(FOOTER_LEN).expect("footer length");
         let expected = rewrite_selected(
             &data[..usize::try_from(prefix_len).expect("prefix")],
             &[1, 2, 3, 4],
