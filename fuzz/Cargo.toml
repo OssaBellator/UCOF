@@ -277,3 +277,10 @@ path = "fuzz_targets/immutable_successor_persistent_streaming_dispatch.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_copy"
+path = "fuzz_targets/immutable_successor_persistent_source_copy.rs"
+test = false
+doc = false
+bench = false
