@@ -149,11 +149,10 @@ fn finish_put_tail_roots(
         .ok_or(ImmutableError::Invalid("persistent put root"))
 }
 
-/// Streams a canonical insertion/replacement batch as a verified base plus one append tail.
-pub fn append_persistent_put_batch_to<W: std::io::Write>(
+fn append_persistent_put_refs_to<W: std::io::Write>(
     writer: &mut W,
     data: &[u8],
-    inputs: &[ImmutableObjectInput],
+    inputs: &[&ImmutableObjectInput],
     limits: ImmutableLimits,
     options: PersistentMixedStreamingOptions,
 ) -> Result<PersistentMixedStreamingReport, PersistentMixedStreamingError> {
@@ -180,7 +179,7 @@ pub fn append_persistent_put_batch_to<W: std::io::Write>(
 
     let mut absent = 0_usize;
     for index in &order {
-        let input = &inputs[*index];
+        let input = inputs[*index];
         if input.object_id == 0 || input.kind == 0 {
             return Err(ImmutableError::Invalid("object input").into());
         }
@@ -211,7 +210,7 @@ pub fn append_persistent_put_batch_to<W: std::io::Write>(
         updates.push(append_persistent_tail_object(
             &mut tail,
             base_len,
-            &inputs[index],
+            inputs[index],
             limits,
         )?);
     }
@@ -293,6 +292,19 @@ pub fn append_persistent_put_batch_to<W: std::io::Write>(
         largest_write_request,
         tail_allocation_bytes: tail.capacity(),
     })
+}
+
+/// Streams a canonical insertion/replacement batch as a verified base plus one append tail.
+pub fn append_persistent_put_batch_to<W: std::io::Write>(
+    writer: &mut W,
+    data: &[u8],
+    inputs: &[ImmutableObjectInput],
+    limits: ImmutableLimits,
+    options: PersistentMixedStreamingOptions,
+) -> Result<PersistentMixedStreamingReport, PersistentMixedStreamingError> {
+    allocation_check::<&ImmutableObjectInput>(inputs.len(), limits)?;
+    let references: Vec<&ImmutableObjectInput> = inputs.iter().collect();
+    append_persistent_put_refs_to(writer, data, &references, limits, options)
 }
 
 #[cfg(test)]
