@@ -26,10 +26,13 @@ mod recovery;
 mod repair;
 mod snapshots;
 mod spill_publication;
+mod spill_restart;
 #[cfg(unix)]
 mod unix_spill_fault_injection;
 #[cfg(unix)]
 mod unix_spill_publication;
+#[cfg(unix)]
+mod unix_spill_restart;
 
 pub use compaction::{CompactionError, CompactionLimits, CompactionPlan, ObjectGraph};
 pub use directory::{
@@ -70,6 +73,11 @@ pub use spill_publication::{
     SpillPublicationLimits, SpillPublicationOutcome, SpillPublicationSession,
     SpillPublicationStage,
 };
+pub use spill_restart::{
+    classify_spill_restart, SpillRestartDisposition, SpillRestartFacts,
+    SpillRestartJournalEvidence, SpillRestartJournalPhase, SpillRestartOwnership,
+    SpillRestartValidation,
+};
 #[cfg(unix)]
 pub use unix_spill_fault_injection::{
     run_fault_injected_unix_publication, UnixSpillFaultPoint, UnixSpillFaultReport,
@@ -77,4 +85,9 @@ pub use unix_spill_fault_injection::{
 #[cfg(unix)]
 pub use unix_spill_publication::{
     publish_bytes_no_overwrite, UnixSpillPublicationError, UnixSpillPublicationReport,
+};
+#[cfg(unix)]
+pub use unix_spill_restart::{
+    inspect_unix_spill_after_restart, UnixSpillRestartExpectedArtifact,
+    UnixSpillRestartInspection,
 };
