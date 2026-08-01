@@ -74,7 +74,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
-    matrix:
+      matrix:
         target:
           - i686-unknown-linux-gnu
           - powerpc64-unknown-linux-gnu
