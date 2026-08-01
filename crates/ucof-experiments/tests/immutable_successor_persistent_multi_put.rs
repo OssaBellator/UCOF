@@ -146,8 +146,5 @@ fn mixed_deletion_batches_use_persistent_canonical_regrouping() {
         limits,
     )
     .expect("persistent mixed batch");
-    assert_eq!(
-        result.mode,
-        PersistentBatchMode::CopyOnWriteCanonicalMixed
-    );
+    assert_eq!(result.mode, PersistentBatchMode::CopyOnWriteCanonicalMixed);
 }
