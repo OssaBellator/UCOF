@@ -68,9 +68,15 @@ impl Write for BoundedSink {
 }
 
 fuzz_target!(|data: &[u8]| {
-    let count = data.first().map_or(1_usize, |byte| 1 + usize::from(*byte % 16));
-    let source_chunk = data.get(1).map_or(1_usize, |byte| 1 + usize::from(*byte % 64));
-    let sink_chunk = data.get(2).map_or(1_usize, |byte| 1 + usize::from(*byte % 64));
+    let count = data
+        .first()
+        .map_or(1_usize, |byte| 1 + usize::from(*byte % 16));
+    let source_chunk = data
+        .get(1)
+        .map_or(1_usize, |byte| 1 + usize::from(*byte % 64));
+    let sink_chunk = data
+        .get(2)
+        .map_or(1_usize, |byte| 1 + usize::from(*byte % 64));
     let limits = ImmutableLimits {
         max_file_bytes: 4 * 1024 * 1024,
         max_objects: 32,
