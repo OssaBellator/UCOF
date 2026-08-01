@@ -62,9 +62,8 @@ pub use recovery::{
 };
 pub use repair::{CopyRange, RepairError, RepairLimits, RepairPlan};
 pub use semantic_history_streaming_compaction::{
-    rewrite_compacted_versioned_source_sequence_to,
-    ImmutableHistoricalSemanticStreamingError, ImmutableHistoricalSemanticStreamingOptions,
-    ImmutableHistoricalSemanticStreamingReport,
+    rewrite_compacted_versioned_source_sequence_to, ImmutableHistoricalSemanticStreamingError,
+    ImmutableHistoricalSemanticStreamingOptions, ImmutableHistoricalSemanticStreamingReport,
 };
 pub use semantic_streaming_compaction::{
     rewrite_compacted_active_file_to, ImmutableSemanticStreamingError,
