@@ -1,0 +1,128 @@
+{
+  "status": "non-normative conditional HTTP response classification traces",
+  "cases": [
+    {
+      "name": "metadata-success",
+      "request": {"kind": "metadata"},
+      "response": {"status": 200, "version": "\"v1\"", "content_length": 99, "body_length": 0},
+      "authentication": "terminal",
+      "expected": {"decision": "accept-metadata", "length": 99, "version": "\"v1\""}
+    },
+    {
+      "name": "metadata-weak-version",
+      "request": {"kind": "metadata"},
+      "response": {"status": 200, "version": "W/\"v1\"", "content_length": 99, "body_length": 0},
+      "authentication": "terminal",
+      "expected": {"decision": "fail", "error": "invalid-version-token"}
+    },
+    {
+      "name": "range-success",
+      "request": {"kind": "range", "version": "\"v1\"", "offset": 10, "length": 5, "total_length": 100},
+      "response": {"status": 206, "version": "\"v1\"", "content_length": 5, "content_range": [10, 14, 100], "body_length": 5},
+      "authentication": "terminal",
+      "expected": {"decision": "accept-range", "version": "\"v1\"", "offset": 10, "total_length": 100, "body_length": 5}
+    },
+    {
+      "name": "range-wrong-content-range",
+      "request": {"kind": "range", "version": "\"v1\"", "offset": 10, "length": 5, "total_length": 100},
+      "response": {"status": 206, "version": "\"v1\"", "content_length": 5, "content_range": [11, 15, 100], "body_length": 5},
+      "authentication": "terminal",
+      "expected": {"decision": "fail", "error": "protocol:content-range"}
+    },
+    {
+      "name": "range-version-mismatch",
+      "request": {"kind": "range", "version": "\"v1\"", "offset": 10, "length": 5, "total_length": 100},
+      "response": {"status": 206, "version": "\"v2\"", "content_length": 5, "content_range": [10, 14, 100], "body_length": 5},
+      "authentication": "terminal",
+      "expected": {"decision": "fail", "error": "protocol:response-version-token"}
+    },
+    {
+      "name": "precondition-version-change",
+      "request": {"kind": "range", "version": "\"v1\"", "offset": 0, "length": 4, "total_length": 4},
+      "response": {"status": 412, "body_length": 0},
+      "authentication": "terminal",
+      "expected": {"decision": "fail", "error": "version-changed"}
+    },
+    {
+      "name": "authentication-refresh-authorized",
+      "request": {"kind": "metadata"},
+      "response": {"status": 401, "body_length": 0},
+      "authentication": "one-refresh",
+      "expected": {"decision": "refresh-authentication"}
+    },
+    {
+      "name": "authentication-terminal",
+      "request": {"kind": "metadata"},
+      "response": {"status": 401, "body_length": 0},
+      "authentication": "terminal",
+      "expected": {"decision": "fail", "error": "client:http-unauthorized"}
+    },
+    {
+      "name": "forbidden-remains-terminal",
+      "request": {"kind": "metadata"},
+      "response": {"status": 403, "body_length": 0},
+      "authentication": "one-refresh",
+      "expected": {"decision": "fail", "error": "client:http-forbidden"}
+    },
+    {
+      "name": "retry-503-server-minimum",
+      "request": {"kind": "metadata"},
+      "response": {"status": 503, "body_length": 0, "retry_after_millis": 750},
+      "authentication": "terminal",
+      "backoff": {"base": 100, "max": 1000, "cumulative": 5000, "remaining_deadline": 2000},
+      "expected": {"decision": "retry", "error": "retryable:http-service-unavailable", "server_minimum_millis": 750, "delay_millis": 750}
+    },
+    {
+      "name": "retry-429-zero-minimum",
+      "request": {"kind": "metadata"},
+      "response": {"status": 429, "body_length": 0, "retry_after_millis": 0},
+      "authentication": "terminal",
+      "backoff": {"base": 100, "max": 1000, "cumulative": 5000},
+      "expected": {"decision": "retry", "error": "retryable:http-rate-limited", "server_minimum_millis": null, "delay_millis": 100}
+    },
+    {
+      "name": "oversized-server-minimum",
+      "request": {"kind": "metadata"},
+      "response": {"status": 429, "body_length": 0, "retry_after_millis": 1001},
+      "authentication": "terminal",
+      "backoff": {"base": 100, "max": 1000, "cumulative": 5000},
+      "expected": {"decision": "retry", "error": "retryable:http-rate-limited", "server_minimum_millis": 1001, "delay_error": "server-retry-delay"}
+    },
+    {
+      "name": "unknown-501-terminal",
+      "request": {"kind": "metadata"},
+      "response": {"status": 501, "body_length": 0},
+      "authentication": "terminal",
+      "expected": {"decision": "fail", "error": "client:http-server-status"}
+    },
+    {
+      "name": "redirect-terminal-protocol",
+      "request": {"kind": "metadata"},
+      "response": {"status": 307, "body_length": 0},
+      "authentication": "terminal",
+      "expected": {"decision": "fail", "error": "protocol:redirect"}
+    },
+    {
+      "name": "full-body-range-rejected",
+      "request": {"kind": "range", "version": "\"v1\"", "offset": 0, "length": 5, "total_length": 5},
+      "response": {"status": 200, "version": "\"v1\"", "content_length": 5, "body_length": 5},
+      "authentication": "terminal",
+      "expected": {"decision": "fail", "error": "protocol:range-success-status"}
+    },
+    {
+      "name": "range-unsatisfiable-terminal",
+      "request": {"kind": "range", "version": "\"v1\"", "offset": 5, "length": 5, "total_length": 5},
+      "response": {"status": 416, "body_length": 0},
+      "authentication": "terminal",
+      "expected": {"decision": "fail", "error": "client:http-range-unsatisfiable"}
+    },
+    {
+      "name": "metadata-body-rejected",
+      "request": {"kind": "metadata"},
+      "response": {"status": 200, "version": "\"v1\"", "content_length": 99, "body_length": 1},
+      "authentication": "terminal",
+      "expected": {"decision": "fail", "error": "protocol:metadata-response-shape"}
+    }
+  ],
+  "aggregate_sha256": "c71a386cdf7498e4841b297661864d23607d87234aa86c8c1c2e8ed9bb4e82b9"
+}
