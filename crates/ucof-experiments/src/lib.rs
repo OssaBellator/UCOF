@@ -21,6 +21,7 @@ mod exp0002_source_strict;
 pub mod exp0002_source_version;
 /// Reusable, non-normative immutable-page successor byte experiment.
 pub mod immutable_successor;
+mod mixed_reference_plan;
 mod mixed_tree_plan;
 mod mixed_update_plan;
 mod publication;
@@ -47,6 +48,10 @@ pub use exp0002_source_recovery::{
 pub use exp0002_source_strict::{validate_strict_at, VerifiedExp0002Source};
 pub use exp0002_source_version::{
     Exp0002SourceVersion, Exp0002StableSource, Exp0002VersionedReadAt,
+};
+pub use mixed_reference_plan::{
+    plan_mixed_page_references, MixedReferencePlan, MixedReferencePlanError,
+    PlannedPageIdentity,
 };
 pub use mixed_tree_plan::{
     plan_mixed_tree_updates, MixedRootTransition, MixedTreePlan, MixedTreePlanError,
