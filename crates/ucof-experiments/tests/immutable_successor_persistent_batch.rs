@@ -105,7 +105,7 @@ fn replacement_fast_path_operates_above_one_internal_level() {
 }
 
 #[test]
-fn insertions_and_deletions_report_full_rebuild_fallback() {
+fn insertions_and_deletions_use_persistent_canonical_regrouping() {
     let limits = ImmutableLimits::default();
     let genesis = build_genesis(&objects(400), limits).expect("genesis");
     let result = append_persistent_batch(
@@ -117,8 +117,14 @@ fn insertions_and_deletions_report_full_rebuild_fallback() {
         limits,
     )
     .expect("shape-changing batch");
-    assert_eq!(result.mode, PersistentBatchMode::FullRebuildShapeChange);
-    assert_eq!(result.pages_reused, 0);
-    assert_eq!(result.pages_written, result.report.page_count);
+    assert_eq!(result.mode, PersistentBatchMode::CopyOnWriteCanonicalMixed);
     assert_eq!(result.report.object_count, 400);
+    assert_eq!(
+        result.report.page_count,
+        result.pages_written + result.pages_reused
+    );
+    assert_eq!(
+        validate(&result.bytes, limits).expect("result validates"),
+        result.report
+    );
 }

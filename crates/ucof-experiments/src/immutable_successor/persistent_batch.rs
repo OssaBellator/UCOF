@@ -11,8 +11,10 @@ pub enum PersistentBatchMode {
     CopyOnWritePutBatch,
     /// One active identifier: rewrite its path, repair underflow, and collapse the root when needed.
     CopyOnWriteDeletion,
-    /// A batch containing deletion plus another operation still uses the deterministic full rebuild
-    /// baseline until a shared mixed insert/delete repair planner is integrated.
+    /// A batch containing deletion plus another operation: apply the complete operation set,
+    /// canonically regroup final pages, and reuse only exact current page bodies.
+    CopyOnWriteCanonicalMixed,
+    /// Reserved deterministic full-rebuild fallback for unsupported future operation shapes.
     FullRebuildShapeChange,
 }
 
@@ -164,7 +166,8 @@ fn rewrite_replacement_path(
 /// Replacement-only batches use copy-on-write leaf-to-root updates at arbitrary depth. One absent
 /// `Put` uses persistent insertion and split propagation. Multi-operation `Put` batches use one
 /// shared path planner. One `Delete` uses persistent underflow repair and root collapse. Batches
-/// combining deletion with another operation currently use [`append_batch`].
+/// combining deletion with another operation apply all changes canonically and reuse only exact
+/// current leaf or internal page bodies.
 pub fn append_persistent_batch(
     data: &[u8],
     operations: &[ImmutableBatchOperation],
@@ -187,6 +190,14 @@ pub fn append_persistent_batch(
         return Err(ImmutableError::DuplicateObject(
             operations[pair[0]].object_id(),
         ));
+    }
+
+    if operations.len() > 1
+        && operations
+            .iter()
+            .any(|operation| matches!(operation, ImmutableBatchOperation::Delete(_)))
+    {
+        return append_persistent_mixed_from_previous(data, operations, previous, limits);
     }
 
     if operations.len() == 1 {
