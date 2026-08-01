@@ -6,6 +6,7 @@
 //! Range-source APIs deliberately separate targeted authenticated lookup from
 //! full exact-end validation and explicitly requested recovery.
 
+mod active_file_selected_streaming;
 mod compaction;
 mod directory;
 mod enumeration;
@@ -26,6 +27,9 @@ mod recovery;
 mod repair;
 mod snapshots;
 
+pub use active_file_selected_streaming::{
+    rewrite_selected_active_file_to, ImmutableSelectedActiveStreamingReport,
+};
 pub use compaction::{CompactionError, CompactionLimits, CompactionPlan, ObjectGraph};
 pub use directory::{
     DirectoryBuildError, DirectoryLookupError, DirectoryStats, LookupResult, ObjectLocator,
