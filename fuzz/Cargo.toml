@@ -270,3 +270,10 @@ path = "fuzz_targets/immutable_successor_persistent_multi_put_streaming.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_streaming_dispatch"
+path = "fuzz_targets/immutable_successor_persistent_streaming_dispatch.rs"
+test = false
+doc = false
+bench = false
