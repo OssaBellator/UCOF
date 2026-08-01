@@ -19,6 +19,7 @@ include!("immutable_successor/persistent_mixed.rs");
 include!("immutable_successor/persistent_mixed_streaming.rs");
 include!("immutable_successor/persistent_replacement_streaming.rs");
 include!("immutable_successor/persistent_insert_streaming.rs");
+include!("immutable_successor/persistent_delete_streaming.rs");
 include!("immutable_successor/rewrite.rs");
 
 #[allow(clippy::len_without_is_empty)]
