@@ -12,6 +12,7 @@ include!("immutable_successor/occupancy.rs");
 include!("immutable_successor/part5.rs");
 include!("immutable_successor/streaming_genesis.rs");
 include!("immutable_successor/source_streaming_genesis.rs");
+include!("immutable_successor/active_file_streaming.rs");
 include!("immutable_successor/batch.rs");
 include!("immutable_successor/persistent_batch.rs");
 include!("immutable_successor/persistent_insert.rs");
