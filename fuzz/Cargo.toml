@@ -200,3 +200,10 @@ path = "fuzz_targets/immutable_successor_source_history_recovery.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "conditional_wait_executor"
+path = "fuzz_targets/conditional_wait_executor.rs"
+test = false
+doc = false
+bench = false
