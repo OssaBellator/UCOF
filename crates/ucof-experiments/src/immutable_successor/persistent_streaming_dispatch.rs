@@ -99,7 +99,12 @@ mod persistent_streaming_dispatch_tests {
             .collect()
     }
 
+    fn base(limits: ImmutableLimits) -> Vec<u8> {
+        build_genesis(&even_objects(400), limits).expect("base")
+    }
+
     fn assert_dispatch_matches_owned(
+        label: &str,
         base: &[u8],
         operations: &[ImmutableBatchOperation],
         expected_mode: PersistentBatchMode,
@@ -117,33 +122,57 @@ mod persistent_streaming_dispatch_tests {
             },
         )
         .expect("streamed batch");
-        assert_eq!(streamed, owned.bytes);
-        assert_eq!(report.report, owned.report);
-        assert_eq!(report.mode, expected_mode);
-        assert_eq!(report.mode, owned.mode);
-        assert_eq!(report.pages_written, owned.pages_written);
-        assert_eq!(report.pages_reused, owned.pages_reused);
-        assert!(report.largest_write_request <= 29);
-        assert!(report.tail_allocation_bytes < streamed.len());
+        assert_eq!(streamed, owned.bytes, "{label}: bytes");
+        assert_eq!(report.report, owned.report, "{label}: report");
+        assert_eq!(report.mode, expected_mode, "{label}: expected mode");
+        assert_eq!(report.mode, owned.mode, "{label}: owned mode");
+        assert_eq!(
+            report.pages_written, owned.pages_written,
+            "{label}: pages written"
+        );
+        assert_eq!(
+            report.pages_reused, owned.pages_reused,
+            "{label}: pages reused"
+        );
+        assert!(report.largest_write_request <= 29, "{label}: write bound");
+        assert!(
+            report.tail_allocation_bytes < streamed.len(),
+            "{label}: tail allocation"
+        );
     }
 
     #[test]
-    fn dispatcher_selects_every_specialized_tail_mode() {
+    fn dispatcher_selects_replacement_tail() {
         let limits = ImmutableLimits::default();
-        let base = build_genesis(&even_objects(400), limits).expect("base");
+        let base = base(limits);
         assert_dispatch_matches_owned(
+            "replacement",
             &base,
             &[ImmutableBatchOperation::Put(object(2, 201))],
             PersistentBatchMode::CopyOnWriteReplacements,
             limits,
         );
+    }
+
+    #[test]
+    fn dispatcher_selects_insertion_tail() {
+        let limits = ImmutableLimits::default();
+        let base = base(limits);
         assert_dispatch_matches_owned(
+            "insertion",
             &base,
             &[ImmutableBatchOperation::Put(object(801, 202))],
             PersistentBatchMode::CopyOnWriteInsertion,
             limits,
         );
+    }
+
+    #[test]
+    fn dispatcher_selects_multi_put_tail() {
+        let limits = ImmutableLimits::default();
+        let base = base(limits);
         assert_dispatch_matches_owned(
+            "multi put",
             &base,
             &[
                 ImmutableBatchOperation::Put(object(2, 203)),
@@ -152,13 +181,27 @@ mod persistent_streaming_dispatch_tests {
             PersistentBatchMode::CopyOnWritePutBatch,
             limits,
         );
+    }
+
+    #[test]
+    fn dispatcher_selects_deletion_tail() {
+        let limits = ImmutableLimits::default();
+        let base = base(limits);
         assert_dispatch_matches_owned(
+            "deletion",
             &base,
             &[ImmutableBatchOperation::Delete(2)],
             PersistentBatchMode::CopyOnWriteDeletion,
             limits,
         );
+    }
+
+    #[test]
+    fn dispatcher_selects_mixed_tail() {
+        let limits = ImmutableLimits::default();
+        let base = base(limits);
         assert_dispatch_matches_owned(
+            "mixed",
             &base,
             &[
                 ImmutableBatchOperation::Delete(2),
@@ -172,7 +215,7 @@ mod persistent_streaming_dispatch_tests {
     #[test]
     fn dispatcher_is_order_independent_and_rejects_before_output() {
         let limits = ImmutableLimits::default();
-        let base = build_genesis(&even_objects(400), limits).expect("base");
+        let base = base(limits);
         let forward = vec![
             ImmutableBatchOperation::Put(object(2, 211)),
             ImmutableBatchOperation::Put(object(401, 212)),
