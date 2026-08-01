@@ -194,10 +194,11 @@ pub fn append_persistent_replacement_batch_to<W: std::io::Write>(
         root: next_root,
         parent_snapshot_digest: previous.public.snapshot_digest,
         previous_footer_offset: u64_from_usize(previous.footer_offset)?,
-        page_count: previous.public.page_count,
+        page_count: pages_written,
         object_count: previous.public.object_count,
     };
-    let report = publish_persistent_tail(&mut tail, publication, limits)?;
+    let mut report = publish_persistent_tail(&mut tail, publication, limits)?;
+    report.page_count = previous.public.page_count;
     let output_bytes = persistent_tail_total_len(data.len(), tail.len(), limits)?;
     if output_bytes > limits.max_file_bytes {
         return Err(ImmutableError::Limit("output").into());
@@ -254,19 +255,28 @@ mod persistent_replacement_streaming_tests {
             .collect()
     }
 
-    #[test]
-    fn streamed_replacements_match_owned_writer_at_multiple_leaves() {
+    fn assert_streamed_replacements_match_owned(
+        count: usize,
+        replacement_ids: &[u64],
+        chunk: usize,
+    ) {
         let limits = ImmutableLimits {
             max_file_bytes: 32 * 1024 * 1024,
             max_output_bytes: 32 * 1024 * 1024,
             ..ImmutableLimits::default()
         };
-        let base = build_genesis(&even_objects(400), limits).expect("base");
-        let operations = vec![
-            ImmutableBatchOperation::Put(object(2, 201, 17)),
-            ImmutableBatchOperation::Put(object(400, 202, 19)),
-            ImmutableBatchOperation::Put(object(800, 203, 23)),
-        ];
+        let base = build_genesis(&even_objects(count), limits).expect("base");
+        let operations: Vec<_> = replacement_ids
+            .iter()
+            .enumerate()
+            .map(|(index, object_id)| {
+                ImmutableBatchOperation::Put(object(
+                    *object_id,
+                    u8::try_from(201 + index).expect("seed"),
+                    17 + index * 2,
+                ))
+            })
+            .collect();
         let owned = append_persistent_batch(&base, &operations, limits).expect("owned writer");
         let mut streamed = Vec::new();
         let report = append_persistent_replacement_batch_to(
@@ -275,7 +285,7 @@ mod persistent_replacement_streaming_tests {
             &operations,
             limits,
             PersistentMixedStreamingOptions {
-                max_write_request_bytes: 31,
+                max_write_request_bytes: chunk,
             },
         )
         .expect("streamed writer");
@@ -290,8 +300,18 @@ mod persistent_replacement_streaming_tests {
             report.tail_bytes_written,
             u64_from_usize(streamed.len() - base.len()).expect("tail bytes")
         );
-        assert!(report.largest_write_request <= 31);
+        assert!(report.largest_write_request <= chunk);
         assert!(report.tail_allocation_bytes < streamed.len());
+    }
+
+    #[test]
+    fn streamed_replacements_match_owned_writer_at_multiple_leaves() {
+        assert_streamed_replacements_match_owned(400, &[2, 400, 800], 31);
+    }
+
+    #[test]
+    fn streamed_replacements_match_owned_with_reused_middle_pages() {
+        assert_streamed_replacements_match_owned(200, &[2, 400], 29);
     }
 
     #[test]
