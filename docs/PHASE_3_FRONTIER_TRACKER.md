@@ -9,7 +9,7 @@
 |---|---:|---|---|
 | Canonical occupancy | #17, #18 | Deterministic canonical grouping, strict validation, independent Python construction, boundary tables, and regenerated identities | FCP disposition and migration to the proposed identifier/locator geometry |
 | Persistent single-operation and multi-`Put` writing | #21, #23 | Authenticated deletion, borrow, merge, recursive repair, root collapse, shared insertion/replacement paths, split propagation, and exact reuse accounting | Shared base-offset tail output, landing order, and wider-layout migration |
-| Mixed planning, authenticated bytes, and sink output | #27, #30, #34, #37, #47 | Simultaneous mixed leaf repair, recursive shape, exact page identity, canonical locator regrouping, exact current-page-body reuse, changed-page authentication, one linked commit, and bounded sink output without a second complete successor buffer | Minimal-rewrite comparison, bounded source base, shared non-mixed tail paths, and atomic staging |
+| Mixed planning, authenticated bytes, sink output, and rewrite comparison | #27, #30, #34, #37, #47, #50 | Simultaneous mixed leaf repair, recursive shape, exact page identity, canonical locator regrouping, exact current-page-body reuse, changed-page authentication, one linked commit, bounded sink output without a second complete successor buffer, and equal rewrite counts on pinned path-local comparisons | Global minimality, divergent-partition policy, bounded source base, shared non-mixed tail paths, and atomic staging |
 | Independent mixed transition evidence | #40 | Clean-room Python regeneration of stable-height, root-collapse, and root-growth transitions with pinned per-vector and aggregate SHA-256 identities | Complete proposed-epoch transition corpus and external interoperability review |
 | Bounded canonical output | #35, #36 | Canonical genesis bytes through bounded sequential sinks from owned and strongly versioned payload sources, with incremental hashing and version-change failure | Atomic staging integration |
 | Active and selected active rewrites | #38, #39 | Strict active-file validation, borrowed authenticated payload ranges, inactive-history skipping, caller-selected output, exact selected read accounting, and untouched-sink selection failures | Atomic staging integration |
@@ -26,7 +26,7 @@ All “verified” claims above refer to the current research layout. They do no
 ## Stack map
 
 - PRs #5–#8 share PR #4 as their review baseline.
-- Writer chain: #7 → #15 → #17 → #21 → #23 → #27 → #30 → #34 → #37, with independent transitions in #40 and bounded mixed sink output in #47.
+- Writer chain: #7 → #15 → #17 → #21 → #23 → #27 → #30 → #34 → #37 → #47 → #50, with independent transitions in #40.
 - Output/source chain: #23 → #35 → #36 → #38 → #39 → #41 → #42 → #43 → #44 → #45.
 - Source/history chain: #6 → #14 → #24 → #32.
 - Semantic-policy chain: #6 → #22 → #28 → #48.
@@ -48,9 +48,11 @@ All “verified” claims above refer to the current research layout. They do no
 
 PR #47 constructs only the mixed append tail, computes all new offsets from the verified base length, preserves exact page reuse, hashes the same linked commit, and copies the base plus tail through bounded writes. Its streamed bytes and report are identical to the owned writer, while avoiding a second complete successor-file allocation. Invalid operations fail before output; sink failure after output begins is terminal.
 
+PR #50 compares canonical authenticated page writes with the path-local planner. The pinned stable-height, root-collapse, and root-growth recipes choose identical final leaf partitions and equal write counts of 2, 1, and 3 pages. Broader fuzzing found no equal-final-partition case where canonical regrouping wrote more pages than the conservative path-local estimate.
+
 PR #40 independently reproduces three byte-significant transitions. Its pinned aggregate is `8470bdff6c3a12cc8a01382c61cb9fad35fc9656a82a33288f29c0f9807cb79b`.
 
-**Open:** Compare canonical regrouping with the path-local repair planner to quantify avoidable rewrites. Generalize the base-offset tail abstraction to replacement-only, insertion-only, deletion-only, and shared multi-`Put` modes. Add bounded-source base copying, private staging, and publication. Migrate and regenerate evidence for the proposed epoch geometry.
+**Open:** Global minimality is not proven, and divergent valid final partitions remain a policy question. Generalize the base-offset tail abstraction to replacement-only, insertion-only, deletion-only, and shared multi-`Put` modes. Add bounded-source base copying, private staging, and publication. Migrate and regenerate evidence for the proposed epoch geometry.
 
 ### 3. Source history, rewrite, and transport
 
@@ -72,7 +74,7 @@ PR #41 composes dependency closure with selected authenticated active-file strea
 
 ### 5. Vectors and fuzzing
 
-**Advanced:** Valid, invalid, interrupted, fork, recovery, source, history, rewrite, occupancy, persistent replacement/insertion/deletion/multi-`Put`/mixed, persistent mixed sink output, compaction, profile-defined rewrite bytes, retry, spill, active streaming, selected streaming, semantic streaming, versioned inventory, direct source-to-sink, selected-history source-to-sink, and historical-semantic source-to-sink evidence exists. PR #40 adds independently generated mixed transition bytes rather than treating Rust output as the oracle. PR #48 adds independently generated profile-defined rewrite bytes rather than treating Rust output as the oracle.
+**Advanced:** Valid, invalid, interrupted, fork, recovery, source, history, rewrite, occupancy, persistent replacement/insertion/deletion/multi-`Put`/mixed, persistent mixed sink output and rewrite comparison, compaction, profile-defined rewrite bytes, retry, spill, active streaming, selected streaming, semantic streaming, versioned inventory, direct source-to-sink, selected-history source-to-sink, and historical-semantic source-to-sink evidence exists. PR #40 adds independently generated mixed transition bytes rather than treating Rust output as the oracle. PR #48 adds independently generated profile-defined rewrite bytes rather than treating Rust output as the oracle.
 
 **Open:** Produce a complete cross-language corpus for the eventually selected epoch geometry, including all structural transition boundaries. Add provider-specific retry/source traces, fresh-process restart and physical power-loss corpora, and hostile concrete-provider traces.
 
