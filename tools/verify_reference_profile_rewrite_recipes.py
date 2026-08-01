@@ -27,6 +27,7 @@ CONTRACT = (
 
 @dataclass(frozen=True)
 class PlannedRewrite:
+    selected_roots: tuple[int, ...]
     retained: tuple[int, ...]
     discarded: tuple[int, ...]
     edges_visited: int
@@ -108,23 +109,24 @@ def plan_rewrite(
     maximum: int,
 ) -> PlannedRewrite:
     by_id = {value.object_id: value for value in values}
-    if len(by_id) != len(values) or not roots:
+    selected_roots = tuple(sorted(set(roots)))
+    if len(by_id) != len(values) or not selected_roots:
         raise AssertionError("recipe graph")
-    stack = [(root, 0) for root in reversed(roots)]
+    stack = [(root, 0) for root in reversed(selected_roots)]
     visited: set[int] = set()
     edges_visited = 0
     maximum_depth = 0
     while stack:
         object_id, depth = stack.pop()
+        maximum_depth = max(maximum_depth, depth)
         if object_id in visited:
             continue
         value = by_id.get(object_id)
         if value is None:
             raise AssertionError("missing dependency")
         visited.add(object_id)
-        maximum_depth = max(maximum_depth, depth)
         if value.kind == reference_kind:
-            dependencies = decode_reference_list(value.payload, maximum)
+            dependencies = sorted(set(decode_reference_list(value.payload, maximum)))
         elif value.kind == leaf_kind:
             if value.payload:
                 raise AssertionError("leaf payload")
@@ -132,10 +134,20 @@ def plan_rewrite(
         else:
             raise AssertionError("unknown profile kind")
         edges_visited += len(dependencies)
-        stack.extend((dependency, depth + 1) for dependency in reversed(dependencies))
+        stack.extend(
+            (dependency, depth + 1)
+            for dependency in reversed(dependencies)
+            if dependency not in visited
+        )
     retained = tuple(sorted(visited))
     discarded = tuple(sorted(set(by_id) - visited))
-    return PlannedRewrite(retained, discarded, edges_visited, maximum_depth)
+    return PlannedRewrite(
+        selected_roots,
+        retained,
+        discarded,
+        edges_visited,
+        maximum_depth,
+    )
 
 
 def verify_recipe(contract: dict[str, Any], recipe: dict[str, Any]) -> VerifiedRecipe:
@@ -197,9 +209,9 @@ def verify_recipe(contract: dict[str, Any], recipe: dict[str, Any]) -> VerifiedR
     print(
         f"{recipe['name']}: bytes={facts['decoded_bytes']} sha256={actual_sha} "
         f"root_level={facts['root_level']} pages={facts['page_count']} "
-        f"objects={facts['object_count']} retained={list(plan.retained)} "
-        f"discarded={list(plan.discarded)} edges={plan.edges_visited} "
-        f"depth={plan.maximum_depth}"
+        f"objects={facts['object_count']} roots={list(plan.selected_roots)} "
+        f"retained={list(plan.retained)} discarded={list(plan.discarded)} "
+        f"edges={plan.edges_visited} depth={plan.maximum_depth}"
     )
     return VerifiedRecipe(
         recipe["name"],
@@ -235,6 +247,7 @@ def main() -> None:
 
     print(f"reference_profile_rewrite_vectors={len(recipes)}")
     print(f"aggregate_sha256={actual_aggregate}")
+    print("canonical_root_and_dependency_order=pass")
     print("root_order_determinism=pass")
     print("strict_python_validation=pass")
     print("deterministic_python_writer=pass")
