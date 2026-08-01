@@ -1,0 +1,117 @@
+{
+  "manifest_version": 1,
+  "updated": "2026-08-01",
+  "status": "research-draft",
+  "epoch_allocated": false,
+  "proposal_accepted": false,
+  "repository": "OssaBellator/UCOF",
+  "tracks": [
+    {
+      "id": "wire-policy",
+      "claims": [
+        {
+          "pull_requests": [17, 18],
+          "claim": "canonical half-full grouping and validation are deterministic for the current research geometry",
+          "evidence": ["rust", "python", "valid-vectors", "invalid-vectors", "fuzz", "boundary-tables"],
+          "open": ["FCP-0003 disposition", "128-bit identifier migration", "64-byte locator migration", "landing order"]
+        }
+      ]
+    },
+    {
+      "id": "persistent-writer",
+      "claims": [
+        {
+          "pull_requests": [21, 23],
+          "claim": "single deletion and shared multi-Put batches have authenticated persistent byte paths",
+          "evidence": ["rust", "fuzz", "root-growth", "root-collapse", "borrow", "merge", "page-reuse-accounting"],
+          "open": []
+        },
+        {
+          "pull_requests": [27, 30, 34],
+          "claim": "mixed deletion planning is order-independent through leaf repair, recursive shape, and exact abstract page identity",
+          "evidence": ["rust-model", "stable-height", "root-growth", "root-collapse", "exact-reuse-model"],
+          "open": ["prove abstract identity equals byte identity"]
+        },
+        {
+          "pull_requests": [37],
+          "claim": "mixed deletion batches canonically regroup final locators, reuse only exact current page bodies, and publish one authenticated commit",
+          "evidence": ["rust", "byte-tests", "operation-specific-fuzz"],
+          "open": ["cross-language transition bytes", "minimal-rewrite comparison", "streaming output integration"]
+        }
+      ]
+    },
+    {
+      "id": "source-and-output",
+      "claims": [
+        {
+          "pull_requests": [24, 32],
+          "claim": "selected verified history states can be reissued under cumulative source budgets and measured read/hash/allocation accounting",
+          "evidence": ["rust", "hostile-source-fuzz", "reproducible-csv"],
+          "open": ["remote-provider measurements", "extension and provenance policy"]
+        },
+        {
+          "pull_requests": [35, 36, 38, 39],
+          "claim": "canonical output can be emitted through bounded sinks from owned, versioned, active-file, and selected active-file payload sources",
+          "evidence": ["byte-equivalence", "bounded-read", "bounded-write", "version-change-failure", "tamper-failure", "inactive-payload-skip"],
+          "open": ["bounded remote file inventory", "selected historical-chain streaming", "semantic-compaction streaming", "atomic staging integration"]
+        }
+      ]
+    },
+    {
+      "id": "transport",
+      "claims": [
+        {
+          "pull_requests": [19, 25, 31],
+          "claim": "metadata and range attempts share one bounded budget and retry delays are deterministic, capped, server-minimum-aware, and deadline-aware",
+          "evidence": ["rust", "independent-traces", "pinned-aggregate"],
+          "open": ["provider status classification", "real wait integration", "jitter policy", "authentication refresh", "native async cancellation"]
+        }
+      ]
+    },
+    {
+      "id": "spill-publication",
+      "claims": [
+        {
+          "pull_requests": [20, 26, 29, 33],
+          "claim": "publication state distinguishes not-published, indeterminate, and durable outcomes and aligns with real Unix hard-link and directory-sync side effects",
+          "evidence": ["rust-model", "independent-traces", "unix-filesystem-tests", "authority-boundary-fault-injection"],
+          "open": ["descriptor-relative hardening", "encryption", "restart", "power-loss", "network-filesystem policy", "platform qualification"]
+        }
+      ]
+    },
+    {
+      "id": "semantic-compaction",
+      "claims": [
+        {
+          "pull_requests": [22, 28],
+          "claim": "graph retention policy and one canonical reference-list dependency profile are independently reproducible",
+          "evidence": ["rust", "independent-python", "pinned-aggregates", "malformed-corpus"],
+          "open": ["application-profile adoption", "rewrite-byte vectors", "extension preservation", "provenance and signature reissuance"]
+        }
+      ]
+    }
+  ],
+  "required_external_findings": [
+    "wire field ambiguity",
+    "non-canonical writer output",
+    "validator acceptance divergence",
+    "unbounded allocation or work",
+    "false recovery or publication authority",
+    "page reuse without byte equality",
+    "source version ABA or mixed-view acceptance",
+    "retry of terminal version or protocol failure",
+    "spill confidentiality or cleanup failure",
+    "semantic dependency omission",
+    "freshness rollback or same-sequence fork acceptance"
+  ],
+  "completion_requires": [
+    "accepted proposal",
+    "complete independent parser or external review",
+    "all blocker and high findings dispositioned",
+    "cross-language transition vectors",
+    "production spill qualification",
+    "maintained transport adapters",
+    "explicit freshness authorization guidance",
+    "Candidate 1 disposition"
+  ]
+}
