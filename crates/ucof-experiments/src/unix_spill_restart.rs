@@ -150,7 +150,7 @@ pub fn inspect_unix_spill_after_restart(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{SpillRestartJournalPhase, SpillRestartJournalEvidence};
+    use crate::{SpillRestartJournalEvidence, SpillRestartJournalPhase};
     use std::os::unix::fs::symlink;
     use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -264,13 +264,9 @@ mod tests {
         let foreign = root.join("foreign.tmp");
         let destination = root.join("archive.ucof");
         fs::write(&foreign, bytes).expect("foreign stage");
-        let inspection = inspect_unix_spill_after_restart(
-            &foreign,
-            &destination,
-            Some(expected),
-            None,
-        )
-        .expect("inspection");
+        let inspection =
+            inspect_unix_spill_after_restart(&foreign, &destination, Some(expected), None)
+                .expect("inspection");
         assert_eq!(
             inspection.disposition,
             SpillRestartDisposition::PreserveForeignState
@@ -279,14 +275,13 @@ mod tests {
         fs::remove_file(&foreign).expect("remove foreign");
         fs::write(root.join("target"), bytes).expect("target");
         symlink(root.join("target"), &foreign).expect("symlink");
-        let inspection = inspect_unix_spill_after_restart(
-            &foreign,
-            &destination,
-            Some(expected),
-            None,
-        )
-        .expect("inspection");
-        assert_eq!(inspection.facts.staged_ownership, SpillRestartOwnership::Foreign);
+        let inspection =
+            inspect_unix_spill_after_restart(&foreign, &destination, Some(expected), None)
+                .expect("inspection");
+        assert_eq!(
+            inspection.facts.staged_ownership,
+            SpillRestartOwnership::Foreign
+        );
         assert_eq!(
             inspection.disposition,
             SpillRestartDisposition::PreserveForeignState
