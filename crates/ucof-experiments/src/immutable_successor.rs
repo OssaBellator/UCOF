@@ -16,7 +16,16 @@ include!("immutable_successor/persistent_insert.rs");
 include!("immutable_successor/persistent_delete.rs");
 include!("immutable_successor/persistent_multi_put.rs");
 include!("immutable_successor/persistent_mixed.rs");
-include!("immutable_successor/persistent_mixed_streaming.rs");
+
+#[allow(clippy::io_other_error, clippy::too_many_arguments)]
+mod persistent_mixed_streaming_api {
+    use super::*;
+
+    include!("immutable_successor/persistent_mixed_streaming.rs");
+}
+
+pub use persistent_mixed_streaming_api::*;
+
 include!("immutable_successor/rewrite.rs");
 
 #[allow(clippy::len_without_is_empty)]
