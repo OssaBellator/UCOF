@@ -277,3 +277,10 @@ path = "fuzz_targets/immutable_successor_history_to_sink.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "immutable_successor_historical_semantic_streaming"
+path = "fuzz_targets/immutable_successor_historical_semantic_streaming.rs"
+test = false
+doc = false
+bench = false
