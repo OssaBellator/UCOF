@@ -2,9 +2,9 @@
 
 use libfuzzer_sys::fuzz_target;
 use ucof_experiments::immutable_successor::{
-    append_persistent_batch, append_persistent_mixed_batch, build_genesis,
-    validate_canonical_occupancy, ImmutableBatchOperation, ImmutableLimits, ImmutableObjectInput,
-    PersistentBatchMode, LEAF_CAPACITY,
+    append_persistent_batch, append_persistent_mixed_batch, append_persistent_mixed_suffix,
+    build_genesis, validate_canonical_occupancy, ImmutableBatchOperation, ImmutableLimits,
+    ImmutableObjectInput, PersistentBatchMode, LEAF_CAPACITY,
 };
 
 fn object(object_id: u64, seed: u8) -> ImmutableObjectInput {
@@ -77,6 +77,15 @@ fuzz_target!(|data: &[u8]| {
         direct
     );
 
+    let suffix = append_persistent_mixed_suffix(&genesis, &operations, limits)
+        .expect("bounded persistent mixed suffix");
+    let mut combined = genesis.clone();
+    combined.extend_from_slice(&suffix.suffix);
+    assert_eq!(combined, direct.bytes);
+    assert_eq!(suffix.report, direct.report);
+    assert_eq!(suffix.pages_written, direct.pages_written);
+    assert_eq!(suffix.pages_reused, direct.pages_reused);
+
     operations.reverse();
     assert_eq!(
         append_persistent_mixed_batch(&genesis, &operations, limits)
@@ -84,4 +93,7 @@ fuzz_target!(|data: &[u8]| {
             .bytes,
         direct.bytes
     );
+    let reversed_suffix = append_persistent_mixed_suffix(&genesis, &operations, limits)
+        .expect("reversed persistent mixed suffix");
+    assert_eq!(reversed_suffix.suffix, suffix.suffix);
 });
