@@ -1,5 +1,5 @@
 {
-  "manifest_version": 3,
+  "manifest_version": 4,
   "updated": "2026-08-01",
   "status": "research-draft",
   "epoch_allocated": false,
@@ -47,19 +47,19 @@
           "pull_requests": [24, 32],
           "claim": "selected verified history states can be reissued under cumulative source budgets and measured read/hash/allocation accounting",
           "evidence": ["rust", "hostile-source-fuzz", "reproducible-csv"],
-          "open": ["canonical selected-history sink integration", "remote-provider measurements", "extension and provenance policy"]
+          "open": ["remote-provider measurements", "extension and provenance policy"]
         },
         {
           "pull_requests": [35, 36, 38, 39],
           "claim": "canonical output can be emitted through bounded sinks from owned, strongly versioned, strictly validated active-file, and caller-selected active-file payload sources",
           "evidence": ["rust", "byte-equivalence", "bounded-read", "bounded-write", "version-change-failure", "tamper-before-output", "inactive-payload-skip", "selected-payload-skip", "dedicated-fuzz"],
-          "open": ["selected historical-chain streaming", "atomic staging integration"]
+          "open": ["atomic staging integration"]
         },
         {
-          "pull_requests": [42, 43],
-          "claim": "one non-ABA versioned bounded source can be strictly inventoried and streamed to canonical active-state output under one cumulative budget without materializing the complete input or output",
-          "evidence": ["rust", "strict-report-equivalence", "authenticated-descriptors", "cumulative-budget-preflight", "per-object-version-checks", "digest-equality", "inactive-history-skip", "mid-stream-version-failure", "source-to-sink-fuzz"],
-          "open": ["concrete maintained provider adapter", "selected historical source-to-sink", "provider retry and authentication integration", "atomic publication staging"]
+          "pull_requests": [42, 43, 44],
+          "claim": "one non-ABA versioned bounded source can be strictly inventoried and streamed to canonical output for the latest state or one exact linked-history sequence under one cumulative budget",
+          "evidence": ["rust", "strict-report-equivalence", "authenticated-descriptors", "linked-history-validation", "exact-prefix-selection", "cumulative-budget-preflight", "per-object-version-checks", "digest-equality", "inactive-history-skip", "mid-stream-version-failure", "source-to-sink-fuzz", "selected-history-fuzz"],
+          "open": ["concrete maintained provider adapter", "semantic selection inside selected history", "multi-snapshot historical output", "provider retry and authentication integration", "atomic publication staging"]
         }
       ]
     },
