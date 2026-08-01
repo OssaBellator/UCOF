@@ -8,7 +8,8 @@ use ucof_experiments::{
         ImmutableSourceStreamingWriteOptions, ImmutableStreamingWriteOptions,
         ImmutableVersionedReadAt,
     },
-    rewrite_compacted_versioned_history_sequence_to, CompactionLimits, ObjectGraph,
+    rewrite_compacted_versioned_history_sequence_to, CompactionLimits,
+    ImmutableHistoricalSemanticStreamingOptions, ObjectGraph,
 };
 
 #[derive(Clone, Debug)]
@@ -184,18 +185,21 @@ fuzz_target!(|data: &[u8]| {
             u64::try_from(payload_lengths[index]).expect("bounded payload")
         })
         .sum();
-    let source_limits = ImmutableSourceLimits {
-        format,
-        max_total_bytes_read: 64 * 1024 * 1024,
-        max_read_operations: 1_000_000,
-        max_read_request_bytes: request,
-        hash_block_bytes: hash_block,
-    };
-    let options = ImmutableSourceStreamingWriteOptions {
-        output: ImmutableStreamingWriteOptions {
-            max_write_request_bytes: sink_chunk,
+    let semantic_options = ImmutableHistoricalSemanticStreamingOptions {
+        compaction: compaction_limits,
+        source: ImmutableSourceLimits {
+            format,
+            max_total_bytes_read: 64 * 1024 * 1024,
+            max_read_operations: 1_000_000,
+            max_read_request_bytes: request,
+            hash_block_bytes: hash_block,
         },
-        max_source_read_bytes: payload_chunk,
+        output: ImmutableSourceStreamingWriteOptions {
+            output: ImmutableStreamingWriteOptions {
+                max_write_request_bytes: sink_chunk,
+            },
+            max_source_read_bytes: payload_chunk,
+        },
     };
 
     let mut source = VersionedSource {
@@ -212,9 +216,7 @@ fuzz_target!(|data: &[u8]| {
         sequence,
         &graph,
         &roots,
-        compaction_limits,
-        source_limits,
-        options,
+        semantic_options,
     )
     .expect("historical semantic streaming");
     assert_eq!(actual, expected.bytes);
@@ -241,9 +243,7 @@ fuzz_target!(|data: &[u8]| {
         sequence,
         &invalid_graph,
         &[1],
-        compaction_limits,
-        source_limits,
-        options,
+        semantic_options,
     )
     .is_err());
     assert!(untouched.is_empty());
@@ -266,9 +266,7 @@ fuzz_target!(|data: &[u8]| {
         sequence,
         &missing_graph,
         &[missing_id],
-        compaction_limits,
-        source_limits,
-        options,
+        semantic_options,
     )
     .is_err());
     assert!(untouched.is_empty());
@@ -286,9 +284,7 @@ fuzz_target!(|data: &[u8]| {
         sequence,
         &graph,
         &roots,
-        compaction_limits,
-        source_limits,
-        options,
+        semantic_options,
     )
     .is_err());
     assert!(untouched.is_empty());
