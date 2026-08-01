@@ -32,10 +32,7 @@ fn stable_shape_reuses_exact_untouched_leaves() {
 
     let result = append_persistent_mixed_batch(&genesis, &operations, limits)
         .expect("persistent mixed batch");
-    assert_eq!(
-        result.mode,
-        PersistentBatchMode::CopyOnWriteCanonicalMixed
-    );
+    assert_eq!(result.mode, PersistentBatchMode::CopyOnWriteCanonicalMixed);
     assert_eq!(result.report.sequence, 1);
     assert_eq!(result.report.object_count, 400);
     assert_eq!(result.report.page_count, 4);
@@ -101,8 +98,7 @@ fn canonical_regrouping_can_grow_the_root() {
         ImmutableBatchOperation::Put(object(1)),
         ImmutableBatchOperation::Put(object(371)),
     ];
-    let result = append_persistent_mixed_batch(&genesis, &operations, limits)
-        .expect("root growth");
+    let result = append_persistent_mixed_batch(&genesis, &operations, limits).expect("root growth");
     assert_eq!(result.report.object_count, 186);
     assert_eq!(result.report.root_level, 1);
     assert_eq!(result.report.page_count, 3);
