@@ -1,5 +1,5 @@
 {
-  "manifest_version": 8,
+  "manifest_version": 9,
   "updated": "2026-08-01",
   "status": "research-draft",
   "epoch_allocated": false,
@@ -27,10 +27,10 @@
           "open": []
         },
         {
-          "pull_requests": [27, 30, 34, 37, 47, 50],
-          "claim": "mixed deletion batches are order-independent through leaf repair, recursive shape, exact page identity, canonical locator regrouping, authenticated page emission, one linked commit, bounded sink output without a second complete successor buffer, and pinned rewrite-count parity with conservative path-local planning",
-          "evidence": ["rust-model", "rust-bytes", "stable-height", "root-growth", "root-collapse", "exact-reuse", "operation-specific-fuzz", "owned-writer-equivalence", "base-tail-accounting", "bounded-write", "terminal-sink-failure", "path-local-comparison", "equal-partition-no-extra-write-fuzz"],
-          "open": ["global minimality", "divergent-partition policy", "shared tail abstraction for non-mixed persistent modes", "bounded source base", "atomic staging integration"]
+          "pull_requests": [27, 30, 34, 37, 47, 50, 54],
+          "claim": "mixed deletion batches are order-independent through leaf repair, recursive shape, exact page identity, canonical locator regrouping, authenticated page emission, one linked commit, bounded append-tail sink output, and path-local rewrite comparison; replacement-only batches reuse the same absolute-offset tail discipline",
+          "evidence": ["rust-model", "rust-bytes", "stable-height", "root-growth", "root-collapse", "exact-reuse", "operation-specific-fuzz", "owned-writer-equivalence", "base-tail-accounting", "bounded-write", "terminal-sink-failure", "path-local-comparison", "equal-partition-no-extra-write-fuzz", "replacement-tail-equivalence", "replacement-streaming-fuzz"],
+          "open": ["global minimality", "divergent-partition policy", "insertion-only tail output", "deletion-only tail output", "shared multi-Put tail output", "bounded source base", "atomic staging integration"]
         },
         {
           "pull_requests": [40],
@@ -56,10 +56,10 @@
           "open": ["atomic staging integration"]
         },
         {
-          "pull_requests": [42, 43, 44, 45],
-          "claim": "one non-ABA versioned bounded source can be strictly inventoried and streamed to canonical output for the latest state, one exact linked-history sequence, or a caller-selected reachable subset of that historical state under one cumulative budget",
-          "evidence": ["rust", "strict-report-equivalence", "authenticated-descriptors", "linked-history-validation", "exact-prefix-selection", "selected-object-canonicalization", "graph-plan-before-source", "cumulative-budget-preflight", "per-object-version-checks", "digest-equality", "inactive-history-skip", "exact-selected-reread-accounting", "mid-stream-version-failure", "source-to-sink-fuzz", "selected-history-fuzz", "historical-semantic-fuzz"],
-          "open": ["concrete maintained provider adapter", "multi-snapshot historical output", "provider retry and authentication integration", "atomic publication staging"]
+          "pull_requests": [42, 43, 44, 45, 55],
+          "claim": "one non-ABA versioned bounded source can be strictly inventoried and streamed to canonical output for the latest state, one exact linked-history sequence, a caller-selected reachable subset, or multiple selected linked-history states reissued as one chronological output history",
+          "evidence": ["rust", "strict-report-equivalence", "authenticated-descriptors", "linked-history-validation", "exact-prefix-selection", "selected-object-canonicalization", "graph-plan-before-source", "cumulative-budget-preflight", "per-object-version-checks", "digest-equality", "inactive-history-skip", "exact-selected-reread-accounting", "mid-stream-version-failure", "source-to-sink-fuzz", "selected-history-fuzz", "historical-semantic-fuzz", "chronological-selection-canonicalization", "unchanged-state-boundary", "selected-history-chain-fuzz"],
+          "open": ["concrete maintained provider adapter", "constant-memory multi-commit output", "per-snapshot semantic selection", "provider retry and authentication integration", "atomic publication staging"]
         }
       ]
     },
@@ -67,10 +67,10 @@
       "id": "transport",
       "claims": [
         {
-          "pull_requests": [19, 25, 31],
-          "claim": "metadata and range attempts share one bounded budget and retry delays are deterministic, capped, server-minimum-aware, and deadline-aware",
-          "evidence": ["rust", "independent-traces", "pinned-aggregate"],
-          "open": ["provider status classification", "real wait integration", "jitter policy", "authentication refresh", "native async cancellation"]
+          "pull_requests": [19, 25, 31, 51, 56],
+          "claim": "metadata and range attempts share one bounded budget; HTTP-style responses are classified fail-closed; retry delays are capped, server-minimum-aware, deadline-aware, jitter-bounded, and executable through cooperative cancellation checks",
+          "evidence": ["rust", "independent-retry-traces", "independent-http-traces", "pinned-aggregates", "status-allowlist", "version-terminal", "protocol-terminal", "bounded-jitter", "cooperative-wait", "wait-fuzz"],
+          "open": ["maintained provider adapter", "jitter distribution and seed policy", "authentication refresh execution", "native async cancellation", "production timer/runtime qualification"]
         }
       ]
     },
@@ -78,10 +78,10 @@
       "id": "spill-publication",
       "claims": [
         {
-          "pull_requests": [20, 26, 29, 33],
-          "claim": "publication state distinguishes not-published, indeterminate, and durable outcomes and aligns with real Unix hard-link and directory-sync side effects",
-          "evidence": ["rust-model", "independent-traces", "unix-filesystem-tests", "authority-boundary-fault-injection"],
-          "open": ["descriptor-relative hardening", "encryption", "restart", "power-loss", "network-filesystem policy", "platform qualification"]
+          "pull_requests": [20, 26, 29, 33, 53],
+          "claim": "publication state distinguishes not-published, indeterminate, and durable outcomes, aligns with real Unix hard-link and directory-sync side effects, and is conservatively classifiable after a fresh-process restart only with authenticated ownership-bound journal authority",
+          "evidence": ["rust-model", "independent-transition-traces", "unix-filesystem-tests", "authority-boundary-fault-injection", "fresh-process-tests", "independent-restart-traces", "restart-fuzz", "artifact-length-and-digest-validation"],
+          "open": ["authenticated durable journal implementation", "descriptor-relative hardening", "effective-user ownership", "encryption", "physical power-loss", "network-filesystem policy", "platform qualification"]
         }
       ]
     },
@@ -98,7 +98,7 @@
           "pull_requests": [39, 41, 45],
           "claim": "bounded dependency closure can feed selected authenticated streaming for the current active file or one exact historical prefix so only reachable payloads are reread and emitted",
           "evidence": ["rust", "byte-equivalence", "reachable-orphan-accounting", "bounded-read", "bounded-write", "fail-before-source", "fail-before-output", "semantic-streaming-fuzz", "historical-semantic-fuzz"],
-          "open": ["normative profile adoption", "large-graph spill", "multi-snapshot historical semantic output", "extension preservation", "provenance and signature reissuance"]
+          "open": ["normative profile adoption", "large-graph spill", "semantic selection independently per retained snapshot", "extension preservation", "provenance and signature reissuance"]
         }
       ]
     }
