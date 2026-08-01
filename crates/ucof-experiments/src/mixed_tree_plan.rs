@@ -115,9 +115,7 @@ fn canonical_group_sizes(
     }
     if sizes.len() != groups
         || sizes.iter().sum::<usize>() != total
-        || sizes
-            .iter()
-            .any(|size| *size < minimum || *size > capacity)
+        || sizes.iter().any(|size| *size < minimum || *size > capacity)
     {
         return Err(MixedTreePlanError::InvalidLimits);
     }
@@ -240,11 +238,8 @@ pub fn plan_mixed_tree_updates(
         std::cmp::Ordering::Less => MixedRootTransition::Collapsed,
         std::cmp::Ordering::Equal => MixedRootTransition::Stable,
     };
-    let conservative_touched_original_internal_pages = conservative_touched_internal_pages(
-        &original,
-        &final_shape,
-        &leaf.touched_original_pages,
-    )?;
+    let conservative_touched_original_internal_pages =
+        conservative_touched_internal_pages(&original, &final_shape, &leaf.touched_original_pages)?;
     Ok(MixedTreePlan {
         leaf,
         original,
@@ -289,12 +284,9 @@ mod tests {
 
     #[test]
     fn stable_shape_rewrites_only_the_original_ancestor_path() {
-        let plan = plan_mixed_tree_updates(
-            &even_pages(4, 2),
-            &[MixedPlanOperation::Put(2)],
-            limits(),
-        )
-        .expect("stable plan");
+        let plan =
+            plan_mixed_tree_updates(&even_pages(4, 2), &[MixedPlanOperation::Put(2)], limits())
+                .expect("stable plan");
         assert_eq!(plan.root_transition, MixedRootTransition::Stable);
         assert_eq!(plan.original.root_level, 2);
         assert_eq!(plan.final_shape.root_level, 2);
@@ -306,12 +298,9 @@ mod tests {
 
     #[test]
     fn simultaneous_leaf_split_can_grow_the_root() {
-        let plan = plan_mixed_tree_updates(
-            &even_pages(9, 3),
-            &[MixedPlanOperation::Put(1)],
-            limits(),
-        )
-        .expect("growing plan");
+        let plan =
+            plan_mixed_tree_updates(&even_pages(9, 3), &[MixedPlanOperation::Put(1)], limits())
+                .expect("growing plan");
         assert_eq!(plan.root_transition, MixedRootTransition::Grew);
         assert_eq!(plan.original.root_level, 2);
         assert_eq!(plan.final_shape.root_level, 3);
