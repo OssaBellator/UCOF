@@ -77,12 +77,36 @@ fuzz_target!(|data: &[u8]| {
         .expect("reverse comparison");
     assert_eq!(forward, reverse);
     assert_eq!(forward.original_leaf_sizes.iter().sum::<usize>(), count);
+    let expected_objects = count - 1 + usize::from(inserted);
+    assert_eq!(
+        forward.planner_final_leaf_sizes.iter().sum::<usize>(),
+        expected_objects
+    );
     assert_eq!(
         forward.canonical_final_leaf_sizes.iter().sum::<usize>(),
-        count - 1 + usize::from(inserted)
+        expected_objects
+    );
+    assert_eq!(
+        forward.planner_exact_leaf_pages_written + forward.planner_exact_leaf_pages_reused,
+        forward.planner_final_leaf_sizes.len()
+    );
+    assert_eq!(
+        forward.canonical_exact_leaf_pages_written + forward.canonical_exact_leaf_pages_reused,
+        forward.canonical_final_leaf_sizes.len()
+    );
+    assert_eq!(
+        forward.extra_canonical_leaf_writes,
+        forward
+            .canonical_exact_leaf_pages_written
+            .saturating_sub(forward.planner_exact_leaf_pages_written)
+    );
+    assert_eq!(
+        forward.leaf_partition_equal,
+        forward.first_differing_leaf.is_none()
     );
     if forward.leaf_partition_equal {
         assert!(forward.comparable_relation.is_some());
+        assert_eq!(forward.extra_canonical_leaf_writes, 0);
         assert!(!matches!(
             forward.comparable_relation,
             Some(PersistentMixedRewriteRelation::CanonicalWritesMore(_))
