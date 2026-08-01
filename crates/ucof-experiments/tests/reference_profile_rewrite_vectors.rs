@@ -127,8 +127,7 @@ fn rust_matches_independent_reference_profile_rewrite_pins() {
                     edges: 3,
                     depth: 2,
                     output_len: 16_904,
-                    sha256:
-                        "87bc7de2d5e2afb51e765bf4694cf3a9a178a605d0f032b8157a4bc1bfc7040e",
+                    sha256: "87bc7de2d5e2afb51e765bf4694cf3a9a178a605d0f032b8157a4bc1bfc7040e",
                 },
             ),
         ),
@@ -151,8 +150,7 @@ fn rust_matches_independent_reference_profile_rewrite_pins() {
                     edges: 4,
                     depth: 2,
                     output_len: 16_968,
-                    sha256:
-                        "aee59b41b6a7bf135fc1d741256ea7e6ef121ffb1897a39b646ca2f66b73b715",
+                    sha256: "aee59b41b6a7bf135fc1d741256ea7e6ef121ffb1897a39b646ca2f66b73b715",
                 },
             ),
         ),
@@ -168,8 +166,7 @@ fn rust_matches_independent_reference_profile_rewrite_pins() {
                     edges: 0,
                     depth: 0,
                     output_len: 16_728,
-                    sha256:
-                        "65654ef62675f12db1ed3fde4304eaa1344e2cc25bbb5a2718c51ba3779c5e43",
+                    sha256: "65654ef62675f12db1ed3fde4304eaa1344e2cc25bbb5a2718c51ba3779c5e43",
                 },
             ),
         ),
