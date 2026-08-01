@@ -106,11 +106,131 @@ fn persistent_source_identity<S: ImmutableReadAt>(
     ))
 }
 
+fn persistent_source_canonical_envelope<S: ImmutableReadAt>(
+    source: &mut S,
+    limits: ImmutableSourceLimits,
+    expected: &ImmutableReport,
+) -> Result<(LookupEnvelope, ImmutableSourceStats), ImmutableSourceError> {
+    let mut reader = SourceReader::new(source, limits)?;
+    let envelope = read_lookup_envelope(&mut reader)?;
+    if envelope.sequence != expected.sequence
+        || envelope.snapshot_digest != expected.snapshot_digest
+        || envelope.commit_digest != expected.commit_digest
+        || envelope.root.level != expected.root_level
+    {
+        return Err(ImmutableSourceError::Format(ImmutableError::Invalid(
+            "source report",
+        )));
+    }
+
+    let root_offset = envelope.root.offset;
+    let mut stack = vec![envelope.root.clone()];
+    let mut seen = HashSet::new();
+    while let Some(reference) = stack.pop() {
+        if seen.len() >= reader.limits.format.max_pages || !seen.insert(reference.offset) {
+            return Err(ImmutableSourceError::Format(ImmutableError::Invalid(
+                "page traversal",
+            )));
+        }
+        let page = reader.read_vec(reference.offset, PAGE_SIZE, "canonical page")?;
+        reader.stats.bytes_hashed = reader
+            .stats
+            .bytes_hashed
+            .checked_add(
+                u64::try_from(page.len())
+                    .map_err(|_| ImmutableSourceError::Limit("hashed bytes"))?,
+            )
+            .ok_or(ImmutableSourceError::Limit("hashed bytes"))?;
+        if digest(&[PAGE_DOMAIN, &page]) != reference.digest || &page[..8] != PAGE_MAGIC {
+            return Err(ImmutableSourceError::Format(ImmutableError::Invalid(
+                "canonical page digest",
+            )));
+        }
+        let kind = page[8];
+        let level = page[9];
+        let count = usize::try_from(u32_at(&page, 12, "canonical page count")?)
+            .map_err(|_| ImmutableSourceError::Format(ImmutableError::Invalid(
+                "canonical page count",
+            )))?;
+        let minimum = u64_at(&page, 20, "canonical page minimum")?;
+        let maximum = u64_at(&page, 28, "canonical page maximum")?;
+        if level != reference.level
+            || reference
+                .range
+                .is_some_and(|range| range != (minimum, maximum))
+        {
+            return Err(ImmutableSourceError::Format(ImmutableError::Invalid(
+                "canonical page reference",
+            )));
+        }
+        let is_root = reference.offset == root_offset;
+        match kind {
+            1 => {
+                if level != 0
+                    || count == 0
+                    || count > LEAF_CAPACITY
+                    || (!is_root && count < LEAF_MIN_OCCUPANCY)
+                {
+                    return Err(ImmutableSourceError::Format(ImmutableError::Invalid(
+                        "leaf occupancy",
+                    )));
+                }
+            }
+            2 => {
+                let below_minimum = if is_root {
+                    count < 2
+                } else {
+                    count < INTERNAL_MIN_OCCUPANCY
+                };
+                if level == 0 || below_minimum || count > INTERNAL_FANOUT {
+                    return Err(ImmutableSourceError::Format(ImmutableError::Invalid(
+                        "internal occupancy",
+                    )));
+                }
+                let required = stack
+                    .len()
+                    .checked_add(count)
+                    .ok_or(ImmutableSourceError::Format(ImmutableError::Limit(
+                        "page count",
+                    )))?;
+                allocation_check::<LookupReference>(required, reader.limits.format)?;
+                for index in (0..count).rev() {
+                    let entry = PAGE_HEADER_LEN + index * INTERNAL_ENTRY_LEN;
+                    stack.push(LookupReference {
+                        offset: usize_at(&page, entry + 16, "canonical child")?,
+                        level: level
+                            .checked_sub(1)
+                            .ok_or(ImmutableSourceError::Format(ImmutableError::Invalid(
+                                "canonical child level",
+                            )))?,
+                        digest: array(&page, entry + 32, "canonical child")?,
+                        range: Some((
+                            u64_at(&page, entry, "canonical child")?,
+                            u64_at(&page, entry + 8, "canonical child")?,
+                        )),
+                    });
+                }
+            }
+            _ => {
+                return Err(ImmutableSourceError::Format(ImmutableError::Invalid(
+                    "canonical page kind",
+                )));
+            }
+        }
+    }
+    if seen.len() != expected.page_count {
+        return Err(ImmutableSourceError::Format(ImmutableError::Invalid(
+            "canonical page count",
+        )));
+    }
+    Ok((envelope, reader.stats))
+}
+
 fn persistent_source_replacement_page<S: ImmutableReadAt>(
     reader: &mut SourceReader<'_, S>,
-    envelope: &LookupEnvelope,
     reference: &LookupReference,
     replacements: &std::collections::BTreeMap<u64, Locator>,
+    matched: &mut HashSet<u64>,
     tail: &mut Vec<u8>,
     base_len: usize,
     pages_written: &mut usize,
@@ -122,10 +242,11 @@ fn persistent_source_replacement_page<S: ImmutableReadAt>(
         .stats
         .bytes_hashed
         .checked_add(
-            u64::try_from(page.len())
-                .map_err(|_| PersistentSourceReplacementError::Source(
-                    ImmutableSourceError::Limit("hashed bytes"),
-                ))?,
+            u64::try_from(page.len()).map_err(|_| {
+                PersistentSourceReplacementError::Source(ImmutableSourceError::Limit(
+                    "hashed bytes",
+                ))
+            })?,
         )
         .ok_or(PersistentSourceReplacementError::Source(
             ImmutableSourceError::Limit("hashed bytes"),
@@ -142,9 +263,11 @@ fn persistent_source_replacement_page<S: ImmutableReadAt>(
         u32_at(&page, 12, "persistent page count")
             .map_err(PersistentSourceReplacementError::Writer)?,
     )
-    .map_err(|_| PersistentSourceReplacementError::Writer(ImmutableError::Invalid(
-        "persistent page count",
-    )))?;
+    .map_err(|_| {
+        PersistentSourceReplacementError::Writer(ImmutableError::Invalid(
+            "persistent page count",
+        ))
+    })?;
     let minimum = u64_at(&page, 20, "persistent page minimum")
         .map_err(PersistentSourceReplacementError::Writer)?;
     let maximum = u64_at(&page, 28, "persistent page maximum")
@@ -168,9 +291,11 @@ fn persistent_source_replacement_page<S: ImmutableReadAt>(
                     u32_at(&page, 16, "persistent leaf entry size")
                         .map_err(PersistentSourceReplacementError::Writer)?,
                 )
-                .map_err(|_| PersistentSourceReplacementError::Writer(
-                    ImmutableError::Invalid("persistent leaf entry size"),
-                ))?
+                .map_err(|_| {
+                    PersistentSourceReplacementError::Writer(ImmutableError::Invalid(
+                        "persistent leaf entry size",
+                    ))
+                })?
                     != LEAF_ENTRY_LEN
             {
                 return Err(PersistentSourceReplacementError::Writer(
@@ -199,6 +324,7 @@ fn persistent_source_replacement_page<S: ImmutableReadAt>(
                 };
                 if let Some(replacement) = replacements.get(&locator.object_id) {
                     entries.push(replacement.clone());
+                    matched.insert(locator.object_id);
                     changed = true;
                 } else {
                     entries.push(locator);
@@ -239,9 +365,11 @@ fn persistent_source_replacement_page<S: ImmutableReadAt>(
                     u32_at(&page, 16, "persistent internal entry size")
                         .map_err(PersistentSourceReplacementError::Writer)?,
                 )
-                .map_err(|_| PersistentSourceReplacementError::Writer(
-                    ImmutableError::Invalid("persistent internal entry size"),
-                ))?
+                .map_err(|_| {
+                    PersistentSourceReplacementError::Writer(ImmutableError::Invalid(
+                        "persistent internal entry size",
+                    ))
+                })?
                     != INTERNAL_ENTRY_LEN
             {
                 return Err(PersistentSourceReplacementError::Writer(
@@ -275,9 +403,9 @@ fn persistent_source_replacement_page<S: ImmutableReadAt>(
                 {
                     let (next, child_changed) = persistent_source_replacement_page(
                         reader,
-                        envelope,
                         &child_reference,
                         replacements,
+                        matched,
                         tail,
                         base_len,
                         pages_written,
@@ -379,6 +507,15 @@ fn plan_persistent_source_replacements_inner<S: ImmutableReadAt>(
     let strict = validate_source_at(source, limits)
         .map_err(PersistentSourceReplacementError::Source)?;
     let mut total_stats = strict.stats;
+
+    let canonical_limits = remaining_source_limits(limits, total_stats)
+        .map_err(PersistentSourceReplacementError::Source)?;
+    let (envelope, canonical_stats) =
+        persistent_source_canonical_envelope(source, canonical_limits, &strict.report)
+            .map_err(PersistentSourceReplacementError::Source)?;
+    add_source_stats(&mut total_stats, canonical_stats)
+        .map_err(PersistentSourceReplacementError::Source)?;
+
     let identity_limits = remaining_source_limits(limits, total_stats)
         .map_err(PersistentSourceReplacementError::Source)?;
     let (identity, identity_stats) = persistent_source_identity(source, identity_limits)
@@ -390,22 +527,12 @@ fn plan_persistent_source_replacements_inner<S: ImmutableReadAt>(
         .map_err(PersistentSourceReplacementError::Source)?;
     let mut reader = SourceReader::new(source, path_limits)
         .map_err(PersistentSourceReplacementError::Source)?;
-    if u64::try_from(reader.length).map_err(|_| PersistentSourceReplacementError::Source(
-        ImmutableSourceError::Limit("length"),
-    ))? != identity.length
+    if u64::try_from(reader.length).map_err(|_| {
+        PersistentSourceReplacementError::Source(ImmutableSourceError::Limit("length"))
+    })? != identity.length
     {
         return Err(PersistentSourceReplacementError::Source(
             ImmutableSourceError::Format(ImmutableError::Invalid("source length")),
-        ));
-    }
-    let envelope = read_lookup_envelope(&mut reader)
-        .map_err(PersistentSourceReplacementError::Source)?;
-    if envelope.sequence != strict.report.sequence
-        || envelope.snapshot_digest != strict.report.snapshot_digest
-        || envelope.commit_digest != strict.report.commit_digest
-    {
-        return Err(PersistentSourceReplacementError::Source(
-            ImmutableSourceError::Format(ImmutableError::Invalid("source report")),
         ));
     }
 
@@ -422,25 +549,31 @@ fn plan_persistent_source_replacements_inner<S: ImmutableReadAt>(
     }
 
     let mut pages_written = 0_usize;
+    let mut matched = HashSet::new();
     let (root, changed) = persistent_source_replacement_page(
         &mut reader,
-        &envelope,
         &envelope.root,
         &replacements,
+        &mut matched,
         &mut tail,
         base_len,
         &mut pages_written,
     )?;
-    if !changed || pages_written == 0 {
+    if matched.len() != replacements.len() {
         let missing = replacements
             .keys()
-            .next()
+            .find(|object_id| !matched.contains(object_id))
             .copied()
             .ok_or(PersistentSourceReplacementError::Writer(
                 ImmutableError::Invalid("persistent replacement state"),
             ))?;
         return Err(PersistentSourceReplacementError::Writer(
             ImmutableError::MissingObject(missing),
+        ));
+    }
+    if !changed || pages_written == 0 {
+        return Err(PersistentSourceReplacementError::Writer(
+            ImmutableError::Invalid("persistent replacement state"),
         ));
     }
     let pages_reused = strict
@@ -488,11 +621,11 @@ fn plan_persistent_source_replacements_inner<S: ImmutableReadAt>(
 /// Plans a replacement-only persistent append tail directly from one strongly versioned bounded
 /// random-access source.
 ///
-/// The operation strictly validates the exact-end source, hashes the complete file identity, then
-/// rereads only replacement paths to construct the same tail as the in-memory replacement writer.
-/// It retains no complete base copy. Current commit authentication and strict validation still read
-/// all active data; this experiment proves bounded memory and path-local tail construction, not
-/// minimal source traffic.
+/// The operation strictly validates the exact-end source, independently enforces canonical
+/// occupancy, hashes the complete file identity, and then rereads only replacement paths to
+/// construct the same tail as the in-memory replacement writer. It retains no complete base copy.
+/// Current commit authentication and strict validation still read all active data; this experiment
+/// proves bounded memory and path-local tail construction, not minimal source traffic.
 pub fn plan_persistent_replacement_tail_at<S: PersistentVersionedReadAt>(
     source: &mut S,
     operations: &[ImmutableBatchOperation],
@@ -594,7 +727,7 @@ mod persistent_source_replacement_tests {
     fn source_limits(format: ImmutableLimits, file_len: usize) -> ImmutableSourceLimits {
         ImmutableSourceLimits {
             format,
-            max_total_bytes_read: u64::try_from(file_len * 8).expect("budget"),
+            max_total_bytes_read: u64::try_from(file_len * 12).expect("budget"),
             max_read_operations: 2_000_000,
             max_read_request_bytes: 257,
             hash_block_bytes: 251,
@@ -630,7 +763,10 @@ mod persistent_source_replacement_tests {
         assert_eq!(plan.report, owned.report);
         assert_eq!(plan.pages_written, owned.pages_written);
         assert_eq!(plan.pages_reused, owned.pages_reused);
-        assert_eq!(plan.identity, PersistentSourceIdentity::from_bytes(&base).expect("identity"));
+        assert_eq!(
+            plan.identity,
+            PersistentSourceIdentity::from_bytes(&base).expect("identity")
+        );
         assert!(plan.version_checks > 0);
         assert!(plan.tail_allocation_bytes < owned.bytes.len());
     }
@@ -674,6 +810,31 @@ mod persistent_source_replacement_tests {
     }
 
     #[test]
+    fn mixed_existing_and_missing_identifiers_are_rejected() {
+        let format = ImmutableLimits::default();
+        let base = base(32, format);
+        let mut source = VersionedSlice {
+            bytes: base.clone(),
+            version: PersistentSourceVersion([25; 32]),
+            reads: 0,
+            mutate_after_read: None,
+        };
+        let error = plan_persistent_replacement_tail_at(
+            &mut source,
+            &[
+                ImmutableBatchOperation::Put(object(2, 205, 9)),
+                ImmutableBatchOperation::Put(object(3, 206, 9)),
+            ],
+            source_limits(format, base.len()),
+        )
+        .expect_err("missing identifier");
+        assert_eq!(
+            error,
+            PersistentSourceReplacementError::Writer(ImmutableError::MissingObject(3))
+        );
+    }
+
+    #[test]
     fn source_version_change_rejects_without_a_plan() {
         let format = ImmutableLimits::default();
         let base = base(16, format);
@@ -697,7 +858,7 @@ mod persistent_source_replacement_tests {
         let format = ImmutableLimits::default();
         let base = base(16, format);
         let mut source = VersionedSlice {
-            bytes: base.clone(),
+            bytes: base,
             version: PersistentSourceVersion([24; 32]),
             reads: 0,
             mutate_after_read: None,
