@@ -26,6 +26,7 @@ mod source_api {
 
     include!("immutable_successor/source.rs");
     include!("immutable_successor/source_full.rs");
+    include!("immutable_successor/source_history_inventory.rs");
     include!("immutable_successor/source_history_rewrite.rs");
     include!("immutable_successor/source_inventory_conversion.rs");
 
