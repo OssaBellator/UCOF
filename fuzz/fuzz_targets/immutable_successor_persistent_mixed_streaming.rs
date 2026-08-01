@@ -8,11 +8,7 @@ use ucof_experiments::immutable_successor::{
 };
 
 fn object(object_id: u64, seed: u8, payload_len: usize) -> ImmutableObjectInput {
-    ImmutableObjectInput::new(
-        object_id,
-        u16::from(1 + seed % 31),
-        vec![seed; payload_len],
-    )
+    ImmutableObjectInput::new(object_id, u16::from(1 + seed % 31), vec![seed; payload_len])
 }
 
 fuzz_target!(|data: &[u8]| {
@@ -97,7 +93,10 @@ fuzz_target!(|data: &[u8]| {
     assert_eq!(report.mode, expected.mode);
     assert_eq!(
         report.tail_allocation_bytes,
-        actual.len().checked_sub(genesis.len()).expect("append tail")
+        actual
+            .len()
+            .checked_sub(genesis.len())
+            .expect("append tail")
     );
     assert!(report.tail_allocation_bytes < actual.len());
     assert!(report.largest_write_request <= write_chunk);
