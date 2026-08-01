@@ -33,6 +33,7 @@ mod source_api {
         use super::*;
 
         include!("immutable_successor/source_to_sink.rs");
+        include!("immutable_successor/source_selected_to_sink.rs");
     }
 
     pub use source_to_sink_api::*;
