@@ -50,8 +50,7 @@ pub use exp0002_source_version::{
     Exp0002SourceVersion, Exp0002StableSource, Exp0002VersionedReadAt,
 };
 pub use mixed_reference_plan::{
-    plan_mixed_page_references, MixedReferencePlan, MixedReferencePlanError,
-    PlannedPageIdentity,
+    plan_mixed_page_references, MixedReferencePlan, MixedReferencePlanError, PlannedPageIdentity,
 };
 pub use mixed_tree_plan::{
     plan_mixed_tree_updates, MixedRootTransition, MixedTreePlan, MixedTreePlanError,
