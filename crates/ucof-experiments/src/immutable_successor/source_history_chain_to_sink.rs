@@ -1,3 +1,5 @@
+use std::io::Write;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct ImmutableHistoryChainStreamingOptions {
     pub max_write_request_bytes: usize,
@@ -210,7 +212,13 @@ mod source_history_chain_to_sink_tests {
         assert_eq!(report.output_allocation_bytes, actual.len());
         assert!(report.largest_write_request <= 31);
         assert!(source.largest_request <= 29);
-        assert_eq!(validate_history(&actual, format).expect("output history").entries.len(), 2);
+        assert_eq!(
+            validate_history(&actual, format)
+                .expect("output history")
+                .entries
+                .len(),
+            2
+        );
     }
 
     #[test]
