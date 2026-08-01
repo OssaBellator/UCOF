@@ -17,6 +17,7 @@ include!("immutable_successor/persistent_delete.rs");
 include!("immutable_successor/persistent_multi_put.rs");
 include!("immutable_successor/persistent_mixed.rs");
 include!("immutable_successor/persistent_mixed_streaming.rs");
+include!("immutable_successor/mixed_rewrite_comparison.rs");
 include!("immutable_successor/rewrite.rs");
 
 #[allow(clippy::len_without_is_empty)]
