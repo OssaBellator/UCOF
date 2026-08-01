@@ -25,6 +25,7 @@ pub mod immutable_successor;
 mod publication;
 mod recovery;
 mod repair;
+#[allow(clippy::derivable_impls)]
 mod semantic_history_streaming_compaction;
 mod semantic_streaming_compaction;
 mod snapshots;
