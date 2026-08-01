@@ -270,3 +270,10 @@ path = "fuzz_targets/immutable_successor_source_to_sink.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "immutable_successor_history_to_sink"
+path = "fuzz_targets/immutable_successor_history_to_sink.rs"
+test = false
+doc = false
+bench = false
