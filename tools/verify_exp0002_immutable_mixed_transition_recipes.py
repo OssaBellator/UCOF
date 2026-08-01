@@ -32,6 +32,14 @@ class TransitionResult:
     pages_reused: int
 
 
+@dataclass(frozen=True)
+class VerifiedRecipe:
+    name: str
+    output_digest: bytes
+    facts: dict[str, int | str]
+    pin_errors: tuple[str, ...]
+
+
 def base_values(recipe: dict) -> list[objects.ObjectInput]:
     count = recipe["base_object_count"]
     stride = recipe["base_identifier_stride"]
@@ -180,7 +188,7 @@ def apply_mixed_transition(base: bytes, operations: list[dict]) -> TransitionRes
     return TransitionResult(result, pages_written, pages_reused)
 
 
-def verify_recipe(recipe: dict) -> tuple[str, bytes]:
+def verify_recipe(recipe: dict) -> VerifiedRecipe:
     base = canonical.build_genesis(base_values(recipe))
     forward = apply_mixed_transition(base, recipe["operations"])
     reverse = apply_mixed_transition(base, list(reversed(recipe["operations"])))
@@ -190,7 +198,7 @@ def verify_recipe(recipe: dict) -> tuple[str, bytes]:
     report = objects.validate_complete(forward.data)
     canonical.validate_canonical_occupancy(forward.data)
     actual_sha = sha256(forward.data).hexdigest()
-    facts = {
+    facts: dict[str, int | str] = {
         "decoded_bytes": len(forward.data),
         "sha256": actual_sha,
         "sequence": report.structural.sequence,
@@ -200,14 +208,13 @@ def verify_recipe(recipe: dict) -> tuple[str, bytes]:
         "pages_written": forward.pages_written,
         "pages_reused": forward.pages_reused,
     }
+    pin_errors: list[str] = []
     for key, actual in facts.items():
         expected = recipe[key]
         if expected in (None, ""):
-            raise AssertionError(
-                f"{recipe['name']}: pin {key} to {actual!r}"
-            )
-        if actual != expected:
-            raise AssertionError(
+            pin_errors.append(f"{recipe['name']}: pin {key} to {actual!r}")
+        elif actual != expected:
+            pin_errors.append(
                 f"{recipe['name']}: {key} expected {expected!r}, received {actual!r}"
             )
 
@@ -221,12 +228,17 @@ def verify_recipe(recipe: dict) -> tuple[str, bytes]:
             raise AssertionError(f"{recipe['name']}: object {object_id} payload")
 
     print(
-        f"{recipe['name']}: bytes={len(forward.data)} sha256={actual_sha} "
-        f"sequence={report.structural.sequence} root_level={report.structural.root.level} "
-        f"pages={len(report.structural.reachable_pages)} objects={len(report.objects)} "
-        f"written={forward.pages_written} reused={forward.pages_reused}"
+        f"{recipe['name']}: bytes={facts['decoded_bytes']} sha256={actual_sha} "
+        f"sequence={facts['sequence']} root_level={facts['root_level']} "
+        f"pages={facts['page_count']} objects={facts['object_count']} "
+        f"written={facts['pages_written']} reused={facts['pages_reused']}"
     )
-    return recipe["name"], bytes.fromhex(actual_sha)
+    return VerifiedRecipe(
+        recipe["name"],
+        bytes.fromhex(actual_sha),
+        facts,
+        tuple(pin_errors),
+    )
 
 
 def main() -> None:
@@ -239,15 +251,17 @@ def main() -> None:
         raise AssertionError("mixed transition recipe set")
 
     aggregate = sha256()
-    for name, output_digest in map(verify_recipe, recipes):
-        aggregate.update(name.encode("utf-8"))
-        aggregate.update(output_digest)
+    pin_errors: list[str] = []
+    for result in map(verify_recipe, recipes):
+        aggregate.update(result.name.encode("utf-8"))
+        aggregate.update(result.output_digest)
+        pin_errors.extend(result.pin_errors)
     actual_aggregate = aggregate.hexdigest()
     expected_aggregate = contract["aggregate_sha256"]
     if expected_aggregate in (None, ""):
-        raise AssertionError(f"pin aggregate_sha256 to {actual_aggregate!r}")
-    if actual_aggregate != expected_aggregate:
-        raise AssertionError(
+        pin_errors.append(f"pin aggregate_sha256 to {actual_aggregate!r}")
+    elif actual_aggregate != expected_aggregate:
+        pin_errors.append(
             f"aggregate SHA-256 expected {expected_aggregate}, received {actual_aggregate}"
         )
 
@@ -257,6 +271,12 @@ def main() -> None:
     print("strict_python_validation=pass")
     print("canonical_occupancy=pass")
     print("exact_page_body_reuse=pass")
+
+    if pin_errors:
+        print("required_pins:")
+        for error in pin_errors:
+            print(f"- {error}")
+        raise AssertionError(f"{len(pin_errors)} mixed transition pins require update")
 
 
 if __name__ == "__main__":
