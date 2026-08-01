@@ -236,7 +236,7 @@ fuzz_target!(|data: &[u8]| {
         assert!(destination == &expected || destination == &sentinel);
     }
     if link == PersistentPublicationLinkOutcome::DestinationExists {
-        assert_eq!(backend.destination, Some(sentinel));
+        assert_eq!(backend.destination, Some(sentinel.clone()));
     }
 
     if let Ok(report) = result {
@@ -249,7 +249,7 @@ fuzz_target!(|data: &[u8]| {
                 }
             }
             PersistentStagedPublicationOutcome::NotPublishedDestinationExists => {
-                assert_eq!(backend.destination, Some(sentinel));
+                assert_eq!(backend.destination, Some(sentinel.clone()));
                 if report.cleanup_error.is_none() {
                     assert!(backend.private.is_empty());
                 }
