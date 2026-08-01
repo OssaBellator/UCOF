@@ -1,5 +1,5 @@
 {
-  "manifest_version": 5,
+  "manifest_version": 6,
   "updated": "2026-08-01",
   "status": "research-draft",
   "epoch_allocated": false,
@@ -27,10 +27,10 @@
           "open": []
         },
         {
-          "pull_requests": [27, 30, 34, 37],
-          "claim": "mixed deletion batches are order-independent through leaf repair, recursive shape, exact page identity, canonical locator regrouping, authenticated page emission, and one linked commit",
-          "evidence": ["rust-model", "rust-bytes", "stable-height", "root-growth", "root-collapse", "exact-reuse", "operation-specific-fuzz"],
-          "open": ["minimal-rewrite comparison", "streaming persistent output integration"]
+          "pull_requests": [27, 30, 34, 37, 47],
+          "claim": "mixed deletion batches are order-independent through leaf repair, recursive shape, exact page identity, canonical locator regrouping, authenticated page emission, one linked commit, and bounded sink output without a second complete successor buffer",
+          "evidence": ["rust-model", "rust-bytes", "stable-height", "root-growth", "root-collapse", "exact-reuse", "operation-specific-fuzz", "owned-writer-equivalence", "base-tail-accounting", "bounded-write", "terminal-sink-failure"],
+          "open": ["minimal-rewrite comparison", "shared tail abstraction for non-mixed persistent modes", "bounded source base", "atomic staging integration"]
         },
         {
           "pull_requests": [40],
