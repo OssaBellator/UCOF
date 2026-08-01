@@ -54,6 +54,17 @@ struct PersistentMixedTail {
     pages_reused: usize,
 }
 
+#[derive(Clone, Debug)]
+struct PersistentTailPublication {
+    base_len: usize,
+    sequence: u64,
+    root: PageRef,
+    parent_snapshot_digest: [u8; 32],
+    previous_footer_offset: u64,
+    page_count: usize,
+    object_count: usize,
+}
+
 fn persistent_tail_total_len(
     base_len: usize,
     tail_len: usize,
@@ -255,51 +266,46 @@ fn materialize_persistent_tail_tree(
 
 fn publish_persistent_tail(
     tail: &mut Vec<u8>,
-    base_len: usize,
-    sequence: u64,
-    root: &PageRef,
-    parent_snapshot_digest: [u8; 32],
-    previous_footer_offset: u64,
-    page_count: usize,
-    object_count: usize,
+    publication: PersistentTailPublication,
     limits: ImmutableLimits,
 ) -> Result<ImmutableReport, ImmutableError> {
-    let commit_start = usize_from_u64(previous_footer_offset, "previous footer")?
+    let commit_start = usize_from_u64(publication.previous_footer_offset, "previous footer")?
         .checked_add(FOOTER_LEN)
         .ok_or(ImmutableError::Invalid("previous footer"))?;
-    if commit_start != base_len {
+    if commit_start != publication.base_len {
         return Err(ImmutableError::Invalid("persistent mixed exact end"));
     }
     let publication_len = SNAPSHOT_LEN
         .checked_add(FOOTER_LEN)
         .ok_or(ImmutableError::Limit("output"))?;
     persistent_tail_total_len(
-        base_len,
+        publication.base_len,
         tail.len()
             .checked_add(publication_len)
             .ok_or(ImmutableError::Limit("output"))?,
         limits,
     )?;
 
-    let snapshot_offset = base_len
+    let snapshot_offset = publication
+        .base_len
         .checked_add(tail.len())
         .ok_or(ImmutableError::Limit("output"))?;
     let mut snapshot = vec![0_u8; SNAPSHOT_LEN];
     snapshot[..8].copy_from_slice(SNAPSHOT_MAGIC);
-    put_u64(&mut snapshot, 8, sequence);
-    put_u64(&mut snapshot, 16, root.offset);
-    put_u64(&mut snapshot, 24, u64::from(root.level));
-    snapshot[32..64].copy_from_slice(&root.digest);
-    snapshot[64..].copy_from_slice(&parent_snapshot_digest);
+    put_u64(&mut snapshot, 8, publication.sequence);
+    put_u64(&mut snapshot, 16, publication.root.offset);
+    put_u64(&mut snapshot, 24, u64::from(publication.root.level));
+    snapshot[32..64].copy_from_slice(&publication.root.digest);
+    snapshot[64..].copy_from_slice(&publication.parent_snapshot_digest);
     let snapshot_digest = digest(&[SNAPSHOT_DOMAIN, &snapshot]);
     tail.extend_from_slice(&snapshot);
 
     let footer = Footer {
-        sequence,
+        sequence: publication.sequence,
         snapshot_offset: u64_from_usize(snapshot_offset)?,
         snapshot_len: u64_from_usize(SNAPSHOT_LEN)?,
-        previous_footer_offset,
-        page_count_current: u64_from_usize(page_count)?,
+        previous_footer_offset: publication.previous_footer_offset,
+        page_count_current: u64_from_usize(publication.page_count)?,
         snapshot_digest,
         commit_digest: [0_u8; 32],
     };
@@ -307,20 +313,20 @@ fn publish_persistent_tail(
     let commit_digest = digest(&[COMMIT_DOMAIN, tail.as_slice(), &semantics]);
     let mut raw = vec![0_u8; FOOTER_LEN];
     raw[..8].copy_from_slice(FOOTER_MAGIC);
-    put_u64(&mut raw, 8, sequence);
+    put_u64(&mut raw, 8, publication.sequence);
     put_u64(&mut raw, 16, u64_from_usize(snapshot_offset)?);
     put_u64(&mut raw, 24, u64_from_usize(SNAPSHOT_LEN)?);
-    put_u64(&mut raw, 32, previous_footer_offset);
-    put_u64(&mut raw, 40, u64_from_usize(page_count)?);
+    put_u64(&mut raw, 32, publication.previous_footer_offset);
+    put_u64(&mut raw, 40, u64_from_usize(publication.page_count)?);
     raw[48..80].copy_from_slice(&snapshot_digest);
     raw[80..112].copy_from_slice(&commit_digest);
     tail.extend_from_slice(&raw);
 
     Ok(ImmutableReport {
-        sequence,
-        object_count,
-        page_count,
-        root_level: root.level,
+        sequence: publication.sequence,
+        object_count: publication.object_count,
+        page_count: publication.page_count,
+        root_level: publication.root.level,
         snapshot_digest,
         commit_digest,
     })
@@ -372,21 +378,20 @@ fn build_persistent_mixed_tail(
     let page_count = pages_written
         .checked_add(pages_reused)
         .ok_or(ImmutableError::Limit("page count"))?;
-    let report = publish_persistent_tail(
-        &mut tail,
-        data.len(),
-        previous
+    let publication = PersistentTailPublication {
+        base_len: data.len(),
+        sequence: previous
             .public
             .sequence
             .checked_add(1)
             .ok_or(ImmutableError::Limit("sequence"))?,
-        &next_root,
-        previous.public.snapshot_digest,
-        u64_from_usize(previous.footer_offset)?,
+        root: next_root,
+        parent_snapshot_digest: previous.public.snapshot_digest,
+        previous_footer_offset: u64_from_usize(previous.footer_offset)?,
         page_count,
-        locators.len(),
-        limits,
-    )?;
+        object_count: locators.len(),
+    };
+    let report = publish_persistent_tail(&mut tail, publication, limits)?;
     Ok(PersistentMixedTail {
         bytes: tail,
         report,
@@ -542,10 +547,7 @@ mod persistent_mixed_streaming_tests {
     impl std::io::Write for FailingWriter {
         fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
             if self.remaining == 0 {
-                return Err(std::io::Error::new(
-                    std::io::ErrorKind::Other,
-                    "injected sink failure",
-                ));
+                return Err(std::io::Error::other("injected sink failure"));
             }
             let take = buffer.len().min(self.remaining);
             self.bytes.extend_from_slice(&buffer[..take]);
