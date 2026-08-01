@@ -26,6 +26,8 @@ mod recovery;
 mod repair;
 mod snapshots;
 mod spill_publication;
+#[cfg(unix)]
+mod unix_spill_publication;
 
 pub use compaction::{CompactionError, CompactionLimits, CompactionPlan, ObjectGraph};
 pub use directory::{
@@ -65,4 +67,8 @@ pub use spill_publication::{
     NoOverwriteLinkResult, SpillConfidentialityPolicy, SpillPublicationError,
     SpillPublicationLimits, SpillPublicationOutcome, SpillPublicationSession,
     SpillPublicationStage,
+};
+#[cfg(unix)]
+pub use unix_spill_publication::{
+    publish_bytes_no_overwrite, UnixSpillPublicationError, UnixSpillPublicationReport,
 };
