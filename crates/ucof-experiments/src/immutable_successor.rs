@@ -30,6 +30,7 @@ mod conditional_source_api {
     include!("immutable_successor/conditional_retry.rs");
     include!("immutable_successor/conditional_backoff.rs");
     include!("immutable_successor/conditional_http.rs");
+    include!("immutable_successor/conditional_wait.rs");
 }
 
 pub use conditional_source_api::*;
