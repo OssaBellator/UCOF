@@ -1,0 +1,35 @@
+name: Dispatcher Diagnostic
+
+on:
+  push:
+    branches: ["phase-3/persistent-streaming-dispatch"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  case:
+    name: dispatcher-${{ matrix.case }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - case: replacement
+            test: immutable_successor::persistent_streaming_dispatch_tests::dispatcher_selects_replacement_tail
+          - case: insertion
+            test: immutable_successor::persistent_streaming_dispatch_tests::dispatcher_selects_insertion_tail
+          - case: multi-put
+            test: immutable_successor::persistent_streaming_dispatch_tests::dispatcher_selects_multi_put_tail
+          - case: deletion
+            test: immutable_successor::persistent_streaming_dispatch_tests::dispatcher_selects_deletion_tail
+          - case: mixed
+            test: immutable_successor::persistent_streaming_dispatch_tests::dispatcher_selects_mixed_tail
+          - case: preflight-order
+            test: immutable_successor::persistent_streaming_dispatch_tests::dispatcher_is_order_independent_and_rejects_before_output
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - run: cargo test --locked -p ucof-experiments "${{ matrix.test }}" -- --exact
