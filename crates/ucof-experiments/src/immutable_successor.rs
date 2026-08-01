@@ -28,6 +28,7 @@ mod source_api {
     include!("immutable_successor/source_full.rs");
     include!("immutable_successor/source_inventory_conversion.rs");
 
+    #[allow(clippy::too_many_arguments)]
     mod source_to_sink_api {
         use super::*;
 
