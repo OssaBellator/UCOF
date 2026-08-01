@@ -242,3 +242,10 @@ path = "fuzz_targets/immutable_successor_active_file_streaming.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "immutable_successor_selected_active_streaming"
+path = "fuzz_targets/immutable_successor_selected_active_streaming.rs"
+test = false
+doc = false
+bench = false
