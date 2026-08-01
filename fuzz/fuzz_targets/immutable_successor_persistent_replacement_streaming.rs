@@ -76,9 +76,14 @@ fuzz_target!(|data: &[u8]| {
     assert_eq!(forward.report, owned.report);
     assert_eq!(forward.pages_written, owned.pages_written);
     assert_eq!(forward.pages_reused, owned.pages_reused);
-    assert_eq!(forward.base_bytes, base.len());
-    assert_eq!(forward.tail_bytes, streamed.len() - base.len());
-    assert_eq!(forward.bytes_written, streamed.len());
+    assert_eq!(
+        forward.base_bytes_written,
+        u64::try_from(base.len()).expect("base bytes")
+    );
+    assert_eq!(
+        forward.tail_bytes_written,
+        u64::try_from(streamed.len() - base.len()).expect("tail bytes")
+    );
     assert!(forward.largest_write_request <= chunk);
     assert!(forward.tail_allocation_bytes < streamed.len());
     assert_eq!(
