@@ -123,5 +123,8 @@ fn insertions_and_deletions_use_persistent_canonical_regrouping() {
         result.report.page_count,
         result.pages_written + result.pages_reused
     );
-    assert_eq!(validate(&result.bytes, limits).expect("result validates"), result.report);
+    assert_eq!(
+        validate(&result.bytes, limits).expect("result validates"),
+        result.report
+    );
 }
