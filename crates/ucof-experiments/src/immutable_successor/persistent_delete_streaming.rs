@@ -23,6 +23,7 @@ fn materialize_deletion_tail_node(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn delete_persistent_tail_node(
     data: &[u8],
     tail: &mut Vec<u8>,
