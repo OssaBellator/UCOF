@@ -40,7 +40,9 @@ impl fmt::Display for UnixSpillPublicationError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Policy { error, .. } => write!(formatter, "{error}"),
-            Self::Io { label, .. } => write!(formatter, "spill filesystem operation failed: {label}"),
+            Self::Io { label, .. } => {
+                write!(formatter, "spill filesystem operation failed: {label}")
+            }
         }
     }
 }
@@ -58,10 +60,7 @@ fn policy_error(
     }
 }
 
-fn io_error(
-    session: &SpillPublicationSession,
-    label: &'static str,
-) -> UnixSpillPublicationError {
+fn io_error(session: &SpillPublicationSession, label: &'static str) -> UnixSpillPublicationError {
     UnixSpillPublicationError::Io {
         label,
         outcome: session.outcome(),
@@ -256,16 +255,12 @@ mod tests {
 
     fn test_directory(label: &str) -> PathBuf {
         let id = NEXT_DIRECTORY.fetch_add(1, Ordering::Relaxed);
-        std::env::temp_dir().join(format!(
-            "ucof-spill-{label}-{}-{id}",
-            std::process::id()
-        ))
+        std::env::temp_dir().join(format!("ucof-spill-{label}-{}-{id}", std::process::id()))
     }
 
     fn private_directory(path: &Path) {
         fs::create_dir_all(path).expect("create private directory");
-        fs::set_permissions(path, fs::Permissions::from_mode(0o700))
-            .expect("private permissions");
+        fs::set_permissions(path, fs::Permissions::from_mode(0o700)).expect("private permissions");
     }
 
     fn token(seed: u8) -> [u8; 32] {
@@ -298,7 +293,10 @@ mod tests {
         .expect("durable publication");
         assert_eq!(report.outcome, SpillPublicationOutcome::PublishedAndDurable);
         assert_eq!(report.stage, SpillPublicationStage::PrivateNameRetired);
-        assert_eq!(fs::read(&destination).expect("destination bytes"), b"verified bytes");
+        assert_eq!(
+            fs::read(&destination).expect("destination bytes"),
+            b"verified bytes"
+        );
         assert!(!report.staged_path.exists());
         fs::remove_dir_all(root).expect("cleanup");
     }
