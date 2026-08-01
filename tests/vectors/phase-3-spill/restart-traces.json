@@ -1,0 +1,22 @@
+{
+  "status": "non-normative spill restart classification traces",
+  "cases": [
+    {"name":"empty-no-journal","facts":{"stage":false,"dest":false,"owner":"unverifiable","stage_validation":"unknown","dest_validation":"unknown","journal":null},"expected":"nothing"},
+    {"name":"owned-valid-stage-retry","facts":{"stage":true,"dest":false,"owner":"owned","stage_validation":"valid","dest_validation":"unknown","journal":null},"expected":"retry"},
+    {"name":"owned-invalid-stage-remove","facts":{"stage":true,"dest":false,"owner":"owned","stage_validation":"invalid","dest_validation":"unknown","journal":null},"expected":"remove-invalid"},
+    {"name":"foreign-stage-preserve","facts":{"stage":true,"dest":false,"owner":"foreign","stage_validation":"unknown","dest_validation":"unknown","journal":null},"expected":"preserve-foreign"},
+    {"name":"destination-no-journal-indeterminate","facts":{"stage":false,"dest":true,"owner":"unverifiable","stage_validation":"unknown","dest_validation":"valid","journal":null},"expected":"indeterminate"},
+    {"name":"linked-destination-indeterminate","facts":{"stage":true,"dest":true,"owner":"owned","stage_validation":"valid","dest_validation":"valid","journal":{"phase":"linked","authenticated":true,"ownership_matches":true}},"expected":"indeterminate"},
+    {"name":"linked-destination-invalid-manual","facts":{"stage":true,"dest":true,"owner":"owned","stage_validation":"valid","dest_validation":"invalid","journal":{"phase":"linked","authenticated":true,"ownership_matches":true}},"expected":"manual:invalid-linked-destination"},
+    {"name":"synced-destination-cleanup","facts":{"stage":true,"dest":true,"owner":"owned","stage_validation":"valid","dest_validation":"valid","journal":{"phase":"synced","authenticated":true,"ownership_matches":true}},"expected":"durable-cleanup"},
+    {"name":"synced-destination-no-stage","facts":{"stage":false,"dest":true,"owner":"unverifiable","stage_validation":"unknown","dest_validation":"valid","journal":{"phase":"synced","authenticated":true,"ownership_matches":true}},"expected":"durable"},
+    {"name":"synced-destination-missing","facts":{"stage":true,"dest":false,"owner":"owned","stage_validation":"valid","dest_validation":"unknown","journal":{"phase":"synced","authenticated":true,"ownership_matches":true}},"expected":"manual:durable-destination-contradiction"},
+    {"name":"retired-durable","facts":{"stage":false,"dest":true,"owner":"unverifiable","stage_validation":"unknown","dest_validation":"valid","journal":{"phase":"retired","authenticated":true,"ownership_matches":true}},"expected":"durable"},
+    {"name":"retired-stage-reappeared","facts":{"stage":true,"dest":true,"owner":"owned","stage_validation":"valid","dest_validation":"valid","journal":{"phase":"retired","authenticated":true,"ownership_matches":true}},"expected":"manual:private-name-exists-after-retirement"},
+    {"name":"unauthenticated-journal","facts":{"stage":true,"dest":false,"owner":"owned","stage_validation":"invalid","dest_validation":"unknown","journal":{"phase":"staged","authenticated":false,"ownership_matches":true}},"expected":"manual:unauthenticated-restart-journal"},
+    {"name":"wrong-owner-journal","facts":{"stage":true,"dest":false,"owner":"owned","stage_validation":"valid","dest_validation":"unknown","journal":{"phase":"staged","authenticated":true,"ownership_matches":false}},"expected":"manual:restart-journal-ownership"},
+    {"name":"linked-both-missing","facts":{"stage":false,"dest":false,"owner":"unverifiable","stage_validation":"unknown","dest_validation":"unknown","journal":{"phase":"linked","authenticated":true,"ownership_matches":true}},"expected":"manual:linked-destination-and-stage-missing"},
+    {"name":"synced-foreign-stage","facts":{"stage":true,"dest":true,"owner":"foreign","stage_validation":"unknown","dest_validation":"valid","journal":{"phase":"synced","authenticated":true,"ownership_matches":true}},"expected":"manual:foreign-stage-after-durability"}
+  ],
+  "aggregate_sha256": "ba51372e0ef74192c0ee36f628a14c40a51eab886a3db0e8e4b89630d8a35929"
+}

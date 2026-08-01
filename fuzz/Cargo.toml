@@ -200,3 +200,10 @@ path = "fuzz_targets/immutable_successor_source_history_recovery.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "spill_restart_classification"
+path = "fuzz_targets/spill_restart_classification.rs"
+test = false
+doc = false
+bench = false
