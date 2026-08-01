@@ -41,21 +41,11 @@ impl From<ImmutableHistoryToSinkError> for ImmutableHistoricalSemanticStreamingE
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct ImmutableHistoricalSemanticStreamingOptions {
     pub compaction: CompactionLimits,
     pub source: ImmutableSourceLimits,
     pub output: ImmutableSourceStreamingWriteOptions,
-}
-
-impl Default for ImmutableHistoricalSemanticStreamingOptions {
-    fn default() -> Self {
-        Self {
-            compaction: CompactionLimits::default(),
-            source: ImmutableSourceLimits::default(),
-            output: ImmutableSourceStreamingWriteOptions::default(),
-        }
-    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
