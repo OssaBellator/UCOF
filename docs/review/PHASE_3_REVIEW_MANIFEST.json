@@ -1,5 +1,5 @@
 {
-  "manifest_version": 6,
+  "manifest_version": 7,
   "updated": "2026-08-01",
   "status": "research-draft",
   "epoch_allocated": false,
@@ -89,16 +89,16 @@
       "id": "semantic-compaction",
       "claims": [
         {
-          "pull_requests": [22, 28],
-          "claim": "graph retention policy and one canonical reference-list dependency profile are independently reproducible",
-          "evidence": ["rust", "independent-python", "pinned-aggregates", "malformed-corpus"],
-          "open": ["application-profile adoption", "profile rewrite-byte vectors", "extension preservation", "provenance and signature reissuance"]
+          "pull_requests": [22, 28, 48],
+          "claim": "graph retention policy, one canonical reference-list dependency profile, and exact profile-defined rewrite bytes are independently reproducible",
+          "evidence": ["rust", "independent-python", "pinned-graph-aggregate", "malformed-corpus", "profile-payload-codec", "canonical-root-order", "profile-rewrite-byte-equivalence", "pinned-rewrite-sha256", "pinned-rewrite-aggregate", "payload-semantics"],
+          "open": ["application-profile adoption", "root-selection authority", "extension preservation", "provenance and signature reissuance"]
         },
         {
           "pull_requests": [39, 41, 45],
           "claim": "bounded dependency closure can feed selected authenticated streaming for the current active file or one exact historical prefix so only reachable payloads are reread and emitted",
           "evidence": ["rust", "byte-equivalence", "reachable-orphan-accounting", "bounded-read", "bounded-write", "fail-before-source", "fail-before-output", "semantic-streaming-fuzz", "historical-semantic-fuzz"],
-          "open": ["normative profile adoption", "profile rewrite-byte vectors", "large-graph spill", "multi-snapshot historical semantic output"]
+          "open": ["normative profile adoption", "large-graph spill", "multi-snapshot historical semantic output", "extension preservation", "provenance and signature reissuance"]
         }
       ]
     }
