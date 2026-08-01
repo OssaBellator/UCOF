@@ -177,10 +177,13 @@ pub fn run_fault_injected_unix_publication(
         .record_no_overwrite_link(&ownership_token, NoOverwriteLinkResult::Created)
         .map_err(|error| policy_error(&session, error))?;
     if fault == Some(UnixSpillFaultPoint::AfterDestinationLink) {
+        let policy_failure = session
+            .record_destination_directory_sync(&ownership_token, false)
+            .err();
         return Ok(report(
             &session,
             fault,
-            None,
+            policy_failure,
             staged_path,
             destination.to_path_buf(),
         ));
@@ -295,6 +298,7 @@ mod tests {
         );
         assert!(report.destination_exists);
         assert!(report.staged_name_exists);
+        assert!(report.policy_error.is_some());
         fs::remove_dir_all(root).expect("cleanup");
     }
 
