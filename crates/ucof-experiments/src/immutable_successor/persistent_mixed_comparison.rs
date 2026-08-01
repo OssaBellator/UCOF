@@ -131,8 +131,7 @@ fn planner_estimated_writes(
         .checked_sub(reusable_leaves)
         .ok_or(ImmutableError::Invalid("mixed comparison leaf count"))?;
 
-    for final_level in 1..final_level_counts.len() {
-        let final_count = final_level_counts[final_level];
+    for (final_level, final_count) in final_level_counts.iter().copied().enumerate().skip(1) {
         let original_count = original_level_counts
             .get(final_level)
             .copied()
