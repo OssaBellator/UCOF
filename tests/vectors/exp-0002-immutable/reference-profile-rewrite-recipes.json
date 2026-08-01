@@ -1,0 +1,67 @@
+{
+  "status": "non-normative reference-profile rewrite recipes",
+  "reference_kind": 100,
+  "leaf_kind": 101,
+  "max_dependencies_per_object": 8,
+  "aggregate_sha256": null,
+  "vectors": [
+    {
+      "name": "single-root-chain",
+      "roots": [1],
+      "objects": [
+        {"object_id": 1, "profile": "reference", "dependencies": [2, 3]},
+        {"object_id": 2, "profile": "leaf"},
+        {"object_id": 3, "profile": "reference", "dependencies": [4]},
+        {"object_id": 4, "profile": "leaf"},
+        {"object_id": 5, "profile": "leaf"}
+      ],
+      "retained_object_ids": [1, 2, 3, 4],
+      "discarded_object_ids": [5],
+      "edges_visited": 3,
+      "maximum_depth": 2,
+      "decoded_bytes": null,
+      "sha256": null,
+      "root_level": null,
+      "page_count": null,
+      "object_count": 4
+    },
+    {
+      "name": "two-roots-shared-dependency",
+      "roots": [50, 10],
+      "objects": [
+        {"object_id": 10, "profile": "reference", "dependencies": [20, 30]},
+        {"object_id": 20, "profile": "reference", "dependencies": [40]},
+        {"object_id": 30, "profile": "leaf"},
+        {"object_id": 40, "profile": "leaf"},
+        {"object_id": 50, "profile": "reference", "dependencies": [40]},
+        {"object_id": 60, "profile": "leaf"}
+      ],
+      "retained_object_ids": [10, 20, 30, 40, 50],
+      "discarded_object_ids": [60],
+      "edges_visited": 4,
+      "maximum_depth": 2,
+      "decoded_bytes": null,
+      "sha256": null,
+      "root_level": null,
+      "page_count": null,
+      "object_count": 5
+    },
+    {
+      "name": "empty-reference-root",
+      "roots": [7],
+      "objects": [
+        {"object_id": 7, "profile": "reference", "dependencies": []},
+        {"object_id": 8, "profile": "leaf"}
+      ],
+      "retained_object_ids": [7],
+      "discarded_object_ids": [8],
+      "edges_visited": 0,
+      "maximum_depth": 0,
+      "decoded_bytes": null,
+      "sha256": null,
+      "root_level": null,
+      "page_count": null,
+      "object_count": 1
+    }
+  ]
+}
