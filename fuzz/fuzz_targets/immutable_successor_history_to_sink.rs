@@ -113,9 +113,9 @@ fuzz_target!(|data: &[u8]| {
     }
 
     let history = validate_history(&source_bytes, format).expect("slice history");
-    let sequence = data
-        .last()
-        .map_or(0_u64, |byte| u64::from(*byte) % u64::try_from(commit_count).expect("commits"));
+    let sequence = data.last().map_or(0_u64, |byte| {
+        u64::from(*byte) % u64::try_from(commit_count).expect("commits")
+    });
     let entry = history
         .entries
         .iter()
@@ -149,14 +149,9 @@ fuzz_target!(|data: &[u8]| {
         largest_request: 0,
     };
     let mut actual = Vec::new();
-    let report = rewrite_versioned_source_sequence_to(
-        &mut actual,
-        &mut source,
-        sequence,
-        limits,
-        options,
-    )
-    .expect("selected historical source rewrite");
+    let report =
+        rewrite_versioned_source_sequence_to(&mut actual, &mut source, sequence, limits, options)
+            .expect("selected historical source rewrite");
     assert_eq!(actual, expected.bytes);
     assert_eq!(report.output.source, expected.source);
     assert_eq!(report.output.output.report, expected.output);
