@@ -25,6 +25,7 @@ pub mod immutable_successor;
 mod publication;
 mod recovery;
 mod repair;
+mod semantic_streaming_compaction;
 mod snapshots;
 
 pub use active_file_selected_streaming::{
@@ -59,6 +60,10 @@ pub use recovery::{
     RecoveryScanReport, ScannedCandidate,
 };
 pub use repair::{CopyRange, RepairError, RepairLimits, RepairPlan};
+pub use semantic_streaming_compaction::{
+    rewrite_compacted_active_file_to, ImmutableSemanticStreamingError,
+    ImmutableSemanticStreamingReport,
+};
 pub use snapshots::{
     CandidateStatus, CheckpointKind, RejectedCandidate, RootRejection, RootSelectionError,
     RootSelectionLimits, RootSelectionMode, RootSelectionReport, SnapshotCandidate,
