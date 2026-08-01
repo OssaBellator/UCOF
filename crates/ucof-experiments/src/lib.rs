@@ -1,3 +1,5 @@
+#![cfg_attr(test, allow(clippy::io_other_error))]
+
 //! Non-normative research models for Phase 3.
 //!
 //! Nothing in this crate defines UCOF wire compatibility. The models exist to
