@@ -258,7 +258,7 @@ mod tests {
         let pages = even_pages(9, 2);
         let plan = plan_mixed_page_references(
             &pages,
-            &[MixedPlanOperation::Put(19)],
+            &[MixedPlanOperation::Put(37)],
             limits(),
         )
         .expect("reference plan");
@@ -285,11 +285,11 @@ mod tests {
     }
 
     #[test]
-    fn merge_can_promote_an_unchanged_original_internal_page_to_root() {
+    fn merge_collapse_emits_a_new_root_when_the_child_sequence_changes() {
         let pages = even_pages(4, 2);
         let plan = plan_mixed_page_references(
             &pages,
-            &[MixedPlanOperation::Delete(7)],
+            &[MixedPlanOperation::Delete(8)],
             limits(),
         )
         .expect("reference plan");
