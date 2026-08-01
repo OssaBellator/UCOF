@@ -242,3 +242,10 @@ path = "fuzz_targets/immutable_successor_persistent_mixed_streaming.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "immutable_successor_mixed_rewrite_comparison"
+path = "fuzz_targets/immutable_successor_mixed_rewrite_comparison.rs"
+test = false
+doc = false
+bench = false
