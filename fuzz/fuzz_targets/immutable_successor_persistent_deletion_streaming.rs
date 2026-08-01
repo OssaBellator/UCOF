@@ -12,9 +12,9 @@ fn object(object_id: u64, seed: u8, payload_len: usize) -> ImmutableObjectInput 
 }
 
 fuzz_target!(|data: &[u8]| {
-    let count = data
-        .first()
-        .map_or(2_usize, |byte| 2 + usize::from(*byte) % (2 * LEAF_CAPACITY - 1));
+    let count = data.first().map_or(2_usize, |byte| {
+        2 + usize::from(*byte) % (2 * LEAF_CAPACITY - 1)
+    });
     let limits = ImmutableLimits {
         max_file_bytes: 32 * 1024 * 1024,
         max_objects: 2 * LEAF_CAPACITY + 8,
