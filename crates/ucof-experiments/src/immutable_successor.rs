@@ -42,6 +42,7 @@ mod source_api {
         use super::*;
 
         include!("immutable_successor/source_history_to_sink.rs");
+        include!("immutable_successor/source_history_selected_to_sink.rs");
     }
 
     pub use source_history_to_sink_api::*;
