@@ -75,7 +75,9 @@ fuzz_target!(|data: &[u8]| {
         }
         dependencies.sort_unstable();
         dependencies.dedup();
-        graph.add_object(object_id, dependencies).expect("unique graph object");
+        graph
+            .add_object(object_id, dependencies)
+            .expect("unique graph object");
     }
 
     let mut roots = vec![u64::try_from(count).expect("root")];
