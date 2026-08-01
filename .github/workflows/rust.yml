@@ -27,6 +27,8 @@ jobs:
         run: cargo test --locked --workspace --all-targets
       - name: Test Rust documentation
         run: cargo test --locked --workspace --doc
+      - name: Profile successor source I/O
+        run: cargo run --locked -p ucof-experiments --bin ucof-source-io-profile
       - name: Test independent Python parser
         run: python3 tools/validate_exp_0001.py --vectors tests/vectors/exp-0001
       - name: Test adversarial Python cases
