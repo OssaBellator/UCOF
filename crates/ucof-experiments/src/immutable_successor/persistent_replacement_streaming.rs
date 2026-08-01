@@ -1,7 +1,7 @@
 fn rewrite_replacement_tail_path(
     data: &[u8],
     tail: &mut Vec<u8>,
-    base_len: u64,
+    base_len: usize,
     reference: &PageRef,
     replacements: &BTreeMap<u64, Locator>,
     limits: ImmutableLimits,
@@ -117,14 +117,16 @@ fn rewrite_replacement_tail_path(
 /// checks complete before the first sink write. The function owns only the append tail rather than a
 /// second complete successor file. Sink failure after output begins is terminal and returns no success
 /// report.
-pub fn append_persistent_replacement_batch_to<W: Write>(
+pub fn append_persistent_replacement_batch_to<W: std::io::Write>(
     writer: &mut W,
     data: &[u8],
     operations: &[ImmutableBatchOperation],
     limits: ImmutableLimits,
     options: PersistentMixedStreamingOptions,
 ) -> Result<PersistentMixedStreamingReport, PersistentMixedStreamingError> {
-    validate_persistent_mixed_streaming_options(data, limits, options)?;
+    if options.max_write_request_bytes == 0 {
+        return Err(ImmutableError::Invalid("write request").into());
+    }
     if operations.is_empty() {
         return Err(ImmutableError::Invalid("batch operations").into());
     }
@@ -139,7 +141,7 @@ pub fn append_persistent_replacement_batch_to<W: Write>(
         return Err(ImmutableError::DuplicateObject(operations[pair[0]].object_id()).into());
     }
 
-    let base_len = u64_from_usize(data.len())?;
+    let base_len = data.len();
     let mut tail = Vec::new();
     let mut replacements = BTreeMap::new();
     for index in order {
@@ -182,28 +184,22 @@ pub fn append_persistent_replacement_batch_to<W: Write>(
         .page_count
         .checked_sub(pages_written)
         .ok_or(ImmutableError::Invalid("persistent page accounting"))?;
-    let sequence = previous
-        .public
-        .sequence
-        .checked_add(1)
-        .ok_or(ImmutableError::Limit("sequence"))?;
-    let report = publish_persistent_tail(
-        &mut tail,
+    let publication = PersistentTailPublication {
         base_len,
-        sequence,
-        &next_root,
-        previous.public.snapshot_digest,
-        u64_from_usize(previous.footer_offset)?,
-        previous.public.page_count,
-        previous.public.object_count,
-        limits,
-    )?;
-    let tail_bytes = tail.len();
-    let output_bytes = data
-        .len()
-        .checked_add(tail_bytes)
-        .ok_or(ImmutableError::Limit("output"))?;
-    if output_bytes > limits.max_output_bytes || output_bytes > limits.max_file_bytes {
+        sequence: previous
+            .public
+            .sequence
+            .checked_add(1)
+            .ok_or(ImmutableError::Limit("sequence"))?,
+        root: next_root,
+        parent_snapshot_digest: previous.public.snapshot_digest,
+        previous_footer_offset: u64_from_usize(previous.footer_offset)?,
+        page_count: previous.public.page_count,
+        object_count: previous.public.object_count,
+    };
+    let report = publish_persistent_tail(&mut tail, publication, limits)?;
+    let output_bytes = persistent_tail_total_len(data.len(), tail.len(), limits)?;
+    if output_bytes > limits.max_file_bytes {
         return Err(ImmutableError::Limit("output").into());
     }
 
@@ -226,9 +222,8 @@ pub fn append_persistent_replacement_batch_to<W: Write>(
         mode: PersistentBatchMode::CopyOnWriteReplacements,
         pages_written,
         pages_reused,
-        base_bytes: data.len(),
-        tail_bytes,
-        bytes_written: output_bytes,
+        base_bytes_written: u64_from_usize(data.len())?,
+        tail_bytes_written: u64_from_usize(tail.len())?,
         largest_write_request,
         tail_allocation_bytes: tail.capacity(),
     })
@@ -290,9 +285,11 @@ mod persistent_replacement_streaming_tests {
         assert_eq!(report.mode, PersistentBatchMode::CopyOnWriteReplacements);
         assert_eq!(report.pages_written, owned.pages_written);
         assert_eq!(report.pages_reused, owned.pages_reused);
-        assert_eq!(report.base_bytes, base.len());
-        assert_eq!(report.tail_bytes, streamed.len() - base.len());
-        assert_eq!(report.bytes_written, streamed.len());
+        assert_eq!(report.base_bytes_written, u64_from_usize(base.len()).expect("base bytes"));
+        assert_eq!(
+            report.tail_bytes_written,
+            u64_from_usize(streamed.len() - base.len()).expect("tail bytes")
+        );
         assert!(report.largest_write_request <= 31);
         assert!(report.tail_allocation_bytes < streamed.len());
     }
