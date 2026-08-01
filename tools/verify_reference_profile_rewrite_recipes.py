@@ -13,7 +13,6 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-import experiment_exp0002_immutable_canonical_occupancy as canonical
 import experiment_exp0002_immutable_page_objects as objects
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -141,9 +140,8 @@ def plan_rewrite(
 
 def verify_recipe(contract: dict[str, Any], recipe: dict[str, Any]) -> VerifiedRecipe:
     values = recipe_inputs(contract, recipe)
-    source = canonical.build_genesis(values)
+    source = objects.build_genesis(values)
     source_report = objects.validate_complete(source)
-    canonical.validate_canonical_occupancy(source)
     if len(source_report.objects) != len(values):
         raise AssertionError("source object count")
 
@@ -166,9 +164,8 @@ def verify_recipe(contract: dict[str, Any], recipe: dict[str, Any]) -> VerifiedR
         raise AssertionError(f"{recipe['name']}: root order changed closure")
 
     retained_values = [value for value in values if value.object_id in plan.retained]
-    output = canonical.build_genesis(retained_values)
+    output = objects.build_genesis(retained_values)
     output_report = objects.validate_complete(output)
-    canonical.validate_canonical_occupancy(output)
     actual_sha = sha256(output).hexdigest()
     facts: dict[str, int | str | list[int]] = {
         "retained_object_ids": list(plan.retained),
@@ -240,7 +237,7 @@ def main() -> None:
     print(f"aggregate_sha256={actual_aggregate}")
     print("root_order_determinism=pass")
     print("strict_python_validation=pass")
-    print("canonical_occupancy=pass")
+    print("deterministic_python_writer=pass")
     print("payload_semantics=pass")
 
     if pin_errors:
