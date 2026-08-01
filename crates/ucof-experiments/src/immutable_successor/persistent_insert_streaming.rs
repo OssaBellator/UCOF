@@ -187,6 +187,9 @@ pub fn append_persistent_insert_to<W: std::io::Write>(
         .object_count
         .checked_add(1)
         .ok_or(ImmutableError::Limit("object count"))?;
+    let reachable_page_count = pages_reused
+        .checked_add(pages_written)
+        .ok_or(ImmutableError::Limit("page count"))?;
     let publication = PersistentTailPublication {
         base_len,
         sequence: previous
@@ -200,7 +203,8 @@ pub fn append_persistent_insert_to<W: std::io::Write>(
         page_count: pages_written,
         object_count,
     };
-    let report = publish_persistent_tail(&mut tail, publication, limits)?;
+    let mut report = publish_persistent_tail(&mut tail, publication, limits)?;
+    report.page_count = reachable_page_count;
     let output_bytes = persistent_tail_total_len(base_len, tail.len(), limits)?;
     if output_bytes > limits.max_file_bytes {
         return Err(ImmutableError::Limit("output").into());
