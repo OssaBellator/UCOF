@@ -13,7 +13,8 @@
 | Independent mixed transition evidence | #40 | Clean-room Python regeneration of stable-height, root-collapse, and root-growth transitions with pinned per-vector and aggregate SHA-256 identities | Complete proposed-epoch transition corpus and external interoperability review |
 | Bounded canonical output | #35, #36 | Canonical genesis bytes through bounded sequential sinks from owned and strongly versioned payload sources, with incremental hashing and version-change failure | Atomic staging integration |
 | Active and selected active rewrites | #38, #39 | Strict active-file validation, borrowed authenticated payload ranges, inactive-history skipping, caller-selected output, exact selected read accounting, and untouched-sink selection failures | Atomic staging integration |
-| Dependency-aware streaming compaction | #22, #28, #41, #45 | Bounded graph closure, independent graph/profile codecs, selected authenticated streaming for active or exact historical states, exact reachable/orphan accounting, and fail-before-source/output errors | Application-profile adoption, profile rewrite-byte vectors, large-graph spill, multi-snapshot composition, and provenance/extension policy |
+| Dependency profile and rewrite bytes | #22, #28, #48 | Bounded graph policy, canonical reference-list payload coding, malformed-corpus rejection, canonical root/dependency traversal, and exact Rust/Python profile-defined rewrite byte identities | Application-profile adoption, root-selection authority, and preservation policy |
+| Dependency-aware streaming compaction | #41, #45 | Selected authenticated streaming for active or exact historical states, exact reachable/orphan and reread accounting, and fail-before-source/output graph errors | Large-graph spill, multi-snapshot composition, and provenance/extension policy |
 | Versioned bounded-source inventory and output | #42, #43, #44, #45 | Strict active inventory plus canonical latest-state, exact-history, and dependency-selected historical output over one non-ABA versioned source handle and one cumulative budget | Maintained provider adapter, multi-snapshot output, retry/auth integration, and atomic publication staging |
 | Source history and measurements | #14, #24, #32 | Bounded-source strict/history/recovery/rewrite APIs, selected historical reissuance, hostile-source fuzzing, and reproducible read/hash/allocation counters | Real provider measurements, extension policy, and provenance/signature policy |
 | Retry and freshness | #5, #19, #25, #31 | Strong-version operation binding, operation-wide attempt budgets, independent retry traces, bounded delay/deadline planning, and explicit freshness authorization guidance | Maintained provider adapters, real waits, jitter/authentication policy, native async cancellation, and application checkpoint stores |
@@ -28,7 +29,7 @@ All “verified” claims above refer to the current research layout. They do no
 - Writer chain: #7 → #15 → #17 → #21 → #23 → #27 → #30 → #34 → #37, with independent transitions in #40 and bounded mixed sink output in #47.
 - Output/source chain: #23 → #35 → #36 → #38 → #39 → #41 → #42 → #43 → #44 → #45.
 - Source/history chain: #6 → #14 → #24 → #32.
-- Semantic-policy chain: #6 → #22 → #28.
+- Semantic-policy chain: #6 → #22 → #28 → #48.
 - Retry chain: #5 → #19 → #25 → #31.
 - Spill chain: #8 → #20 → #26 → #29 → #33.
 - Occupancy policy #18 is refreshed on #8. The #20 descendant chain should only be refreshed atomically.
@@ -63,15 +64,17 @@ PR #44 validates the complete linked history under the same version, selects one
 
 ### 4. Repair and semantic compaction
 
-**Advanced:** Generic graph traversal has bounded node, edge, and depth work. One reference-list profile has Rust and independent Python codecs. PR #41 composes dependency closure with selected authenticated active-file streaming. PR #45 extends the same fail-before-source graph policy to one exact authenticated historical prefix under one version and cumulative budget. Compaction failures remain distinct from history/source/output failures.
+**Advanced:** Generic graph traversal has bounded node, edge, and depth work. One reference-list profile has Rust and independent Python codecs. PR #48 binds that profile to three exact cross-language rewrite-byte recipes covering a dependency chain, two caller-unsorted roots sharing a dependency, and an empty reference root. Rust and Python agree on canonical roots, retained/discarded IDs, edges, depth, byte length, SHA-256, root level, page count, object count, payload semantics, and aggregate `fe20a891b04b90b6df1870e6652eec5d6ddfa91ebc8370f4d6dfa70881a27c84`.
 
-**Open:** Obtain application-profile adoption and root-selection policy. Pin cross-language rewrite bytes for profile-defined cases. Define extension preservation, provenance and signature reissuance, large-graph spill, and multi-snapshot historical semantic output.
+PR #41 composes dependency closure with selected authenticated active-file streaming. PR #45 extends the same fail-before-source graph policy to one exact authenticated historical prefix under one version and cumulative budget. Compaction failures remain distinct from history/source/output failures.
+
+**Open:** Obtain application-profile adoption and root-selection authority. Define extension preservation, provenance and signature reissuance, large-graph spill, and multi-snapshot historical semantic output.
 
 ### 5. Vectors and fuzzing
 
-**Advanced:** Valid, invalid, interrupted, fork, recovery, source, history, rewrite, occupancy, persistent replacement/insertion/deletion/multi-`Put`/mixed, persistent mixed sink output, compaction, retry, spill, active streaming, selected streaming, semantic streaming, versioned inventory, direct source-to-sink, selected-history source-to-sink, and historical-semantic source-to-sink evidence exists. PR #40 adds independently generated mixed transition bytes rather than treating Rust output as the oracle.
+**Advanced:** Valid, invalid, interrupted, fork, recovery, source, history, rewrite, occupancy, persistent replacement/insertion/deletion/multi-`Put`/mixed, persistent mixed sink output, compaction, profile-defined rewrite bytes, retry, spill, active streaming, selected streaming, semantic streaming, versioned inventory, direct source-to-sink, selected-history source-to-sink, and historical-semantic source-to-sink evidence exists. PR #40 adds independently generated mixed transition bytes rather than treating Rust output as the oracle. PR #48 adds independently generated profile-defined rewrite bytes rather than treating Rust output as the oracle.
 
-**Open:** Produce a complete cross-language corpus for the eventually selected epoch geometry, including all structural transition boundaries. Add provider-specific retry/source traces, fresh-process restart and physical power-loss corpora, profile-defined rewrite bytes, and hostile concrete-provider traces.
+**Open:** Produce a complete cross-language corpus for the eventually selected epoch geometry, including all structural transition boundaries. Add provider-specific retry/source traces, fresh-process restart and physical power-loss corpora, and hostile concrete-provider traces.
 
 ### 6. Spill and publication
 
@@ -81,7 +84,7 @@ PR #44 validates the complete linked history under the same version, selects one
 
 ### 7. Independent review
 
-**Advanced:** The review packet and JSON manifest map wire, writer, source/output, transport, spill, and semantic claims to their evidence and open gates. Independent Python work covers occupancy, graph policy, profile coding, retry traces, spill transitions, and mixed transition bytes.
+**Advanced:** The review packet and JSON manifest map wire, writer, source/output, transport, spill, and semantic claims to their evidence and open gates. Independent Python work covers occupancy, graph policy, profile coding and rewrite bytes, retry traces, spill transitions, and mixed transition bytes.
 
 **Open:** Obtain separately maintained parser/writer review or assigned external reviewers. Disposition every blocker and high-severity finding. Independent evidence produced in this repository is not a substitute for external review.
 
