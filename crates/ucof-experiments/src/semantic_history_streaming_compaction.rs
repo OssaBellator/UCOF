@@ -56,10 +56,7 @@ pub struct ImmutableHistoricalSemanticStreamingReport {
 /// validation occur under one non-ABA source version and one cumulative source budget. Only reachable
 /// payloads are reread for emission, although strict selected-prefix inventory may read all active
 /// payloads once. Historical identity, extensions, provenance, and signatures are not preserved.
-pub fn rewrite_compacted_versioned_history_sequence_to<
-    W: Write,
-    S: ImmutableVersionedReadAt,
->(
+pub fn rewrite_compacted_versioned_history_sequence_to<W: Write, S: ImmutableVersionedReadAt>(
     writer: &mut W,
     source: &mut S,
     sequence: u64,
@@ -86,7 +83,8 @@ mod tests {
     use super::*;
     use crate::immutable_successor::{
         append_replacement, build_genesis, rewrite_selected, validate_history, ImmutableLimits,
-        ImmutableObjectInput, ImmutableReadAt, ImmutableSourceError, ImmutableStreamingWriteOptions,
+        ImmutableObjectInput, ImmutableReadAt, ImmutableSourceError,
+        ImmutableStreamingWriteOptions,
     };
 
     #[derive(Clone, Debug)]
