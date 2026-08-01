@@ -283,9 +283,7 @@ pub fn plan_mixed_leaf_updates(
         .windows(2)
         .find(|pair| pair[0].object_id() == pair[1].object_id())
     {
-        return Err(MixedLeafPlanError::DuplicateOperation(
-            pair[0].object_id(),
-        ));
+        return Err(MixedLeafPlanError::DuplicateOperation(pair[0].object_id()));
     }
 
     let original_maxima: Vec<u64> = pages
@@ -451,9 +449,7 @@ pub fn plan_mixed_leaf_updates(
             continue;
         }
 
-        if position + 1 < working.len()
-            && working[position + 1].object_ids.len() > limits.minimum
-        {
+        if position + 1 < working.len() && working[position + 1].object_ids.len() > limits.minimum {
             let borrowed = working[position + 1].object_ids.remove(0);
             working[position].object_ids.push(borrowed);
             for origin in working[position + 1]
@@ -555,14 +551,20 @@ mod tests {
             minimum: 3,
             ..MixedLeafPlanLimits::default()
         };
-        let input = pages(&[3, 3]);
+        let input = vec![vec![2, 4, 6], vec![8, 10, 12]];
         let plan = plan_mixed_leaf_updates(
             &input,
-            &[MixedPlanOperation::Delete(1), MixedPlanOperation::Put(0 + 7)],
+            &[
+                MixedPlanOperation::Delete(2),
+                MixedPlanOperation::Put(1),
+            ],
             limits,
         )
         .expect("mixed plan");
-        assert_eq!(plan.final_pages.iter().map(Vec::len).collect::<Vec<_>>(), vec![3, 3]);
+        assert_eq!(
+            plan.final_pages.iter().map(Vec::len).collect::<Vec<_>>(),
+            vec![3, 3]
+        );
         assert!(!plan.actions.iter().any(|action| matches!(
             action,
             MixedLeafRepairAction::BorrowFromLeft { .. }
@@ -611,7 +613,10 @@ mod tests {
             action,
             MixedLeafRepairAction::BorrowFromRight { target_position: 0 }
         )));
-        assert_eq!(plan.final_pages.iter().map(Vec::len).collect::<Vec<_>>(), vec![3, 3]);
+        assert_eq!(
+            plan.final_pages.iter().map(Vec::len).collect::<Vec<_>>(),
+            vec![3, 3]
+        );
     }
 
     #[test]
@@ -621,22 +626,27 @@ mod tests {
             minimum: 3,
             ..MixedLeafPlanLimits::default()
         };
-        let input = pages(&[5, 3]);
+        let input = vec![vec![2, 4, 6, 8, 10], vec![12, 14, 16]];
         let plan = plan_mixed_leaf_updates(
             &input,
             &[
-                MixedPlanOperation::Put(9),
-                MixedPlanOperation::Put(10),
-                MixedPlanOperation::Delete(6),
-                MixedPlanOperation::Delete(7),
+                MixedPlanOperation::Put(1),
+                MixedPlanOperation::Put(3),
+                MixedPlanOperation::Delete(12),
+                MixedPlanOperation::Delete(14),
             ],
             limits,
         )
         .expect("split and repair");
         assert_eq!(plan.final_pages.iter().flatten().count(), 8);
+        assert!(plan
+            .actions
+            .iter()
+            .any(|action| matches!(action, MixedLeafRepairAction::Split { .. })));
         assert!(plan.actions.iter().any(|action| matches!(
             action,
-            MixedLeafRepairAction::Split { .. }
+            MixedLeafRepairAction::MergeWithLeft { .. }
+                | MixedLeafRepairAction::MergeWithRight { .. }
         )));
     }
 
