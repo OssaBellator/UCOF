@@ -35,12 +35,9 @@ fn verify_case(
 ) -> [u8; 32] {
     let limits = ImmutableLimits::default();
     let source = build_genesis(&objects, limits).expect("canonical source");
-    let mut resolver = CanonicalReferenceListResolver::new(
-        REFERENCE_KIND,
-        LEAF_KIND,
-        MAX_DEPENDENCIES,
-    )
-    .expect("resolver");
+    let mut resolver =
+        CanonicalReferenceListResolver::new(REFERENCE_KIND, LEAF_KIND, MAX_DEPENDENCIES)
+            .expect("resolver");
     let result = semantic_compact(
         &source,
         roots,
@@ -69,12 +66,9 @@ fn verify_case(
 
     let mut reversed = roots.to_vec();
     reversed.reverse();
-    let mut reversed_resolver = CanonicalReferenceListResolver::new(
-        REFERENCE_KIND,
-        LEAF_KIND,
-        MAX_DEPENDENCIES,
-    )
-    .expect("resolver");
+    let mut reversed_resolver =
+        CanonicalReferenceListResolver::new(REFERENCE_KIND, LEAF_KIND, MAX_DEPENDENCIES)
+            .expect("resolver");
     let reversed_result = semantic_compact(
         &source,
         &reversed,
