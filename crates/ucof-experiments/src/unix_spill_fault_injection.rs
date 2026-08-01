@@ -42,10 +42,7 @@ fn policy_error(
     }
 }
 
-fn io_error(
-    session: &SpillPublicationSession,
-    label: &'static str,
-) -> UnixSpillPublicationError {
+fn io_error(session: &SpillPublicationSession, label: &'static str) -> UnixSpillPublicationError {
     UnixSpillPublicationError::Io {
         label,
         outcome: session.outcome(),
@@ -120,9 +117,7 @@ pub fn run_fault_injected_unix_publication(
         .ok_or_else(|| io_error(&session, "destination parent"))?;
     let destination_metadata = fs::symlink_metadata(destination_parent)
         .map_err(|_| io_error(&session, "destination directory metadata"))?;
-    if destination_metadata.file_type().is_symlink()
-        || !destination_metadata.file_type().is_dir()
-    {
+    if destination_metadata.file_type().is_symlink() || !destination_metadata.file_type().is_dir() {
         return Err(io_error(&session, "destination directory"));
     }
 
@@ -164,9 +159,7 @@ pub fn run_fault_injected_unix_publication(
 
     if fault == Some(UnixSpillFaultPoint::BeforeDestinationLink) {
         let removed = fs::remove_file(&staged_path).is_ok();
-        let policy_failure = session
-            .record_owned_cleanup(&ownership_token, removed)
-            .err();
+        let policy_failure = session.record_owned_cleanup(&ownership_token, removed).err();
         return Ok(report(
             &session,
             fault,
