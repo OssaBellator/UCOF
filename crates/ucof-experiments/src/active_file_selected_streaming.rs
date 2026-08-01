@@ -151,11 +151,8 @@ mod tests {
     #[test]
     fn unselected_active_and_historical_payloads_are_not_read() {
         let limits = ImmutableLimits::default();
-        let genesis = build_genesis(
-            &[object(1, 4_096), object(2, 2_048), object(3, 17)],
-            limits,
-        )
-        .expect("genesis");
+        let genesis = build_genesis(&[object(1, 4_096), object(2, 2_048), object(3, 17)], limits)
+            .expect("genesis");
         let source = append_replacement(
             &genesis,
             &ImmutableObjectInput::new(1, 7, b"small-active".to_vec()),
