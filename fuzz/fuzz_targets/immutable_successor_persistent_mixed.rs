@@ -37,14 +37,15 @@ fuzz_target!(|data: &[u8]| {
         .get(1)
         .map_or(0_usize, |byte| usize::from(*byte) % count);
     let delete_id = u64::try_from(delete_index + 1).expect("small index") * 2;
-    let replace_index = data
-        .get(2)
-        .map_or((delete_index + 1) % count, |byte| usize::from(*byte) % count);
+    let replace_index = data.get(2).map_or((delete_index + 1) % count, |byte| {
+        usize::from(*byte) % count
+    });
     let mut replace_id = u64::try_from(replace_index + 1).expect("small index") * 2;
     if replace_id == delete_id {
         replace_id = u64::try_from((replace_index + 1) % count + 1).expect("small index") * 2;
     }
-    let inserted_id = u64::try_from(count).expect("small count")
+    let inserted_id = u64::try_from(count)
+        .expect("small count")
         .checked_mul(2)
         .and_then(|value| value.checked_add(1))
         .expect("bounded identifier");
@@ -56,7 +57,10 @@ fuzz_target!(|data: &[u8]| {
         ImmutableBatchOperation::Put(object(replace_id, replace_seed)),
     ];
     if data.get(5).is_none_or(|byte| byte & 1 == 0) {
-        operations.push(ImmutableBatchOperation::Put(object(inserted_id, insert_seed)));
+        operations.push(ImmutableBatchOperation::Put(object(
+            inserted_id,
+            insert_seed,
+        )));
     }
 
     let direct = append_persistent_mixed_batch(&genesis, &operations, limits)
