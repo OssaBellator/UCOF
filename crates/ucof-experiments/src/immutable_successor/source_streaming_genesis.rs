@@ -1,5 +1,3 @@
-use std::io::Write;
-
 /// Random-access payload contract for source-backed canonical streaming output.
 ///
 /// `strong_version` must identify one immutable payload view without ABA reuse. Metadata returned by
@@ -444,7 +442,7 @@ mod source_streaming_genesis_tests {
 
     #[test]
     fn version_change_is_terminal_and_returns_no_report() {
-        let mut sources = vec![MemoryPayloadSource::new(1, vec![7; 100])];
+        let mut sources = vec![MemoryPayloadSource::new(1, vec![7; 10])];
         sources[0].mutate_after_read = true;
         let mut sink = Vec::new();
         assert_eq!(
