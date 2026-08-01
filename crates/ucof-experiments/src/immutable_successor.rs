@@ -26,6 +26,7 @@ mod source_api {
 
     include!("immutable_successor/source.rs");
     include!("immutable_successor/source_full.rs");
+    include!("immutable_successor/source_history_rewrite.rs");
     include!("immutable_successor/source_inventory_conversion.rs");
 
     #[allow(clippy::too_many_arguments)]
@@ -43,6 +44,7 @@ mod source_api {
 
         include!("immutable_successor/source_history_to_sink.rs");
         include!("immutable_successor/source_history_selected_to_sink.rs");
+        include!("immutable_successor/source_history_chain_to_sink.rs");
     }
 
     pub use source_history_to_sink_api::*;
