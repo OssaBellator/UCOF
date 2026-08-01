@@ -100,12 +100,8 @@ fuzz_target!(|data: &[u8]| {
         let seed = data.get(7 + count).copied().unwrap_or(83);
         let payload_len = 1 + usize::from(seed % 96);
         active_lengths[index] = payload_len;
-        append_replacement(
-            &genesis,
-            &object(object_id, seed, payload_len),
-            format,
-        )
-        .expect("bounded replacement")
+        append_replacement(&genesis, &object(object_id, seed, payload_len), format)
+            .expect("bounded replacement")
     } else {
         genesis
     };
