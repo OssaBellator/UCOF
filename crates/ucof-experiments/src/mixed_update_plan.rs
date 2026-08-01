@@ -554,10 +554,7 @@ mod tests {
         let input = vec![vec![2, 4, 6], vec![8, 10, 12]];
         let plan = plan_mixed_leaf_updates(
             &input,
-            &[
-                MixedPlanOperation::Delete(2),
-                MixedPlanOperation::Put(1),
-            ],
+            &[MixedPlanOperation::Delete(2), MixedPlanOperation::Put(1)],
             limits,
         )
         .expect("mixed plan");
