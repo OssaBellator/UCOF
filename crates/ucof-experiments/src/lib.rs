@@ -88,6 +88,5 @@ pub use unix_spill_publication::{
 };
 #[cfg(unix)]
 pub use unix_spill_restart::{
-    inspect_unix_spill_after_restart, UnixSpillRestartExpectedArtifact,
-    UnixSpillRestartInspection,
+    inspect_unix_spill_after_restart, UnixSpillRestartExpectedArtifact, UnixSpillRestartInspection,
 };
