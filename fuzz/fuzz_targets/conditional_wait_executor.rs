@@ -5,8 +5,8 @@ use std::time::Duration;
 use libfuzzer_sys::fuzz_target;
 use ucof_experiments::immutable_successor::{
     execute_conditional_wait, plan_conditional_wait, ConditionalBackoffDecision,
-    ConditionalSleeper, ConditionalSourceError, ConditionalWaitPolicy,
-    ImmutableCancellationHandle, ImmutableOperationControl,
+    ConditionalSleeper, ConditionalSourceError, ConditionalWaitPolicy, ImmutableCancellationHandle,
+    ImmutableOperationControl,
 };
 
 #[derive(Default)]
@@ -65,11 +65,9 @@ fuzz_target!(|data: &[u8]| {
     assert!(plan.poll_interval_millis > 0);
 
     let (control, handle) = ImmutableOperationControl::new(None);
-    let possible_calls = usize::try_from(
-        plan.total_delay_millis
-            .div_ceil(plan.poll_interval_millis),
-    )
-    .expect("small calls");
+    let possible_calls =
+        usize::try_from(plan.total_delay_millis.div_ceil(plan.poll_interval_millis))
+            .expect("small calls");
     let mode = byte(7) % 3;
     let trigger = if possible_calls == 0 {
         0
@@ -92,12 +90,10 @@ fuzz_target!(|data: &[u8]| {
                 sleeper.calls.iter().copied().sum::<u64>(),
                 plan.total_delay_millis
             );
-            assert!(
-                sleeper
-                    .calls
-                    .iter()
-                    .all(|chunk| *chunk > 0 && *chunk <= plan.poll_interval_millis)
-            );
+            assert!(sleeper
+                .calls
+                .iter()
+                .all(|chunk| *chunk > 0 && *chunk <= plan.poll_interval_millis));
         }
         1 => {
             assert_eq!(
