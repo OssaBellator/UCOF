@@ -137,9 +137,9 @@ pub fn classify_spill_restart(facts: SpillRestartFacts) -> SpillRestartDispositi
                     {
                         SpillRestartDisposition::PublishedAndDurableCleanupStage
                     }
-                    SpillRestartOwnership::Foreign => {
-                        SpillRestartDisposition::ManualIntervention("foreign stage after durability")
-                    }
+                    SpillRestartOwnership::Foreign => SpillRestartDisposition::ManualIntervention(
+                        "foreign stage after durability",
+                    ),
                     SpillRestartOwnership::Owned | SpillRestartOwnership::Unverifiable => {
                         SpillRestartDisposition::ManualIntervention(
                             "untrusted stage after durability",
