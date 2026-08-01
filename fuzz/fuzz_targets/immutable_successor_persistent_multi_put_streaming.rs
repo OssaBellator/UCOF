@@ -127,10 +127,7 @@ fuzz_target!(|data: &[u8]| {
     assert_eq!(reverse, streamed);
     assert_eq!(reverse_report.report, report.report);
 
-    let duplicate = vec![
-        object(first_insert_id, 1, 1),
-        object(first_insert_id, 2, 2),
-    ];
+    let duplicate = vec![object(first_insert_id, 1, 1), object(first_insert_id, 2, 2)];
     let mut rejected = Vec::new();
     assert!(append_persistent_put_batch_to(
         &mut rejected,
