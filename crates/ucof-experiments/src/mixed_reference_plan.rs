@@ -73,13 +73,16 @@ fn matching_original_group(
         if child_identities.len() != end - start {
             continue;
         }
-        let matches = child_identities.iter().enumerate().all(|(offset, identity)| {
-            *identity
-                == PlannedPageIdentity::Original {
-                    level: child_level,
-                    index: start + offset,
-                }
-        });
+        let matches = child_identities
+            .iter()
+            .enumerate()
+            .all(|(offset, identity)| {
+                *identity
+                    == PlannedPageIdentity::Original {
+                        level: child_level,
+                        index: start + offset,
+                    }
+            });
         if matches {
             return Ok(Some(group_index));
         }
@@ -96,13 +99,16 @@ fn final_leaf_identities(
         .iter()
         .enumerate()
         .map(|(final_index, page)| {
-            let original = original_leaves.iter().enumerate().find_map(|(index, candidate)| {
-                if candidate == page && !tree.leaf.touched_original_pages.contains(&index) {
-                    Some(index)
-                } else {
-                    None
-                }
-            });
+            let original = original_leaves
+                .iter()
+                .enumerate()
+                .find_map(|(index, candidate)| {
+                    if candidate == page && !tree.leaf.touched_original_pages.contains(&index) {
+                        Some(index)
+                    } else {
+                        None
+                    }
+                });
             original.map_or(
                 PlannedPageIdentity::New {
                     level: 0,
@@ -176,7 +182,9 @@ pub fn plan_mixed_page_references(
                     }
                     reused_original_pages[level].push(index);
                 }
-                PlannedPageIdentity::New { level: new_level, .. } => {
+                PlannedPageIdentity::New {
+                    level: new_level, ..
+                } => {
                     if new_level != level {
                         return Err(MixedReferencePlanError::InvalidShape);
                     }
@@ -241,12 +249,8 @@ mod tests {
     #[test]
     fn replacement_marks_one_leaf_and_ancestor_path_new() {
         let pages = even_pages(9, 2);
-        let plan = plan_mixed_page_references(
-            &pages,
-            &[MixedPlanOperation::Put(2)],
-            limits(),
-        )
-        .expect("reference plan");
+        let plan = plan_mixed_page_references(&pages, &[MixedPlanOperation::Put(2)], limits())
+            .expect("reference plan");
         assert_eq!(plan.new_pages_by_level, vec![1, 1, 1]);
         assert_eq!(plan.reused_original_pages[0], (1..9).collect::<Vec<_>>());
         assert_eq!(plan.reused_original_pages[1], vec![1, 2]);
@@ -256,12 +260,8 @@ mod tests {
     #[test]
     fn insertion_without_split_reuses_unaffected_internal_groups() {
         let pages = even_pages(9, 2);
-        let plan = plan_mixed_page_references(
-            &pages,
-            &[MixedPlanOperation::Put(37)],
-            limits(),
-        )
-        .expect("reference plan");
+        let plan = plan_mixed_page_references(&pages, &[MixedPlanOperation::Put(37)], limits())
+            .expect("reference plan");
         assert_eq!(plan.new_pages_by_level, vec![1, 1, 1]);
         assert_eq!(plan.reused_original_pages[0], (0..8).collect::<Vec<_>>());
         assert_eq!(plan.reused_original_pages[1], vec![0, 1]);
@@ -271,12 +271,8 @@ mod tests {
     #[test]
     fn split_that_shifts_group_boundaries_reuses_only_untouched_leaves() {
         let pages = even_pages(9, 3);
-        let plan = plan_mixed_page_references(
-            &pages,
-            &[MixedPlanOperation::Put(1)],
-            limits(),
-        )
-        .expect("reference plan");
+        let plan = plan_mixed_page_references(&pages, &[MixedPlanOperation::Put(1)], limits())
+            .expect("reference plan");
         assert_eq!(plan.tree.final_shape.root_level, 3);
         assert_eq!(plan.reused_original_pages[0], (1..9).collect::<Vec<_>>());
         assert!(plan.reused_original_pages[1].is_empty());
@@ -287,12 +283,8 @@ mod tests {
     #[test]
     fn merge_collapse_emits_a_new_root_when_the_child_sequence_changes() {
         let pages = even_pages(4, 2);
-        let plan = plan_mixed_page_references(
-            &pages,
-            &[MixedPlanOperation::Delete(8)],
-            limits(),
-        )
-        .expect("reference plan");
+        let plan = plan_mixed_page_references(&pages, &[MixedPlanOperation::Delete(8)], limits())
+            .expect("reference plan");
         assert_eq!(plan.tree.final_shape.root_level, 1);
         assert_eq!(plan.final_level_identities[1].len(), 1);
         assert!(matches!(
