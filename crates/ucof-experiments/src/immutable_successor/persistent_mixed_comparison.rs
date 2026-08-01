@@ -46,19 +46,25 @@ pub struct PersistentMixedRewriteComparison {
     pub planner_final_leaf_sizes: Vec<usize>,
     pub canonical_final_leaf_sizes: Vec<usize>,
     pub leaf_partition_equal: bool,
+    pub first_differing_leaf: Option<usize>,
     pub planner_touched_original_leaves: usize,
     pub planner_conservative_touched_original_internal_pages: usize,
     pub planner_estimated_pages_written: usize,
     pub canonical_pages_written: usize,
     pub canonical_pages_reused: usize,
+    pub planner_exact_leaf_pages_written: usize,
+    pub planner_exact_leaf_pages_reused: usize,
+    pub canonical_exact_leaf_pages_written: usize,
+    pub canonical_exact_leaf_pages_reused: usize,
+    pub extra_canonical_leaf_writes: usize,
     /// Present only when the path-local and canonical writers choose identical final leaf bodies.
     pub comparable_relation: Option<PersistentMixedRewriteRelation>,
 }
 
-fn mixed_leaf_id_pages(
+fn mixed_leaf_locator_pages(
     data: &[u8],
     limits: ImmutableLimits,
-) -> Result<Vec<Vec<u64>>, ImmutableError> {
+) -> Result<Vec<Vec<Locator>>, ImmutableError> {
     let report = validate_canonical_internal(data, limits)?;
     let footer = parse_footer(data, report.footer_offset)?;
     let snapshot_offset = usize_from_u64(footer.snapshot_offset, "snapshot range")?;
@@ -75,7 +81,7 @@ fn mixed_leaf_id_pages(
         .first_mut()
         .ok_or(ImmutableError::Invalid("mixed comparison leaves"))?;
     leaves.sort_unstable_by_key(|page| page.reference.minimum);
-    allocation_check::<Vec<u64>>(leaves.len(), limits)?;
+    allocation_check::<Vec<Locator>>(leaves.len(), limits)?;
     let mut result = Vec::with_capacity(leaves.len());
     for page in leaves {
         let entries = match &page.body {
@@ -84,10 +90,16 @@ fn mixed_leaf_id_pages(
                 return Err(ImmutableError::Invalid("mixed comparison leaf body"));
             }
         };
-        allocation_check::<u64>(entries.len(), limits)?;
-        result.push(entries.iter().map(|locator| locator.object_id).collect());
+        result.push(entries.clone());
     }
     Ok(result)
+}
+
+fn mixed_leaf_id_pages(locator_pages: &[Vec<Locator>]) -> Vec<Vec<u64>> {
+    locator_pages
+        .iter()
+        .map(|entries| entries.iter().map(|locator| locator.object_id).collect())
+        .collect()
 }
 
 fn comparison_planner_limits(limits: ImmutableLimits) -> MixedTreePlanLimits {
@@ -160,27 +172,71 @@ fn rewrite_relation(canonical: usize, planner: usize) -> PersistentMixedRewriteR
     }
 }
 
+fn final_locator_pages_for_plan(
+    final_locator_pages: &[Vec<Locator>],
+    planned_id_pages: &[Vec<u64>],
+) -> Result<Vec<Vec<Locator>>, ImmutableError> {
+    let final_locators: Vec<&Locator> = final_locator_pages.iter().flatten().collect();
+    planned_id_pages
+        .iter()
+        .map(|page| {
+            page.iter()
+                .map(|object_id| {
+                    final_locators
+                        .binary_search_by_key(object_id, |locator| locator.object_id)
+                        .map(|index| final_locators[index].clone())
+                        .map_err(|_| ImmutableError::MissingObject(*object_id))
+                })
+                .collect()
+        })
+        .collect()
+}
+
+fn exact_leaf_reuse_counts(
+    original: &[Vec<Locator>],
+    final_pages: &[Vec<Locator>],
+) -> (usize, usize) {
+    let reused = final_pages
+        .iter()
+        .filter(|page| original.iter().any(|candidate| candidate == *page))
+        .count();
+    (final_pages.len() - reused, reused)
+}
+
+fn first_leaf_difference(left: &[Vec<u64>], right: &[Vec<u64>]) -> Option<usize> {
+    let common = left.len().min(right.len());
+    left.iter()
+        .zip(right)
+        .position(|(left_page, right_page)| left_page != right_page)
+        .or_else(|| (left.len() != right.len()).then_some(common))
+}
+
 /// Compares authenticated canonical mixed-page writes with the path-local repair planner.
 ///
-/// The comparison is exact only when both paths choose the same final leaf bodies. In that case the
-/// planner estimate counts every final page that is not covered by an untouched original page or
-/// ancestor. The canonical writer may write fewer pages because byte-equality can prove additional
-/// reuse that the conservative planner deliberately refuses to claim. A result where canonical
-/// writing uses more pages under an equal final partition is evidence of an avoidable rewrite.
+/// Complete-tree rewrite estimates are directly comparable only when both paths choose the same
+/// final leaf bodies. Exact locator-body leaf reuse is also measured under divergent legal layouts,
+/// allowing the cost of the current global canonical grouping rule to be quantified without treating
+/// path-local output as canonical bytes. A positive `extra_canonical_leaf_writes` value is therefore
+/// policy-cost evidence, not by itself a correctness defect.
 pub fn compare_persistent_mixed_rewrites(
     data: &[u8],
     operations: &[ImmutableBatchOperation],
     limits: ImmutableLimits,
 ) -> Result<PersistentMixedRewriteComparison, PersistentMixedRewriteComparisonError> {
-    let original_leaves = mixed_leaf_id_pages(data, limits)?;
+    let original_locator_pages = mixed_leaf_locator_pages(data, limits)?;
+    let original_leaves = mixed_leaf_id_pages(&original_locator_pages);
     let plan = plan_mixed_tree_updates(
         &original_leaves,
         &comparison_operations(operations),
         comparison_planner_limits(limits),
     )?;
     let written = append_persistent_mixed_batch(data, operations, limits)?;
-    let canonical_final_leaves = mixed_leaf_id_pages(&written.bytes, limits)?;
+    let canonical_final_locator_pages = mixed_leaf_locator_pages(&written.bytes, limits)?;
+    let canonical_final_leaves = mixed_leaf_id_pages(&canonical_final_locator_pages);
+    let planner_final_locator_pages =
+        final_locator_pages_for_plan(&canonical_final_locator_pages, &plan.leaf.final_pages)?;
     let leaf_partition_equal = plan.leaf.final_pages == canonical_final_leaves;
+    let first_differing_leaf = first_leaf_difference(&plan.leaf.final_pages, &canonical_final_leaves);
     let planner_estimated_pages_written = planner_estimated_writes(
         original_leaves.len(),
         plan.leaf.final_pages.len(),
@@ -191,6 +247,10 @@ pub fn compare_persistent_mixed_rewrites(
     )?;
     let comparable_relation = leaf_partition_equal
         .then(|| rewrite_relation(written.pages_written, planner_estimated_pages_written));
+    let (planner_exact_leaf_pages_written, planner_exact_leaf_pages_reused) =
+        exact_leaf_reuse_counts(&original_locator_pages, &planner_final_locator_pages);
+    let (canonical_exact_leaf_pages_written, canonical_exact_leaf_pages_reused) =
+        exact_leaf_reuse_counts(&original_locator_pages, &canonical_final_locator_pages);
 
     Ok(PersistentMixedRewriteComparison {
         root_transition: plan.root_transition,
@@ -198,6 +258,7 @@ pub fn compare_persistent_mixed_rewrites(
         planner_final_leaf_sizes: plan.leaf.final_pages.iter().map(Vec::len).collect(),
         canonical_final_leaf_sizes: canonical_final_leaves.iter().map(Vec::len).collect(),
         leaf_partition_equal,
+        first_differing_leaf,
         planner_touched_original_leaves: plan.leaf.touched_original_pages.len(),
         planner_conservative_touched_original_internal_pages: plan
             .conservative_touched_original_internal_pages
@@ -207,6 +268,12 @@ pub fn compare_persistent_mixed_rewrites(
         planner_estimated_pages_written,
         canonical_pages_written: written.pages_written,
         canonical_pages_reused: written.pages_reused,
+        planner_exact_leaf_pages_written,
+        planner_exact_leaf_pages_reused,
+        canonical_exact_leaf_pages_written,
+        canonical_exact_leaf_pages_reused,
+        extra_canonical_leaf_writes: canonical_exact_leaf_pages_written
+            .saturating_sub(planner_exact_leaf_pages_written),
         comparable_relation,
     })
 }
@@ -257,11 +324,13 @@ mod persistent_mixed_comparison_tests {
         );
         assert_eq!(comparison.root_transition, MixedRootTransition::Stable);
         assert!(comparison.leaf_partition_equal);
+        assert_eq!(comparison.first_differing_leaf, None);
         assert_eq!(comparison.original_leaf_sizes, vec![185, 122, 93]);
         assert_eq!(comparison.canonical_final_leaf_sizes, vec![185, 122, 93]);
         assert_eq!(comparison.canonical_pages_written, 2);
         assert_eq!(comparison.canonical_pages_reused, 2);
         assert_eq!(comparison.planner_estimated_pages_written, 2);
+        assert_eq!(comparison.extra_canonical_leaf_writes, 0);
         assert_eq!(
             comparison.comparable_relation,
             Some(PersistentMixedRewriteRelation::Equal)
@@ -283,6 +352,7 @@ mod persistent_mixed_comparison_tests {
         assert_eq!(comparison.canonical_pages_written, 1);
         assert_eq!(comparison.canonical_pages_reused, 0);
         assert_eq!(comparison.planner_estimated_pages_written, 1);
+        assert_eq!(comparison.extra_canonical_leaf_writes, 0);
         assert_eq!(
             comparison.comparable_relation,
             Some(PersistentMixedRewriteRelation::Equal)
@@ -305,9 +375,33 @@ mod persistent_mixed_comparison_tests {
         assert_eq!(comparison.canonical_pages_written, 3);
         assert_eq!(comparison.canonical_pages_reused, 0);
         assert_eq!(comparison.planner_estimated_pages_written, 3);
+        assert_eq!(comparison.extra_canonical_leaf_writes, 0);
         assert_eq!(
             comparison.comparable_relation,
             Some(PersistentMixedRewriteRelation::Equal)
         );
+    }
+
+    #[test]
+    fn divergent_partition_quantifies_one_extra_canonical_leaf_write() {
+        let comparison = compare(
+            400,
+            vec![
+                ImmutableBatchOperation::Delete(2),
+                ImmutableBatchOperation::Put(object(800, 99, b"replacement-eight-hundred")),
+            ],
+        );
+        assert_eq!(comparison.root_transition, MixedRootTransition::Stable);
+        assert!(!comparison.leaf_partition_equal);
+        assert_eq!(comparison.first_differing_leaf, Some(0));
+        assert_eq!(comparison.original_leaf_sizes, vec![185, 122, 93]);
+        assert_eq!(comparison.planner_final_leaf_sizes, vec![184, 122, 93]);
+        assert_eq!(comparison.canonical_final_leaf_sizes, vec![185, 121, 93]);
+        assert_eq!(comparison.planner_exact_leaf_pages_written, 2);
+        assert_eq!(comparison.planner_exact_leaf_pages_reused, 1);
+        assert_eq!(comparison.canonical_exact_leaf_pages_written, 3);
+        assert_eq!(comparison.canonical_exact_leaf_pages_reused, 0);
+        assert_eq!(comparison.extra_canonical_leaf_writes, 1);
+        assert_eq!(comparison.comparable_relation, None);
     }
 }
