@@ -7,11 +7,7 @@ use ucof_experiments::immutable_successor::{
 };
 
 fn object(object_id: u64, seed: u8, payload_len: usize) -> ImmutableObjectInput {
-    ImmutableObjectInput::new(
-        object_id,
-        u16::from(1 + seed % 31),
-        vec![seed; payload_len],
-    )
+    ImmutableObjectInput::new(object_id, u16::from(1 + seed % 31), vec![seed; payload_len])
 }
 
 fuzz_target!(|data: &[u8]| {
@@ -80,10 +76,7 @@ fuzz_target!(|data: &[u8]| {
     let reverse = compare_persistent_mixed_rewrites(&genesis, &operations, limits)
         .expect("reverse comparison");
     assert_eq!(forward, reverse);
-    assert_eq!(
-        forward.original_leaf_sizes.iter().sum::<usize>(),
-        count
-    );
+    assert_eq!(forward.original_leaf_sizes.iter().sum::<usize>(), count);
     assert_eq!(
         forward.canonical_final_leaf_sizes.iter().sum::<usize>(),
         count - 1 + usize::from(inserted)
