@@ -115,9 +115,7 @@ impl PersistentStagingBackend for Backend {
         self.step(PersistentPublicationStage::SyncPrivate)
     }
 
-    fn publish_no_replace(
-        &mut self,
-    ) -> Result<PersistentPublicationLinkOutcome, &'static str> {
+    fn publish_no_replace(&mut self) -> Result<PersistentPublicationLinkOutcome, &'static str> {
         self.step(PersistentPublicationStage::PublishLink)?;
         match self.link {
             PersistentPublicationLinkOutcome::Linked => {
