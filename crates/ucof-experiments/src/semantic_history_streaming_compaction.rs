@@ -50,9 +50,7 @@ impl From<CompactionError> for ImmutableHistoricalSemanticStreamingError {
     }
 }
 
-impl From<ImmutableSelectedHistoryToSinkError>
-    for ImmutableHistoricalSemanticStreamingError
-{
+impl From<ImmutableSelectedHistoryToSinkError> for ImmutableHistoricalSemanticStreamingError {
     fn from(error: ImmutableSelectedHistoryToSinkError) -> Self {
         Self::Streaming(error)
     }
@@ -70,10 +68,7 @@ pub struct ImmutableHistoricalSemanticStreamingReport {
 /// The graph is caller-supplied and is not inferred from opaque payload bytes. Strict history and
 /// selected-prefix validation still authenticate every active object in the chosen state. Only the
 /// second payload pass and output are restricted to the reachable closure.
-pub fn rewrite_compacted_versioned_source_sequence_to<
-    W: Write,
-    S: ImmutableVersionedReadAt,
->(
+pub fn rewrite_compacted_versioned_source_sequence_to<W: Write, S: ImmutableVersionedReadAt>(
     writer: &mut W,
     source: &mut S,
     graph: &ObjectGraph,
@@ -98,8 +93,8 @@ mod tests {
     use super::*;
     use crate::immutable_successor::{
         append_replacement, build_genesis, rewrite_selected, validate_history, ImmutableLimits,
-        ImmutableObjectInput, ImmutableReadAt, ImmutableSourceError, ImmutableStreamingWriteOptions,
-        FOOTER_LEN,
+        ImmutableObjectInput, ImmutableReadAt, ImmutableSourceError,
+        ImmutableStreamingWriteOptions, FOOTER_LEN,
     };
 
     #[derive(Clone, Debug)]
@@ -234,7 +229,12 @@ mod tests {
         assert_eq!(report.output.output.selected_object_ids, vec![1, 2, 3, 4]);
         assert_eq!(report.output.output.output.output.report, expected.output);
         assert_eq!(
-            report.output.output.output.cumulative_source_stats.bytes_read
+            report
+                .output
+                .output
+                .output
+                .cumulative_source_stats
+                .bytes_read
                 - report.output.output.output.inventory_stats.bytes_read,
             u64::try_from(
                 b"root-at-one".len()
