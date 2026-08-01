@@ -1,0 +1,67 @@
+{
+  "status": "non-normative reference-profile rewrite recipes",
+  "reference_kind": 100,
+  "leaf_kind": 101,
+  "max_dependencies_per_object": 8,
+  "aggregate_sha256": "fe20a891b04b90b6df1870e6652eec5d6ddfa91ebc8370f4d6dfa70881a27c84",
+  "vectors": [
+    {
+      "name": "single-root-chain",
+      "roots": [1],
+      "objects": [
+        {"object_id": 1, "profile": "reference", "dependencies": [2, 3]},
+        {"object_id": 2, "profile": "leaf"},
+        {"object_id": 3, "profile": "reference", "dependencies": [4]},
+        {"object_id": 4, "profile": "leaf"},
+        {"object_id": 5, "profile": "leaf"}
+      ],
+      "retained_object_ids": [1, 2, 3, 4],
+      "discarded_object_ids": [5],
+      "edges_visited": 3,
+      "maximum_depth": 2,
+      "decoded_bytes": 16904,
+      "sha256": "87bc7de2d5e2afb51e765bf4694cf3a9a178a605d0f032b8157a4bc1bfc7040e",
+      "root_level": 0,
+      "page_count": 1,
+      "object_count": 4
+    },
+    {
+      "name": "two-roots-shared-dependency",
+      "roots": [50, 10],
+      "objects": [
+        {"object_id": 10, "profile": "reference", "dependencies": [20, 30]},
+        {"object_id": 20, "profile": "reference", "dependencies": [40]},
+        {"object_id": 30, "profile": "leaf"},
+        {"object_id": 40, "profile": "leaf"},
+        {"object_id": 50, "profile": "reference", "dependencies": [40]},
+        {"object_id": 60, "profile": "leaf"}
+      ],
+      "retained_object_ids": [10, 20, 30, 40, 50],
+      "discarded_object_ids": [60],
+      "edges_visited": 4,
+      "maximum_depth": 2,
+      "decoded_bytes": 16968,
+      "sha256": "aee59b41b6a7bf135fc1d741256ea7e6ef121ffb1897a39b646ca2f66b73b715",
+      "root_level": 0,
+      "page_count": 1,
+      "object_count": 5
+    },
+    {
+      "name": "empty-reference-root",
+      "roots": [7],
+      "objects": [
+        {"object_id": 7, "profile": "reference", "dependencies": []},
+        {"object_id": 8, "profile": "leaf"}
+      ],
+      "retained_object_ids": [7],
+      "discarded_object_ids": [8],
+      "edges_visited": 0,
+      "maximum_depth": 0,
+      "decoded_bytes": 16728,
+      "sha256": "65654ef62675f12db1ed3fde4304eaa1344e2cc25bbb5a2718c51ba3779c5e43",
+      "root_level": 0,
+      "page_count": 1,
+      "object_count": 1
+    }
+  ]
+}
