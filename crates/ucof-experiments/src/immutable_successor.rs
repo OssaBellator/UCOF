@@ -24,7 +24,7 @@ include!("immutable_successor/persistent_multi_put_streaming.rs");
 include!("immutable_successor/persistent_streaming_dispatch.rs");
 include!("immutable_successor/rewrite.rs");
 
-#[allow(clippy::len_without_is_empty)]
+#[allow(clippy::len_without_is_empty, clippy::type_complexity)]
 mod source_api {
     use super::*;
 
