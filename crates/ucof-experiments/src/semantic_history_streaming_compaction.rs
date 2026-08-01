@@ -41,6 +41,23 @@ impl From<ImmutableHistoryToSinkError> for ImmutableHistoricalSemanticStreamingE
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ImmutableHistoricalSemanticStreamingOptions {
+    pub compaction: CompactionLimits,
+    pub source: ImmutableSourceLimits,
+    pub output: ImmutableSourceStreamingWriteOptions,
+}
+
+impl Default for ImmutableHistoricalSemanticStreamingOptions {
+    fn default() -> Self {
+        Self {
+            compaction: CompactionLimits::default(),
+            source: ImmutableSourceLimits::default(),
+            output: ImmutableSourceStreamingWriteOptions::default(),
+        }
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImmutableHistoricalSemanticStreamingReport {
     pub plan: CompactionPlan,
@@ -62,18 +79,16 @@ pub fn rewrite_compacted_versioned_history_sequence_to<W: Write, S: ImmutableVer
     sequence: u64,
     graph: &ObjectGraph,
     selected_roots: &[u64],
-    compaction_limits: CompactionLimits,
-    source_limits: ImmutableSourceLimits,
-    options: ImmutableSourceStreamingWriteOptions,
+    options: ImmutableHistoricalSemanticStreamingOptions,
 ) -> Result<ImmutableHistoricalSemanticStreamingReport, ImmutableHistoricalSemanticStreamingError> {
-    let plan = graph.plan(selected_roots, compaction_limits)?;
+    let plan = graph.plan(selected_roots, options.compaction)?;
     let output = rewrite_versioned_source_sequence_selected_to(
         writer,
         source,
         sequence,
         &plan.reachable,
-        source_limits,
-        options,
+        options.source,
+        options.output,
     )?;
     Ok(ImmutableHistoricalSemanticStreamingReport { plan, output })
 }
@@ -192,19 +207,21 @@ mod tests {
             0,
             &graph(),
             &[1],
-            CompactionLimits::default(),
-            ImmutableSourceLimits {
-                format,
-                max_total_bytes_read: 64 * 1024 * 1024,
-                max_read_operations: 1_000_000,
-                max_read_request_bytes: 31,
-                hash_block_bytes: 29,
-            },
-            ImmutableSourceStreamingWriteOptions {
-                output: ImmutableStreamingWriteOptions {
-                    max_write_request_bytes: 37,
+            ImmutableHistoricalSemanticStreamingOptions {
+                compaction: CompactionLimits::default(),
+                source: ImmutableSourceLimits {
+                    format,
+                    max_total_bytes_read: 64 * 1024 * 1024,
+                    max_read_operations: 1_000_000,
+                    max_read_request_bytes: 31,
+                    hash_block_bytes: 29,
                 },
-                max_source_read_bytes: 17,
+                output: ImmutableSourceStreamingWriteOptions {
+                    output: ImmutableStreamingWriteOptions {
+                        max_write_request_bytes: 37,
+                    },
+                    max_source_read_bytes: 17,
+                },
             },
         )
         .expect("historical semantic streaming");
@@ -240,9 +257,7 @@ mod tests {
                 0,
                 &graph,
                 &[1],
-                CompactionLimits::default(),
-                ImmutableSourceLimits::default(),
-                ImmutableSourceStreamingWriteOptions::default(),
+                ImmutableHistoricalSemanticStreamingOptions::default(),
             ),
             Err(ImmutableHistoricalSemanticStreamingError::Compaction(
                 CompactionError::MissingObject(9)
@@ -270,9 +285,7 @@ mod tests {
                 0,
                 &graph,
                 &[8],
-                CompactionLimits::default(),
-                ImmutableSourceLimits::default(),
-                ImmutableSourceStreamingWriteOptions::default(),
+                ImmutableHistoricalSemanticStreamingOptions::default(),
             ),
             Err(ImmutableHistoricalSemanticStreamingError::Historical(_))
         ));
