@@ -61,13 +61,7 @@ pub fn rewrite_compacted_active_file_to<W: Write>(
     limits: ImmutableLimits,
 ) -> Result<ImmutableSemanticStreamingReport, ImmutableSemanticStreamingError> {
     let plan = graph.plan(selected_roots, compaction_limits)?;
-    let output = rewrite_selected_active_file_to(
-        writer,
-        data,
-        &plan.reachable,
-        options,
-        limits,
-    )?;
+    let output = rewrite_selected_active_file_to(writer, data, &plan.reachable, options, limits)?;
     Ok(ImmutableSemanticStreamingReport { plan, output })
 }
 
