@@ -12,6 +12,7 @@ include!("immutable_successor/part5.rs");
 include!("immutable_successor/batch.rs");
 include!("immutable_successor/rewrite.rs");
 include!("immutable_successor/semantic_compaction.rs");
+include!("immutable_successor/dependency_profile.rs");
 
 #[allow(clippy::len_without_is_empty)]
 mod source_api {
