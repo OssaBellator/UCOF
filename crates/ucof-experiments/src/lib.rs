@@ -27,6 +27,8 @@ mod repair;
 mod snapshots;
 mod spill_publication;
 #[cfg(unix)]
+mod unix_spill_fault_injection;
+#[cfg(unix)]
 mod unix_spill_publication;
 
 pub use compaction::{CompactionError, CompactionLimits, CompactionPlan, ObjectGraph};
@@ -67,6 +69,10 @@ pub use spill_publication::{
     NoOverwriteLinkResult, SpillConfidentialityPolicy, SpillPublicationError,
     SpillPublicationLimits, SpillPublicationOutcome, SpillPublicationSession,
     SpillPublicationStage,
+};
+#[cfg(unix)]
+pub use unix_spill_fault_injection::{
+    run_fault_injected_unix_publication, UnixSpillFaultPoint, UnixSpillFaultReport,
 };
 #[cfg(unix)]
 pub use unix_spill_publication::{
