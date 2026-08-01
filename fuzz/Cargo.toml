@@ -256,3 +256,10 @@ path = "fuzz_targets/immutable_successor_semantic_streaming.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "immutable_successor_source_inventory"
+path = "fuzz_targets/immutable_successor_source_inventory.rs"
+test = false
+doc = false
+bench = false
