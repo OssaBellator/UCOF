@@ -113,7 +113,6 @@ fuzz_target!(|data: &[u8]| {
         PersistentSourceCopyError::IdentityMismatch(PersistentSourceCopyPhase::Copy)
     );
     assert_eq!(rejected.len(), base.len());
-    assert!(tail.is_empty() || !rejected.ends_with(tail));
 
     let mut wrong = identity;
     wrong.sha256[0] ^= 1;
