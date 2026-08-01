@@ -275,7 +275,7 @@ mod tests {
     }
 
     #[test]
-    fn unauthenticated_or_wrong-owner_journal_never_authorizes_cleanup() {
+    fn unauthenticated_or_wrong_owner_journal_never_authorizes_cleanup() {
         let mut state = facts();
         state.staged_name_exists = true;
         state.staged_ownership = SpillRestartOwnership::Owned;
