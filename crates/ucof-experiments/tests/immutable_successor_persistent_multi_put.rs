@@ -134,7 +134,7 @@ fn caller_order_is_canonical_and_duplicate_operations_fail() {
 }
 
 #[test]
-fn mixed_deletion_batches_remain_an_explicit_fallback() {
+fn mixed_deletion_batches_use_persistent_canonical_regrouping() {
     let limits = ImmutableLimits::default();
     let genesis = build_genesis(&even_objects(400), limits).expect("genesis");
     let result = append_persistent_batch(
@@ -145,6 +145,9 @@ fn mixed_deletion_batches_remain_an_explicit_fallback() {
         ],
         limits,
     )
-    .expect("mixed fallback");
-    assert_eq!(result.mode, PersistentBatchMode::FullRebuildShapeChange);
+    .expect("persistent mixed batch");
+    assert_eq!(
+        result.mode,
+        PersistentBatchMode::CopyOnWriteCanonicalMixed
+    );
 }
