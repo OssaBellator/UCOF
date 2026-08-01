@@ -1,5 +1,5 @@
 {
-  "manifest_version": 4,
+  "manifest_version": 5,
   "updated": "2026-08-01",
   "status": "research-draft",
   "epoch_allocated": false,
@@ -56,10 +56,10 @@
           "open": ["atomic staging integration"]
         },
         {
-          "pull_requests": [42, 43, 44],
-          "claim": "one non-ABA versioned bounded source can be strictly inventoried and streamed to canonical output for the latest state or one exact linked-history sequence under one cumulative budget",
-          "evidence": ["rust", "strict-report-equivalence", "authenticated-descriptors", "linked-history-validation", "exact-prefix-selection", "cumulative-budget-preflight", "per-object-version-checks", "digest-equality", "inactive-history-skip", "mid-stream-version-failure", "source-to-sink-fuzz", "selected-history-fuzz"],
-          "open": ["concrete maintained provider adapter", "semantic selection inside selected history", "multi-snapshot historical output", "provider retry and authentication integration", "atomic publication staging"]
+          "pull_requests": [42, 43, 44, 45],
+          "claim": "one non-ABA versioned bounded source can be strictly inventoried and streamed to canonical output for the latest state, one exact linked-history sequence, or a caller-selected reachable subset of that historical state under one cumulative budget",
+          "evidence": ["rust", "strict-report-equivalence", "authenticated-descriptors", "linked-history-validation", "exact-prefix-selection", "selected-object-canonicalization", "graph-plan-before-source", "cumulative-budget-preflight", "per-object-version-checks", "digest-equality", "inactive-history-skip", "exact-selected-reread-accounting", "mid-stream-version-failure", "source-to-sink-fuzz", "selected-history-fuzz", "historical-semantic-fuzz"],
+          "open": ["concrete maintained provider adapter", "multi-snapshot historical output", "provider retry and authentication integration", "atomic publication staging"]
         }
       ]
     },
@@ -95,10 +95,10 @@
           "open": ["application-profile adoption", "profile rewrite-byte vectors", "extension preservation", "provenance and signature reissuance"]
         },
         {
-          "pull_requests": [39, 41],
-          "claim": "bounded dependency closure can feed selected authenticated active-file streaming so only reachable payloads are read and emitted",
-          "evidence": ["rust", "byte-equivalence", "reachable-orphan-accounting", "bounded-read", "bounded-write", "fail-before-output", "semantic-streaming-fuzz"],
-          "open": ["normative profile adoption", "versioned bounded-source semantic streaming", "large-graph spill", "historical-state semantic streaming"]
+          "pull_requests": [39, 41, 45],
+          "claim": "bounded dependency closure can feed selected authenticated streaming for the current active file or one exact historical prefix so only reachable payloads are reread and emitted",
+          "evidence": ["rust", "byte-equivalence", "reachable-orphan-accounting", "bounded-read", "bounded-write", "fail-before-source", "fail-before-output", "semantic-streaming-fuzz", "historical-semantic-fuzz"],
+          "open": ["normative profile adoption", "profile rewrite-byte vectors", "large-graph spill", "multi-snapshot historical semantic output"]
         }
       ]
     }
