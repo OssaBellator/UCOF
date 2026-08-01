@@ -6,7 +6,7 @@ use ucof_experiments::{
         append_replacement, build_genesis, rewrite_selected, validate_history, ImmutableLimits,
         ImmutableObjectInput, ImmutableReadAt, ImmutableSourceError, ImmutableSourceLimits,
         ImmutableSourceStreamingWriteOptions, ImmutableStreamingWriteOptions,
-        ImmutableVersionedReadAt,
+        ImmutableVersionedReadAt, FOOTER_LEN,
     },
     rewrite_compacted_versioned_history_sequence_to, CompactionLimits,
     ImmutableHistoricalSemanticStreamingOptions, ObjectGraph,
@@ -170,7 +170,7 @@ fuzz_target!(|data: &[u8]| {
         .iter()
         .find(|entry| entry.report.sequence == sequence)
         .expect("selected sequence");
-    let prefix_len = entry.footer_offset + 192;
+    let prefix_len = entry.footer_offset + u64::try_from(FOOTER_LEN).expect("footer length");
     let expected = rewrite_selected(
         &source_bytes[..usize::try_from(prefix_len).expect("prefix")],
         &plan.reachable,
