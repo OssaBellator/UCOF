@@ -85,10 +85,7 @@ fuzz_target!(|data: &[u8]| {
                 | SpillRestartJournalPhase::PrivateNameRetired
         ));
         assert!(facts.destination_exists);
-        assert_eq!(
-            facts.destination_validation,
-            SpillRestartValidation::Valid
-        );
+        assert_eq!(facts.destination_validation, SpillRestartValidation::Valid);
     }
     if disposition == SpillRestartDisposition::RemoveInvalidOwnedStage {
         assert!(facts.staged_name_exists);
