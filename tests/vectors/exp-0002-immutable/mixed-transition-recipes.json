@@ -1,0 +1,73 @@
+{
+  "status": "non-normative independent mixed transition recipes",
+  "aggregate_sha256": "8470bdff6c3a12cc8a01382c61cb9fad35fc9656a82a33288f29c0f9807cb79b",
+  "vectors": [
+    {
+      "name": "persistent-mixed-stable-shape",
+      "base_object_count": 400,
+      "base_identifier_stride": 2,
+      "operations": [
+        {"operation": "delete", "object_id": 700},
+        {"operation": "put", "object_id": 701, "kind": 78, "payload_utf8": "inserted-701"},
+        {"operation": "put", "object_id": 702, "kind": 77, "payload_utf8": "replacement-702"}
+      ],
+      "decoded_bytes": 122486,
+      "sha256": "830bf109eb2eb2788eff0af42f0d4af46d93222837fac03269fa0327f63ba087",
+      "sequence": 1,
+      "root_level": 1,
+      "page_count": 4,
+      "object_count": 400,
+      "pages_written": 2,
+      "pages_reused": 2,
+      "payload_expectations": [
+        {"object_id": 700, "status": "missing"},
+        {"object_id": 701, "status": "active", "payload_utf8": "inserted-701"},
+        {"object_id": 702, "status": "active", "payload_utf8": "replacement-702"}
+      ]
+    },
+    {
+      "name": "persistent-mixed-root-collapse",
+      "base_object_count": 186,
+      "base_identifier_stride": 2,
+      "operations": [
+        {"operation": "delete", "object_id": 2},
+        {"operation": "put", "object_id": 4, "kind": 91, "payload_utf8": "replacement-four"}
+      ],
+      "decoded_bytes": 77033,
+      "sha256": "c2a953dba93805cd33e3ff2fac6d34c264d50baa83cea592edb64ed1e341a238",
+      "sequence": 1,
+      "root_level": 0,
+      "page_count": 1,
+      "object_count": 185,
+      "pages_written": 1,
+      "pages_reused": 0,
+      "payload_expectations": [
+        {"object_id": 2, "status": "missing"},
+        {"object_id": 4, "status": "active", "payload_utf8": "replacement-four"}
+      ]
+    },
+    {
+      "name": "persistent-mixed-root-growth",
+      "base_object_count": 185,
+      "base_identifier_stride": 2,
+      "operations": [
+        {"operation": "delete", "object_id": 2},
+        {"operation": "put", "object_id": 1, "kind": 11, "payload_utf8": "inserted-one"},
+        {"operation": "put", "object_id": 371, "kind": 12, "payload_utf8": "inserted-371"}
+      ],
+      "decoded_bytes": 77030,
+      "sha256": "cdc87a7e28c9922b67bdf52385bf8a96434037e05370b153574c61ed602703ff",
+      "sequence": 1,
+      "root_level": 1,
+      "page_count": 3,
+      "object_count": 186,
+      "pages_written": 3,
+      "pages_reused": 0,
+      "payload_expectations": [
+        {"object_id": 2, "status": "missing"},
+        {"object_id": 1, "status": "active", "payload_utf8": "inserted-one"},
+        {"object_id": 371, "status": "active", "payload_utf8": "inserted-371"}
+      ]
+    }
+  ]
+}
