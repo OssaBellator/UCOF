@@ -133,7 +133,10 @@ fuzz_target!(|data: &[u8]| {
     );
 
     let duplicate = objects
-        .get(data.get(6).map_or(0_usize, |byte| usize::from(*byte) % count))
+        .get(
+            data.get(6)
+                .map_or(0_usize, |byte| usize::from(*byte) % count),
+        )
         .expect("duplicate object")
         .clone();
     let mut duplicate_source = VersionedSource {
