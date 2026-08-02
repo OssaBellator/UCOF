@@ -46,6 +46,7 @@ mod source_api {
         include!("immutable_successor/source_history_to_sink.rs");
         include!("immutable_successor/source_history_selected_to_sink.rs");
         include!("immutable_successor/source_history_chain_to_sink.rs");
+        include!("immutable_successor/source_history_chain_owned_cap.rs");
     }
 
     pub use source_history_to_sink_api::*;
