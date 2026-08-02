@@ -74,7 +74,11 @@ fuzz_target!(|data: &[u8]| {
         0 => 2 * LEAF_MIN_OCCUPANCY,
         1 => LEAF_CAPACITY,
         2 => 400,
-        _ => 2 + data.get(1).map_or(31_usize, |byte| usize::from(*byte) % 220),
+        _ => {
+            2 + data
+                .get(1)
+                .map_or(31_usize, |byte| usize::from(*byte) % 220)
+        }
     };
     let format = ImmutableLimits {
         max_file_bytes: 64 * 1024 * 1024,
@@ -125,8 +129,8 @@ fuzz_target!(|data: &[u8]| {
         reads: 0,
         mutate_after_read: None,
     };
-    let plan = plan_persistent_mixed_tail_at(&mut source, &operations, limits)
-        .expect("source mixed plan");
+    let plan =
+        plan_persistent_mixed_tail_at(&mut source, &operations, limits).expect("source mixed plan");
     assert_eq!(plan.tail, owned.bytes[base.len()..]);
     assert_eq!(plan.report, owned.report);
     assert_eq!(plan.pages_written, owned.pages_written);
