@@ -63,7 +63,8 @@ jobs:
             immutable_successor_persistent_source_replacement \
             immutable_successor_persistent_source_insertion \
             immutable_successor_persistent_source_deletion \
-            immutable_successor_persistent_source_multi_put
+            immutable_successor_persistent_source_multi_put \
+            immutable_successor_persistent_source_mixed
           do
             if [[ "${{ github.event_name }}" == "schedule" ]]; then
               cargo fuzz run "$target" -- -max_total_time=30 -max_len=65536
