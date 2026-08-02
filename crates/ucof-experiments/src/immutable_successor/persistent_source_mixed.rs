@@ -337,7 +337,7 @@ fn plan_persistent_source_mixed_inner<S: ImmutableReadAt>(
         limits.format,
     )
     .map_err(mixed_writer_error)?;
-    let page_count = pages_written
+    let active_page_count = pages_written
         .checked_add(pages_reused)
         .ok_or_else(|| mixed_writer_error(ImmutableError::Limit("page count")))?;
     let publication = PersistentTailPublication {
@@ -351,11 +351,12 @@ fn plan_persistent_source_mixed_inner<S: ImmutableReadAt>(
         parent_snapshot_digest: strict.report.snapshot_digest,
         previous_footer_offset: u64::try_from(envelope.footer_offset)
             .map_err(|_| mixed_source_error(ImmutableSourceError::Limit("offset")))?,
-        page_count,
+        page_count: pages_written,
         object_count: locators.len(),
     };
-    let report = publish_persistent_tail(&mut tail, publication, limits.format)
+    let mut report = publish_persistent_tail(&mut tail, publication, limits.format)
         .map_err(mixed_writer_error)?;
+    report.page_count = active_page_count;
     persistent_tail_total_len(base_len, tail.len(), limits.format).map_err(mixed_writer_error)?;
 
     add_source_stats(&mut total_stats, reader.stats).map_err(mixed_source_error)?;
