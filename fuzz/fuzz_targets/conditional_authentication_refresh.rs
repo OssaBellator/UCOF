@@ -177,12 +177,21 @@ fuzz_target!(|data: &[u8]| {
         assert_eq!(exchange.calls, 1);
     }
     if refresher.calls == 1 {
-        assert_eq!(authentication, ConditionalAuthenticationPolicy::OneRefreshPermitted);
+        assert_eq!(
+            authentication,
+            ConditionalAuthenticationPolicy::OneRefreshPermitted
+        );
         assert_eq!(first, ResponseKind::Unauthorized);
-        assert_eq!(exchange.calls, 1 + usize::from(refresh_mode == RefreshMode::Success && cancel_at != Some(1)));
+        assert_eq!(
+            exchange.calls,
+            1 + usize::from(refresh_mode == RefreshMode::Success && cancel_at != Some(1))
+        );
     }
     if exchange.calls == 2 {
-        assert_eq!(authentication, ConditionalAuthenticationPolicy::OneRefreshPermitted);
+        assert_eq!(
+            authentication,
+            ConditionalAuthenticationPolicy::OneRefreshPermitted
+        );
         assert_eq!(first, ResponseKind::Unauthorized);
         assert_eq!(refresher.calls, 1);
         assert_eq!(refresh_mode, RefreshMode::Success);
