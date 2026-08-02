@@ -207,3 +207,10 @@ path = "fuzz_targets/conditional_wait_executor.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "conditional_authentication_refresh"
+path = "fuzz_targets/conditional_authentication_refresh.rs"
+test = false
+doc = false
+bench = false
