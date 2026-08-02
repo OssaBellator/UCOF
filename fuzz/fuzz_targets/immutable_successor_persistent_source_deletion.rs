@@ -67,7 +67,11 @@ fuzz_target!(|data: &[u8]| {
         1 => 400,
         2 => LEAF_CAPACITY + 2,
         3 => 2 * LEAF_MIN_OCCUPANCY,
-        _ => 2 + data.get(1).map_or(31_usize, |byte| usize::from(*byte) % 220),
+        _ => {
+            2 + data
+                .get(1)
+                .map_or(31_usize, |byte| usize::from(*byte) % 220)
+        }
     };
     let format = ImmutableLimits {
         max_file_bytes: 32 * 1024 * 1024,
@@ -75,12 +79,11 @@ fuzz_target!(|data: &[u8]| {
         ..ImmutableLimits::default()
     };
     let base = build_genesis(&objects(count), format).expect("canonical base");
-    let object_id = 1
-        + u64::try_from(
-            data.get(2)
-                .map_or(0_usize, |byte| usize::from(*byte) % count),
-        )
-        .expect("object id");
+    let object_id = 1 + u64::try_from(
+        data.get(2)
+            .map_or(0_usize, |byte| usize::from(*byte) % count),
+    )
+    .expect("object id");
     let owned = append_persistent_delete(&base, object_id, format).expect("owned deletion");
     let limits = ImmutableSourceLimits {
         format,
