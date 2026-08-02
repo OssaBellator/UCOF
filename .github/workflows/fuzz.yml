@@ -68,11 +68,18 @@ jobs:
           do
             echo "::group::Smoke fuzz target: $target"
             if [[ "${{ github.event_name }}" == "schedule" ]]; then
-              cargo fuzz run "$target" -- -max_total_time=30 -max_len=65536
+              if cargo fuzz run "$target" -- -max_total_time=30 -max_len=65536; then
+                status=0
+              else
+                status=$?
+              fi
             else
-              cargo fuzz run "$target" -- -runs=256 -max_len=65536
+              if cargo fuzz run "$target" -- -runs=256 -max_len=65536; then
+                status=0
+              else
+                status=$?
+              fi
             fi
-            status=$?
             echo "::endgroup::"
             if [[ $status -ne 0 ]]; then
               echo "::error title=Fuzz smoke failure::Target $target exited with status $status"
