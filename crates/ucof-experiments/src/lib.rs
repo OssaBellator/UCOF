@@ -25,6 +25,7 @@ pub mod immutable_successor;
 mod publication;
 mod recovery;
 mod repair;
+mod semantic_history_multi_plan;
 mod semantic_history_streaming_compaction;
 mod semantic_streaming_compaction;
 mod snapshots;
@@ -61,6 +62,11 @@ pub use recovery::{
     RecoveryScanReport, ScannedCandidate,
 };
 pub use repair::{CopyRange, RepairError, RepairLimits, RepairPlan};
+pub use semantic_history_multi_plan::{
+    plan_historical_semantic_selections, HistoricalSemanticSelectionEntry,
+    HistoricalSemanticSelectionError, HistoricalSemanticSelectionLimits,
+    HistoricalSemanticSelectionPlan, HistoricalSemanticSelectionRequest,
+};
 pub use semantic_history_streaming_compaction::{
     rewrite_compacted_versioned_history_sequence_to, ImmutableHistoricalSemanticStreamingError,
     ImmutableHistoricalSemanticStreamingOptions, ImmutableHistoricalSemanticStreamingReport,
