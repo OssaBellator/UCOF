@@ -49,15 +49,13 @@ impl PersistentVersionedReadAt for VersionedSource {
 }
 
 fn object(object_id: u64, seed: u8, payload_len: usize) -> ImmutableObjectInput {
-    ImmutableObjectInput::new(
-        object_id,
-        u16::from(seed % 31 + 1),
-        vec![seed; payload_len],
-    )
+    ImmutableObjectInput::new(object_id, u16::from(seed % 31 + 1), vec![seed; payload_len])
 }
 
 fuzz_target!(|data: &[u8]| {
-    let count = 1 + data.first().map_or(31_usize, |byte| usize::from(*byte) % 180);
+    let count = 1 + data
+        .first()
+        .map_or(31_usize, |byte| usize::from(*byte) % 180);
     let format = ImmutableLimits {
         max_file_bytes: 32 * 1024 * 1024,
         max_output_bytes: 32 * 1024 * 1024,
