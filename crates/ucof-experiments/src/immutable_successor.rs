@@ -37,6 +37,8 @@ mod source_api {
         use super::*;
 
         include!("immutable_successor/persistent_source_replacement.rs");
+        include!("immutable_successor/persistent_source_insertion.rs");
+        include!("immutable_successor/persistent_source_insertion_error.rs");
     }
 
     pub use persistent_source_replacement_api::*;
