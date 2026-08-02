@@ -52,7 +52,8 @@ mod source_api {
                     super::persistent_source_canonical_envelope(source, limits, expected)?;
                 let extra_limits = remaining_source_limits(limits, stats)?;
                 let mut reader = SourceReader::new(source, extra_limits)?;
-                let page = reader.read_vec(envelope.root.offset, PAGE_SIZE, "deletion root page")?;
+                let page =
+                    reader.read_vec(envelope.root.offset, PAGE_SIZE, "deletion root page")?;
                 reader.stats.bytes_hashed = reader
                     .stats
                     .bytes_hashed
