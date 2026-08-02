@@ -1,0 +1,154 @@
+{
+  "manifest_version": 11,
+  "updated": "2026-08-01",
+  "status": "research-draft",
+  "epoch_allocated": false,
+  "proposal_accepted": false,
+  "repository": "OssaBellator/UCOF",
+  "tracks": [
+    {
+      "id": "wire-policy",
+      "claims": [
+        {
+          "pull_requests": [17, 18],
+          "claim": "canonical half-full grouping and validation are deterministic for the current research geometry",
+          "evidence": ["rust", "python", "valid-vectors", "invalid-vectors", "fuzz", "boundary-tables"],
+          "open": ["FCP-0003 disposition", "128-bit identifier migration", "64-byte locator migration", "landing order"]
+        }
+      ]
+    },
+    {
+      "id": "persistent-writer",
+      "claims": [
+        {
+          "pull_requests": [21, 23, 27, 30, 34, 37],
+          "claim": "replacement, insertion, deletion, recursive repair, shared multi-Put, and canonical mixed batches have authenticated persistent byte paths with exact reuse accounting",
+          "evidence": ["rust", "fuzz", "root-growth", "root-collapse", "borrow", "merge", "recursive-repair", "page-reuse-accounting", "caller-order-determinism"],
+          "open": ["global minimality", "divergent-partition policy", "proposed-epoch migration"]
+        },
+        {
+          "pull_requests": [47, 54, 57, 58, 59, 60],
+          "claim": "all five current persistent modes emit byte-identical absolute-offset append tails through bounded sink writes behind one borrowed-payload dispatcher",
+          "evidence": ["owned-writer-equivalence", "base-tail-accounting", "bounded-write", "terminal-sink-failure", "replacement-streaming-fuzz", "insertion-streaming-fuzz", "deletion-streaming-fuzz", "multi-put-streaming-fuzz", "mixed-streaming-fuzz", "cross-mode-dispatch-fuzz", "sparse-replacement-regression"],
+          "open": ["bounded source-backed mutation planning"]
+        },
+        {
+          "pull_requests": [40, 50],
+          "claim": "mixed transitions and path-local rewrite comparisons have independent or separately structured evidence for stable-height, root-collapse, and root-growth behavior",
+          "evidence": ["independent-python", "strict-validation", "canonical-occupancy", "pinned-sha256", "pinned-aggregate", "path-local-comparison", "equal-partition-no-extra-write-fuzz"],
+          "open": ["complete proposed-epoch transition corpus", "external interoperability review", "global minimality policy"]
+        }
+      ]
+    },
+    {
+      "id": "source-and-output",
+      "claims": [
+        {
+          "pull_requests": [24, 32],
+          "claim": "selected verified history states can be reissued under cumulative source budgets and measured read/hash/allocation accounting",
+          "evidence": ["rust", "hostile-source-fuzz", "reproducible-csv"],
+          "open": ["remote-provider measurements", "extension and provenance policy"]
+        },
+        {
+          "pull_requests": [35, 36, 38, 39],
+          "claim": "canonical output can be emitted through bounded sinks from owned, strongly versioned, strictly validated active-file, and caller-selected active-file payload sources",
+          "evidence": ["rust", "byte-equivalence", "bounded-read", "bounded-write", "version-change-failure", "tamper-before-output", "inactive-payload-skip", "selected-payload-skip", "dedicated-fuzz"],
+          "open": ["maintained provider integration", "staged-publication composition"]
+        },
+        {
+          "pull_requests": [42, 43, 44, 45, 55],
+          "claim": "one non-ABA versioned bounded source can be strictly inventoried and streamed for the latest state, one exact linked-history sequence, one reachable subset, or multiple selected states reissued chronologically",
+          "evidence": ["rust", "strict-report-equivalence", "authenticated-descriptors", "linked-history-validation", "exact-prefix-selection", "graph-plan-before-source", "cumulative-budget-preflight", "per-object-version-checks", "digest-equality", "mid-stream-version-failure", "source-to-sink-fuzz", "selected-history-chain-fuzz"],
+          "open": ["maintained provider adapter", "constant-memory multi-commit output", "per-snapshot semantic selection", "provider retry and authentication integration", "staged-publication composition"]
+        },
+        {
+          "pull_requests": [61],
+          "claim": "an independently identified immutable base can be copied in bounded two-pass reads and combined with a preconstructed tail without retaining the complete base; identity mismatch fails before output and copy-phase mutation withholds the tail",
+          "evidence": ["rust", "whole-file-length-and-sha256", "two-pass-budget-preflight", "bounded-read", "bounded-write", "real-successor-equivalence", "wrong-identity-no-output", "copy-mutation-tail-withholding", "source-copy-fuzz"],
+          "open": ["source-backed mutation planning", "strong provider integration"]
+        },
+        {
+          "pull_requests": [62],
+          "claim": "one strong non-ABA token brackets every source length and range operation while the bounded two-pass identity and tail-withholding rules remain intact",
+          "evidence": ["rust", "pre-and-post-version-checks", "changed-range-not-forwarded", "preflight-change-no-output", "copy-change-exact-prefix", "version-service-error", "versioned-source-copy-fuzz"],
+          "open": ["maintained provider adapter", "token-strength qualification"]
+        },
+        {
+          "pull_requests": [63],
+          "claim": "version-bound base and tail bytes remain private until complete staged validation and synchronization; publication distinguishes destination-exists, indeterminate, and durable outcomes, and cleanup failure cannot downgrade durability",
+          "evidence": ["rust", "complete-staged-length-and-sha256", "private-file-sync", "no-overwrite-outcomes", "parent-sync-durability", "cleanup-non-downgrade", "source-version-abort", "staged-publication-fuzz"],
+          "open": ["concrete secure backend qualification", "authenticated journal", "encryption", "power-loss and platform qualification"]
+        },
+        {
+          "pull_requests": [64],
+          "claim": "the staged-publication contract has a concrete Unix research backend with exclusive private files, owner/link-count/mode/content validation, hard-link no-overwrite publication, and destination and staging directory synchronization",
+          "evidence": ["rust", "exclusive-mode-0600-file", "symlink-refusal", "same-filesystem-check", "owner-and-link-count-validation", "sha256-validation", "hard-link-no-overwrite", "directory-sync", "version-change-cleanup"],
+          "open": ["descriptor-relative path handling", "effective-user policy", "authenticated journal", "encryption", "physical power-loss", "network-filesystem policy", "non-Unix platforms"]
+        }
+      ]
+    },
+    {
+      "id": "transport",
+      "claims": [
+        {
+          "pull_requests": [19, 25, 31, 51, 56],
+          "claim": "metadata and range attempts share one bounded budget; HTTP-style responses are classified fail-closed; retry delays are capped, server-minimum-aware, deadline-aware, jitter-bounded, and executable through cooperative cancellation checks",
+          "evidence": ["rust", "independent-retry-traces", "independent-http-traces", "pinned-aggregates", "status-allowlist", "version-terminal", "protocol-terminal", "bounded-jitter", "cooperative-wait", "wait-fuzz"],
+          "open": ["maintained provider adapter", "jitter distribution and seed policy", "authentication refresh execution", "native async cancellation", "production timer/runtime qualification"]
+        }
+      ]
+    },
+    {
+      "id": "spill-publication",
+      "claims": [
+        {
+          "pull_requests": [20, 26, 29, 33, 53, 63, 64],
+          "claim": "publication distinguishes not-published, indeterminate, and durable outcomes, integrates version-bound persistent output with private staging and a Unix hard-link backend, and is conservatively classifiable after restart only with authenticated ownership-bound journal authority",
+          "evidence": ["rust-model", "independent-transition-traces", "unix-filesystem-tests", "integrated-private-staging", "complete-artifact-validation", "staged-publication-fuzz", "authority-boundary-fault-injection", "fresh-process-tests", "independent-restart-traces", "restart-fuzz"],
+          "open": ["authenticated durable journal implementation", "descriptor-relative hardening", "effective-user ownership", "encryption", "physical power-loss", "network-filesystem policy", "platform qualification"]
+        }
+      ]
+    },
+    {
+      "id": "semantic-compaction",
+      "claims": [
+        {
+          "pull_requests": [22, 28, 48],
+          "claim": "graph retention policy, one canonical reference-list dependency profile, and exact profile-defined rewrite bytes are independently reproducible",
+          "evidence": ["rust", "independent-python", "pinned-graph-aggregate", "malformed-corpus", "profile-payload-codec", "canonical-root-order", "profile-rewrite-byte-equivalence", "pinned-rewrite-sha256", "pinned-rewrite-aggregate", "payload-semantics"],
+          "open": ["application-profile adoption", "root-selection authority", "extension preservation", "provenance and signature reissuance"]
+        },
+        {
+          "pull_requests": [39, 41, 45],
+          "claim": "bounded dependency closure can feed selected authenticated streaming for the active file or one exact historical prefix so only reachable payloads are reread and emitted",
+          "evidence": ["rust", "byte-equivalence", "reachable-orphan-accounting", "bounded-read", "bounded-write", "fail-before-source", "fail-before-output", "semantic-streaming-fuzz", "historical-semantic-fuzz"],
+          "open": ["normative profile adoption", "large-graph spill", "semantic selection independently per retained snapshot", "extension preservation", "provenance and signature reissuance"]
+        }
+      ]
+    }
+  ],
+  "required_external_findings": [
+    "wire field ambiguity",
+    "non-canonical writer output",
+    "validator acceptance divergence",
+    "unbounded allocation or work",
+    "false recovery or publication authority",
+    "page reuse without byte equality",
+    "source version ABA or mixed-view acceptance",
+    "retry of terminal version or protocol failure",
+    "spill confidentiality or cleanup failure",
+    "semantic dependency omission",
+    "freshness rollback or same-sequence fork acceptance"
+  ],
+  "completion_requires": [
+    "accepted proposal",
+    "complete independent parser or external review",
+    "all blocker and high findings dispositioned",
+    "complete proposed-epoch cross-language vectors",
+    "production spill qualification",
+    "maintained transport adapters",
+    "descriptor-relative encrypted authenticated publication with power-loss qualification",
+    "explicit freshness authorization guidance",
+    "Candidate 1 disposition"
+  ]
+}
