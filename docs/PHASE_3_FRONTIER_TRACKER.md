@@ -1,136 +1,185 @@
 # Phase 3 Frontier Tracker
 
-**Updated:** 2026-08-02  
-**Purpose:** Keep verified implementation evidence, work still under verification, proposed policy, and external or production gates separate.
+**Updated:** 2026-08-02 18:54 Australia/Melbourne  
+**Purpose:** Separate repository-verified research evidence from review, policy, integration, external, and production gates.
 
 ## Evidence boundary
 
-This tracker records only repository evidence. A green research branch does not allocate an epoch, accept FCP-0003, establish provider or filesystem behavior, adopt an application profile, qualify production use, or substitute for independent review.
+This tracker records repository evidence only. A green research branch does not allocate an epoch, accept FCP-0003, establish maintained-provider behavior, qualify filesystem durability, adopt an application dependency profile, or replace independent review.
 
-The Phase 3 work remains a set of stacked draft pull requests. Preserve each pull request's existing base and review boundary; do not flatten independent frontiers into one branch merely because they share research code.
+Preserve every pull request's current base and review boundary. Independent frontiers may share ancestors without being flattened into one branch.
 
-## Verified tip snapshot
+## Verified frontier snapshot
 
-The following heads and workflow states were rechecked remotely on 2026-08-02:
+The following heads were checked remotely on 2026-08-02. Each listed implementation pull request is open, mergeable, ready for review, and green across its applicable Rust, Phase 3 integration, Phase 3 evidence, immutable-successor vector, and Fuzz workflows.
 
-| Frontier | Pull request | Verified head | Current workflow evidence |
+| Frontier | Pull request | Verified head | Repository evidence |
 |---|---:|---|---|
-| Source-backed persistent planning | #69 | `ebae3b7278fb2d164c63caef02edb5b1462c08ed` | Predecessor #68 is recorded green. At #69 head `2dec728d948c9072c90a383c5b58d3de418278dc`, Rust, immutable-successor vector, Phase 3 evidence, and Phase 3 integration passed while Fuzz failed. The current head retains per-target logs and crash artifacts; run `30739267128` is the next diagnostic gate. |
-| Retry and cooperative waits | #56 | `335ebcc27bdb558b1b92fc140d370d7263d41d56` | Current workflow matrix green. |
-| Private staging and Unix publication | #64 | `dff2b826ad34b94d76ddc845d95d241f118a932e` | Current workflow matrix green. |
-| Version-bound selected history output | #55 | `a14f914d4f19757d58ac2056ebac215caf41c449` | Current workflow matrix green. |
-| Dependency-aware semantic streaming | #45 | `2212a949347db6cde58b526fc85ffae68226a0b5` | Current workflow matrix green. |
-| Proposal and convergence packet | #8 | `f618569b4ecc0eff7e60def039aeef396d8a37ba` | Current workflow matrix green before this tracker refresh. |
+| Source-backed canonical mixed planning | #69 | `48d8d110d7105d8e4c92c56ed6af6c9247f27f3f` | Full matrix green. Hostile smoke fuzzing exposed three minimized defects; all have deterministic fixes or regressions. PR #68 predecessor is recorded green at `090fa2b1ffbdd2b437f6c1a6b7ff357243ba5dc8`. |
+| Conditional authentication refresh execution | #71 | `b510f89ea2f8840692579513181e96a52e5e6f34` | Full matrix green. Executes at most one explicitly authorized refresh and one replay above PR #56. |
+| Unix publication directory identity pinning | #72 | `0d0ad79b9f9c3c471d7ef8006e67d54652724a18` | Full matrix green. Detects staging or destination-parent replacement during one path-based publication lifecycle above PR #64. |
+| Selected-history owned-output cap | #73 | `c13f5d8e5d81f8e665269137db908d3622e47cab` | Full matrix green. Adds a caller-selected cap while preserving fail-before-output semantics above PR #55. |
+| Per-state historical semantic selection planning | #74 | `c7c37bfb6588f7b1911a3e5d49daf66d40edbad0` | Full matrix green. Plans each retained state's graph and roots independently above PR #45. |
+| Proposal and convergence packet | #8 | `8fc542dbb8e27af42d4c32e3786d9d1b9901a797` before this refresh | Prior matrix green; this tracker refresh is the next convergence commit. |
 
-A green tip establishes only the checks encoded on that branch. It does not close the remaining qualification, integration, policy, or external-review gate listed below.
+A green tip establishes only the checks encoded on that branch. Review, stack order, maintained integration, external interoperability, and production qualification remain separate.
 
-## Current implementation frontiers
+## Established Phase 3 evidence
 
-| Frontier | PRs | Current repository evidence | Remaining gate |
-|---|---:|---|---|
-| Canonical occupancy | #17, #18 | Deterministic grouping, strict validation, independent construction, boundary tables, and regenerated identities | FCP disposition and migration to the proposed identifier/locator geometry |
-| Owned persistent writing | #21, #23, #27, #30, #34, #37 | Replacement, insertion, deletion, recursive repair, shared multi-`Put`, canonical mixed updates, exact page identity, and reuse accounting | Proposed-epoch migration and global minimality policy |
-| Complete append-tail writer stack | #47, #54, #57, #58, #59, #60 | Byte-identical bounded base-plus-tail output for all five current mutation modes behind one borrowed-payload dispatcher | Composition with source-backed planners, maintained adapters, and publication |
-| Bounded and version-bound base copying | #61, #62 | Two-pass whole-file identity verification, cumulative budgets, bounded I/O, tail withholding, and strong non-ABA checks around every source operation | Maintained provider adapters and proof that provider tokens satisfy the non-ABA contract |
-| Source-backed persistent planning | #65, #66, #67, #68, #69 | #65–#68 are recorded green for replacement, insertion, deletion, and shared insertion/replacement planning. #69 adds canonical mixed deletion-plus-other-operation planning. Its non-fuzz matrix passed at `2dec728d948c9072c90a383c5b58d3de418278dc`; repeated fuzz smoke failures are now instrumented at head `ebae3b7278fb2d164c63caef02edb5b1462c08ed` with retained per-target logs and artifacts | Inspect run `30739267128`, minimize any retained failure, and complete hostile mixed-source fuzzing; then compose planning with private staged publication. The planners retain bounded active metadata and do not claim constant memory or minimal source traffic |
-| Private staging and Unix publication | #63, #64 | Complete staged validation, private-file sync, explicit no-overwrite outcomes, directory durability, non-downgrading cleanup, and a concrete Unix hard-link backend | Descriptor-relative hardening, authenticated journal, encryption, power-loss/NFS policy, and platform qualification |
-| Independent mixed transition evidence | #40 | Clean-room regeneration of stable-height, root-collapse, and root-growth transitions with pinned identities | Complete proposed-epoch transition corpus and external interoperability review |
-| Bounded canonical output | #35, #36 | Canonical genesis output through bounded sinks from owned and strongly versioned payload sources | Maintained provider integration and staged publication composition |
-| Active and selected rewrites | #38, #39 | Strict active-file validation, borrowed authenticated ranges, inactive-history skipping, selected output, and exact read accounting | Maintained provider integration and staged publication composition |
-| Dependency profile and exact rewrite bytes | #22, #28, #48 | Bounded graph policy, canonical reference-list coding, malformed-corpus rejection, canonical traversal, and exact Rust/Python identities | Application-profile adoption, root authority, and preservation policy |
-| Dependency-aware semantic streaming | #41, #45 | Selected authenticated streaming for active or exact historical states with bounded dependency closure and exact accounting | Large-graph spill, per-retained-snapshot semantic selection, and provenance/extension policy |
-| Versioned source inventory and history output | #42, #43, #44, #45, #55 | Latest-state, exact-sequence, dependency-selected historical, and chronological multi-selected-state output under one non-ABA version and cumulative budget | Constant-memory multi-commit output, retry/auth integration, maintained adapters, and staged publication |
-| Source history and measurements | #14, #24, #32 | Bounded strict/history/recovery/rewrite APIs, selected historical reissuance, hostile-source fuzzing, and reproducible counters | Real provider measurements and provenance/signature/extension policy |
-| Retry, HTTP classification, waits, and freshness | #5, #19, #25, #31, #51, #56 | Strong-version operation binding, operation-wide retry budgets, independent traces, fail-closed HTTP classification, bounded jitter planning, cooperative waits, and freshness guidance | Maintained adapters, authentication-refresh execution, native async cancellation, and durable checkpoint stores |
-| Spill publication and restart | #20, #26, #29, #33, #53, #63, #64 | Publication authority model, independent traces, Unix no-overwrite publication, integrated private staging, directory synchronization, fault injection, and conservative authenticated restart classification | Authenticated journal, encryption, descriptor-relative hardening, power-loss/NFS policy, and platform qualification |
-| Proposal and external review packet | #8 | Draft FCP, Candidate 1 disposition, production spill requirements, freshness authorization, review manifest, verified tip snapshot, and this tracker | Maintainer decisions, selected landing order, and external review findings |
+The current repository evidence includes:
 
-## Stack map
+- deterministic canonical occupancy, strict validation, regenerated identities, and boundary tables;
+- owned persistent replacement, insertion, deletion, split, borrow, redistribution, merge, recursive underflow, root growth/collapse, shared multi-`Put`, and canonical mixed mutation;
+- bounded base-plus-tail streaming for all current persistent mutation modes;
+- strong non-ABA source binding, cumulative source budgets, whole-file identity verification, and bounded source copying;
+- source-backed replacement, insertion, deletion, shared multi-`Put`, and canonical mixed tail planning;
+- private staged validation, synchronization, no-replace publication outcomes, parent durability, conservative cleanup, and a Unix research backend;
+- strict/history/recovery/rewrite APIs for slices and bounded sources, exact sequence selection, and chronological selected-history reissuance;
+- fail-closed HTTP-style classification, operation-wide retry accounting, bounded jitter planning, cooperative waits, and one explicitly authorized authentication refresh;
+- dependency-selected active and historical output, independent exact-byte policy evidence, and per-state semantic selection planning;
+- independent transition oracles, hostile source/fuzz evidence, reproducible accounting, and proposal review material.
 
-- PRs #5–#8 share PR #4 as their early review baseline.
-- Owned writer and append-tail chain: #7 → #15 → #17 → #21 → #23 → #27 → #30 → #34 → #37 → #47 → #54 → #57 → #58 → #59 → #60.
-- Base-copy and publication branch: #60 → #61 → #62 → #63 → #64.
-- Source-backed mutation-planning branch: #62 → #65 → #66 → #67 → #68 → #69.
-- Output/source/history chain: #23 → #35 → #36 → #38 → #39 → #41 → #42 → #43 → #44 → #45 → #55.
-- Source/history measurement chain: #6 → #14 → #24 → #32.
-- Semantic-policy chain: #6 → #22 → #28 → #48.
-- Retry chain: #5 → #19 → #25 → #31 → #51 → #56.
-- Spill/restart chain: #8 → #20 → #26 → #29 → #33 → #53; persistent output joins through #63 and #64.
-- Independent writer comparison and transition evidence remain in #40 and #50.
-- Occupancy policy #18 is refreshed on #8. Descendant evidence remains draft until landing order and policy disposition are selected.
+## Current frontier status
 
-## Frontier status
+### 1. Source-backed persistent planning
 
-### 1. Successor epoch and normative policy
+**Advanced**
 
-**Advanced:** FCP-0003 proposes immutable pages, opaque identifiers, compact authenticated locators, fixed geometry, canonical occupancy, deterministic split/deletion behavior, and batch semantics. Current executable Rust/Python evidence tests those policy ideas against the existing research layout.
+PR #69 completes the current source-backed mutation-planning modes with canonical deletion-plus-other-operation planning. It preserves exact owned-writer tail bytes, reports, current-page accounting, active-tree page accounting, and authenticated page reuse while retaining bounded decoded locator/page metadata rather than the complete base file.
 
-**Open:** The executable layout still differs from the proposed identifier and locator widths. Epoch allocation, occupancy landing order, migration and transition vectors, Candidate 1 disposition, and every material proposal objection require maintainer action. Green experiments are not proposal acceptance.
+The retained fuzz diagnostics minimized and resolved three findings:
 
-### 2. Persistent writers and source-backed planning
+1. `immutable_successor_persistent_batch`, `[10, 65]` (`CkE=`): a stale harness expected full rebuild instead of the established copy-on-write insertion batch mode.
+2. `immutable_successor_persistent_mixed_streaming`, `[249, 245, 202]` (`+fXK`): streaming publication used complete active-tree pages for footer `page_count_current`.
+3. `immutable_successor_persistent_source_mixed`, `[10]` (`Cg==`): source planning repeated that footer/report conflation.
 
-**Advanced:** The owned writer paths cover replacement, insertion, deletion, split, borrow, redistribution, merge, recursive underflow, root growth/collapse, shared multi-`Put`, and canonical mixed batches. Exact reuse requires byte-identical locator or child-reference page bodies.
+The contract is now explicit: footer `page_count_current` counts pages written in the current commit; `ImmutableReport.page_count` counts the complete active tree, including reused pages.
 
-PRs #47, #54, #57, #58, and #59 construct absolute-offset append tails for every current persistent mode. PR #60 dispatches those modes without cloning multi-`Put` payloads. PRs #61 and #62 add bounded two-pass source copying and strong non-ABA source-version checks.
+**Open**
 
-The source-planning stack now extends beyond replacement-only planning:
+- compose verified source plans with private staged publication without collapsing the #62→#65→#69 and #62→#63→#64 review branches prematurely;
+- retain version, budget, destination-visibility, and durability boundaries across that composition;
+- add maintained provider adapters and prove their version tokens satisfy the non-ABA contract;
+- source planning still performs complete strict validation and whole-file identity passes and retains active metadata, so it does not claim constant memory or minimal source traffic;
+- proposed-epoch migration and global rewrite-minimality policy remain separate.
 
-- #65 plans replacement tails from a strongly versioned bounded source;
-- #66 adds insertion and split/root-growth planning;
-- #67 adds deterministic deletion repair and root collapse;
-- #68 adds shared insertion/replacement multi-`Put` planning and is recorded green at `090fa2b1ffbdd2b437f6c1a6b7ff357243ba5dc8`;
-- #69 adds canonical mixed deletion-plus-other-operation planning and exact owned-writer equivalence.
+### 2. Transport, retry, and authentication
 
-**Open:** #69's non-fuzz matrix passed at `2dec728d948c9072c90a383c5b58d3de418278dc`, but Fuzz failed after formatting and compilation passed. Commits through `ebae3b7278fb2d164c63caef02edb5b1462c08ed` add behavior-preserving per-target logs, a step summary, and retained crash artifacts so the next failure can be diagnosed without guessing. Inspect run `30739267128` before changing implementation. Source planning still performs complete strict validation and whole-file identity passes and retains decoded active locator/page metadata; it does not claim constant memory or minimal source traffic. The next integration layer should combine a verified source plan with #63/#64 private staging without weakening version, budget, destination-visibility, or durability boundaries. Proposed-epoch migration and global rewrite minimality remain separate.
+**Advanced**
+
+PR #56 provides cooperative wait execution around the existing strong-version, retry-budget, HTTP-classification, and jitter-planning evidence. PR #71 adds an adapter-neutral state machine that:
+
+- invokes an application-owned refresher only after an explicitly authorized 401 classification;
+- permits at most one refresh and one replay;
+- classifies a second 401 terminally;
+- checks cancellation and the monotonic deadline around every exchange and refresh call;
+- returns transport and refresh failures directly without hidden retries or backoff.
+
+**Open**
+
+- maintained HTTP/cloud adapters and provider-specific request, response-body, redirect, and authentication rules;
+- credential acquisition, redaction, refresh synchronization, and production credential-runtime qualification;
+- native asynchronous cancellation and runtime integration;
+- durable checkpoint stores and application freshness authorization;
+- realistic latency, billing, cache, and concurrency measurements.
 
 ### 3. Publication durability
 
-**Advanced:** #63 composes version-bound copying with private staging, complete staged length/SHA-256 validation, private synchronization, explicit no-overwrite outcomes, parent synchronization, retained private state for indeterminate outcomes, and cleanup that cannot downgrade durable success. #64 implements that contract as a path-based Unix research backend using private mode-0600 files, owner/link-count checks, hard-link publication, and destination/staging directory synchronization. The current #64 workflow matrix is green at `dff2b826ad34b94d76ddc845d95d241f118a932e`.
+**Advanced**
 
-**Open:** The Unix backend is path-based and plaintext. Production-oriented work still needs descriptor-relative secure handles, effective-user and namespace policy, an authenticated durable journal, encryption and nonce management, physical power-loss evidence, network-filesystem policy, and supported-platform qualification. Do not treat successful research filesystem tests as production durability qualification.
+PRs #63 and #64 provide private staging, complete staged validation, private synchronization, explicit no-overwrite outcomes, destination-parent synchronization, non-downgrading cleanup, and a concrete Unix hard-link backend.
 
-### 4. Source history, rewrite, and transport
+PR #72 records staging and destination-parent `(device, inode)` identities after private staging begins and fails closed if either observed path resolves to a different directory before a later path-dependent operation. Tests cover stable delegation, staging-directory replacement, and destination-parent replacement.
 
-**Advanced:** Strict validation, lookup, linked-history enumeration, report-only recovery, rewrite-all, selected rewrite, selected historical retention, and reproducible accounting exist for slices and bounded sources. #42–#45 bind inventories and selected output to one non-ABA version. #55 reissues multiple selected linked-history states chronologically under one version and cumulative budget; its current workflow matrix is green at `a14f914d4f19757d58ac2056ebac215caf41c449`.
+**Open**
 
-#51 classifies HTTP-style metadata and conditional ranges fail-closed. #56 executes accepted retry delays with bounded caller-supplied jitter and cooperative cancellation/deadline checks around each wait chunk; its current workflow matrix is green at `335ebcc27bdb558b1b92fc140d370d7263d41d56`.
+- the wrapper remains path-based; identity checks and following filesystem operations are separate syscalls and can race;
+- descriptor-relative secure handles and `openat`/`linkat`-style resolution;
+- effective-user, namespace, symlink, mount, and supported-platform policy;
+- authenticated durable journal, encryption and nonce management;
+- physical power-loss evidence and network-filesystem policy;
+- production durability qualification.
 
-**Open:** #55 owns the complete output history before sink copying. Add constant-memory multi-commit output and semantic selection independently for each retained state. Add maintained HTTP/cloud adapters, provider-specific request/body rules, single-use authentication refresh execution, native asynchronous cancellation, staged publication composition, and realistic latency/billing/cache/concurrency measurements.
+### 4. Versioned history output
 
-### 5. Repair and semantic compaction
+**Advanced**
 
-**Advanced:** Generic dependency traversal bounds node, edge, and depth work. One reference-list profile has Rust and independent Python codecs; #48 binds it to exact cross-language rewrite recipes. #41 composes dependency closure with selected authenticated active-file streaming, and #45 extends it to an authenticated historical prefix. The current #45 workflow matrix is green at `2212a949347db6cde58b526fc85ffae68226a0b5`.
+PR #55 reissues multiple selected linked-history states chronologically under one strong source version and cumulative budget, with complete preflight before bounded sink writes.
 
-**Open:** Obtain application-profile adoption and root-selection authority. Define extension preservation, provenance/signature reissuance, large-graph spill, and semantic selection independently for every retained history state. Caller-supplied dependency graphs are not a normative application contract.
+PR #73 adds an explicit caller-selected cap for the complete owned output. An exact cap preserves canonical bytes, retained source/output mappings, source statistics, version binding, and sink request bounds. An undersized cap fails before the first sink byte.
 
-### 6. Vectors and fuzzing
+**Open**
 
-**Advanced:** Existing evidence covers strict/recovery/history/source/rewrite paths; occupancy; owned persistent mutation modes; all five append-tail writers and dispatch; source-backed replacement, insertion, deletion, and multi-`Put`; unversioned and strong-version base copying; private staging/publication; semantic compaction; retry and HTTP classification; cooperative waits; spill transitions/restart; and versioned historical output. #40 and #48 provide independent byte or policy oracles.
+- the complete reissued output chain is still owned before sink copying; the cap bounds that allocation but does not make it constant-memory;
+- construct and validate chronological commit tails incrementally without retaining the complete output chain;
+- integrate retry/authentication, maintained adapters, and private staged publication;
+- preserve or explicitly reissue provenance, extensions, signatures, and historical policy.
 
-**In verification:** #69's mixed-source target is a distinct gate because it combines canonical operation ordering, deletion repair, insertion/replacement records, exact page reuse, root collapse/growth, source mutation, and cumulative budgets. Fuzz run `30739105920` failed after compilation but the connector did not expose its decoded target log. Head `ebae3b7278fb2d164c63caef02edb5b1462c08ed` retains the exact per-target logs and generated artifacts on failure; inspect run `30739267128` and patch only a reproduced code or harness defect.
+### 5. Semantic compaction and retained states
 
-**Open:** Produce the complete cross-language corpus for selected epoch geometry, maintained-provider traces, authenticated journal and physical power-loss corpora, descriptor-relative filesystem tests, and hostile maintained-adapter traces.
+**Advanced**
 
-### 7. Independent review and freshness
+PR #45 streams dependency-selected active objects from one exact historical state under one strong source version. PR #74 adds a bounded graph-only plan for multiple retained states:
 
-**Advanced:** The review packet maps wire, writer, source/output, transport, spill, and semantic claims to evidence and open gates. Trusted checkpoint comparison distinguishes unpinned integrity, current state, authorized advance, rollback, and same-sequence fork.
+- requests are canonicalized chronologically;
+- duplicate sequences are rejected;
+- every sequence supplies its own graph and trusted roots;
+- closure, orphan set, edge count, and maximum depth are computed independently per state;
+- a cumulative reachable-object bound covers the aggregate plan.
 
-**Open:** Obtain a separately maintained parser/writer review or assigned external reviewers. Disposition every blocker and high-severity finding. Integrate freshness guidance into applications, durable checkpoint stores, and concrete adapters.
+**Open**
 
-### 8. Candidate 1 disposition
+- compose per-state plans with source-history membership, object-presence validation, and multi-state output;
+- adopt a normative application dependency profile and root-selection authority;
+- define extension preservation, provenance/signature reissuance, and missing-profile behavior;
+- add large-graph spill and bounded durable planning;
+- caller-supplied graphs remain research inputs, not a normative application contract.
 
-**Advanced:** The disposition draft recommends superseding Candidate 1 as the reusable-page baseline while retaining it as executable negative/security evidence.
+### 6. Proposal and external review
 
-**Open:** A maintainer must decide and explicitly transfer every material FCP-0002 objection into FCP-0003, rejected alternatives, or named later work.
+**Advanced**
+
+The proposal packet records FCP-0003, Candidate 1 disposition material, occupancy evidence, production spill requirements, freshness authorization, review manifests, stack topology, and verified frontier tips.
+
+**Open**
+
+- maintainer decisions on epoch allocation, occupancy landing order, selected stack order, migration, and Candidate 1 disposition;
+- disposition of every material proposal objection;
+- a separately maintained parser/writer implementation or assigned external reviewers;
+- complete cross-language valid, invalid, and transition vectors for the selected epoch;
+- external interoperability findings and high-severity review closure.
+
+## Stack map
+
+- Source-backed mutation planning: #62 → #65 → #66 → #67 → #68 → #69.
+- Base-copy/publication: #60 → #61 → #62 → #63 → #64 → #72.
+- Retry/transport: #5 → #19 → #25 → #31 → #51 → #56 → #71.
+- Source/output/history: #23 → #35 → #36 → #38 → #39 → #41 → #42 → #43 → #44 → #45 → #55 → #73.
+- Historical semantic child: #45 → #74.
+- Semantic-policy evidence: #6 → #22 → #28 → #48.
+- Spill/restart evidence: #8 → #20 → #26 → #29 → #33 → #53; persistent publication joins through #63, #64, and #72.
+- Independent transition and writer evidence remain in #40 and #50.
+- Proposal convergence remains on #8; it records evidence but does not merge implementation stacks.
+
+## Review and landing constraints
+
+1. Keep #69, #71, #72, #73, and #74 on their current bases during review.
+2. Do not infer that ready-for-review means ready to merge out of stack order.
+3. Do not combine source planning and publication until their independent review boundaries are preserved and the composition contract is explicit.
+4. Do not describe #73 as constant-memory history output.
+5. Do not describe #72 as descriptor-relative or race-free filesystem hardening.
+6. Do not describe #74 as source-validated multi-state semantic output or an adopted application profile.
+7. Green experiments do not allocate an epoch or accept FCP-0003.
 
 ## Current execution order
 
-1. Inspect PR #69 Fuzz run `30739267128`; download the retained diagnostic artifact on failure and patch only a minimized, reproduced code or harness defect.
-2. Compose the proven source-planning result with private staging/publication without collapsing the #62→#65→#69 and #62→#63→#64 review branches prematurely.
-3. Advance the transport frontier with a maintained adapter or a clearly scoped adapter-neutral execution layer, not additional policy-only classification.
-4. Advance history/compaction with constant-memory multi-commit output and per-retained-state semantic selection while preserving fail-before-output behavior.
-5. Advance publication with descriptor-relative and authenticated-journal evidence before making stronger durability claims.
-6. Keep proposal convergence synchronized with verified PR heads and preserve all external/maintainer gates.
+1. Obtain review and stack-order decisions for green PRs #69 and #71–#74.
+2. Add a dedicated composition layer joining a verified source-backed plan to private staged publication while preserving source-version, budget, preflight, no-replace, and durability semantics.
+3. Advance selected-history output from a bounded complete allocation to incremental chronological tail construction with fail-before-publication behavior.
+4. Compose per-state semantic plans with source-history validation and multi-state output without reusing one global closure.
+5. Advance Unix publication from path-identity detection to descriptor-relative secure handles and authenticated restart evidence.
+6. Add a maintained transport adapter and durable freshness/checkpoint integration without weakening the green adapter-neutral contracts.
+7. Keep this tracker synchronized with every verified head, blocker, review decision, and assurance-boundary change.
 
 ## Phase 3 completion rule
 
@@ -143,9 +192,9 @@ Phase 3 remains incomplete until one selected experimental layout has:
 - adopted semantic dependency and preservation contracts;
 - complete cross-language valid, invalid, and transition vectors for the selected epoch;
 - hostile source, operation, transport, and filesystem evidence;
-- realistic range-I/O measurements;
+- realistic range-I/O and maintained-provider measurements;
 - independent implementation or external review;
 - explicit freshness authorization and durable checkpoint guidance;
 - maintainer disposition of Candidate 1 and proposal objections.
 
-Technical success in one branch does not allocate an epoch, accept an FCP, close a provider or production gate, or supersede external review.
+Technical success in any one branch does not allocate an epoch, accept an FCP, close a provider or production gate, or supersede independent review.
