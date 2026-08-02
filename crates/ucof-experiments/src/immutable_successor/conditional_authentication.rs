@@ -1,5 +1,3 @@
-use std::collections::VecDeque;
-
 /// Adapter-neutral execution contract for one HTTP-style conditional request.
 pub trait ConditionalHttpExchange {
     fn exchange(
@@ -93,6 +91,7 @@ where
 #[cfg(test)]
 mod conditional_authentication_tests {
     use super::*;
+    use std::collections::VecDeque;
 
     struct SequenceExchange {
         responses: VecDeque<Result<ConditionalHttpResponseHead, ConditionalSourceError>>,
