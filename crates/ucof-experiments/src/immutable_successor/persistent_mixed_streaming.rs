@@ -375,7 +375,7 @@ fn build_persistent_mixed_tail(
         &originals,
         limits,
     )?;
-    let page_count = pages_written
+    let active_page_count = pages_written
         .checked_add(pages_reused)
         .ok_or(ImmutableError::Limit("page count"))?;
     let publication = PersistentTailPublication {
@@ -388,10 +388,11 @@ fn build_persistent_mixed_tail(
         root: next_root,
         parent_snapshot_digest: previous.public.snapshot_digest,
         previous_footer_offset: u64_from_usize(previous.footer_offset)?,
-        page_count,
+        page_count: pages_written,
         object_count: locators.len(),
     };
-    let report = publish_persistent_tail(&mut tail, publication, limits)?;
+    let mut report = publish_persistent_tail(&mut tail, publication, limits)?;
+    report.page_count = active_page_count;
     Ok(PersistentMixedTail {
         bytes: tail,
         report,
@@ -520,6 +521,67 @@ mod persistent_mixed_streaming_tests {
         assert!(report.tail_allocation_bytes < actual.len());
         assert!(report.largest_write_request <= 37);
         validate_canonical_occupancy(&actual, limits).expect("streamed validation");
+    }
+
+    #[test]
+    fn reused_pages_do_not_inflate_footer_current_page_count() {
+        let limits = ImmutableLimits {
+            max_file_bytes: 8 * 1024 * 1024,
+            max_objects: 2 * LEAF_CAPACITY + 16,
+            max_pages: 128,
+            max_depth: 4,
+            max_allocation_bytes: 8 * 1024 * 1024,
+            max_output_bytes: 8 * 1024 * 1024,
+            ..ImmutableLimits::default()
+        };
+        let objects: Vec<_> = (1..=253_u64)
+            .map(|index| {
+                let seed = if index % 3 == 0 {
+                    202
+                } else {
+                    u8::try_from(index).expect("bounded fuzz regression index")
+                };
+                object(index * 2, seed, 1 + usize::from(seed % 64))
+            })
+            .collect();
+        let base = build_genesis(&objects, limits).expect("fuzz regression base");
+        let operations = vec![
+            ImmutableBatchOperation::Delete(406),
+            ImmutableBatchOperation::Put(object(408, 17, 18)),
+            ImmutableBatchOperation::Put(object(507, 29, 30)),
+        ];
+        let expected =
+            append_persistent_mixed_batch(&base, &operations, limits).expect("owned mixed");
+        assert!(expected.pages_reused > 0);
+
+        let mut actual = Vec::new();
+        let report = append_persistent_mixed_batch_to(
+            &mut actual,
+            &base,
+            &operations,
+            limits,
+            PersistentMixedStreamingOptions {
+                max_write_request_bytes: 54,
+            },
+        )
+        .expect("streamed mixed");
+
+        assert_eq!(actual, expected.bytes);
+        assert_eq!(report.report, expected.report);
+        assert_eq!(report.pages_written, expected.pages_written);
+        assert_eq!(report.pages_reused, expected.pages_reused);
+        assert_eq!(
+            report.report.page_count,
+            report
+                .pages_written
+                .checked_add(report.pages_reused)
+                .expect("active page count")
+        );
+        let footer = parse_footer(&actual, actual.len() - FOOTER_LEN).expect("footer");
+        assert_eq!(
+            footer.page_count_current,
+            u64::try_from(report.pages_written).expect("current pages")
+        );
     }
 
     #[test]

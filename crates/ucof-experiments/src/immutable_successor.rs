@@ -80,6 +80,7 @@ mod source_api {
 
             include!("immutable_successor/persistent_source_deletion.rs");
             include!("immutable_successor/persistent_source_multi_put.rs");
+            include!("immutable_successor/persistent_source_mixed.rs");
         }
 
         pub use persistent_source_deletion_api::*;
@@ -90,6 +91,7 @@ mod source_api {
 
 pub use source_api::*;
 
+include!("immutable_successor/persistent_source_mixed_regression.rs");
 include!("immutable_successor/persistent_source_copy.rs");
 include!("immutable_successor/persistent_versioned_source_copy.rs");
 
