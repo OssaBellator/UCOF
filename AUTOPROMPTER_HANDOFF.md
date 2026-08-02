@@ -1,6 +1,6 @@
 # AUTOPROMPTER HANDOFF
 
-Progress recorded: 2026-08-02 18:56 Australia/Melbourne.
+Progress recorded: 2026-08-02 18:58 Australia/Melbourne.
 
 ## Goal
 
@@ -68,7 +68,7 @@ PRs #69 and #71–#74 are open, mergeable, ready for review, and green across th
 
 - Replaced the stale frontier tracker with a verified snapshot of PRs #69 and #71–#74.
 - Recorded established evidence, exact assurance boundaries, stack topology, review constraints, remaining gates, and current execution order in commit `30a6debf38d2e16c6eb5f39671a017d162ca1c07`.
-- The documentation-only Rust workflow `30740703030` is currently in progress.
+- Verified the documentation-only Rust workflow `30740703030` succeeded.
 
 ## Decisions
 
@@ -84,7 +84,6 @@ PRs #69 and #71–#74 are open, mergeable, ready for review, and green across th
 
 ## Blockers and remaining gates
 
-- PR #8's tracker refresh awaits completion of Rust workflow `30740703030`.
 - PRs #69 and #71–#74 require review and stack-order decisions despite green repository checks.
 - Source-backed planning still needs explicit composition with private staged publication while preserving version, budget, preflight, visibility, and durability boundaries.
 - Transport still needs maintained provider adapters, credential-runtime qualification, native asynchronous cancellation, and durable freshness/checkpoint integration.
@@ -97,15 +96,14 @@ PRs #69 and #71–#74 are open, mergeable, ready for review, and green across th
 
 - None identified. Every completed implementation, regression, test, fuzz, documentation, PR-record, tracker, and continuity change is committed remotely.
 - This action-capable connector session has no local working tree containing additional completed changes.
-- The running PR #8 workflow and future composition layers are active or next work, not completed uncommitted implementation.
+- Future composition and qualification layers are next work, not completed uncommitted implementation.
 
 ## Exact next steps
 
-1. Verify PR #8 workflow `30740703030`; correct only an evidence-backed documentation or formatting defect if it fails.
-2. Obtain review and landing-order decisions for green PRs #69 and #71–#74 while preserving their current bases.
-3. Create a dedicated child composition branch joining a verified source-backed plan to private staged publication, preserving source-version, cumulative-budget, fail-before-publication, no-replace, and durability semantics.
-4. Advance selected-history output from a bounded complete allocation to incremental chronological tail construction.
-5. Compose per-state semantic plans with source-history membership, object-presence validation, and multi-state output without reusing a global closure.
-6. Advance Unix publication from path-identity detection to descriptor-relative handles and authenticated restart evidence.
-7. Add a maintained transport adapter and durable freshness/checkpoint integration without weakening the adapter-neutral contracts.
-8. Update this handoff and `docs/PHASE_3_FRONTIER_TRACKER.md` after every verified head, review decision, blocker, or next-task change.
+1. Obtain review and landing-order decisions for green PRs #69 and #71–#74 while preserving their current bases.
+2. Create a dedicated child composition branch joining a verified source-backed plan to private staged publication, preserving source-version, cumulative-budget, fail-before-publication, no-replace, and durability semantics.
+3. Advance selected-history output from a bounded complete allocation to incremental chronological tail construction.
+4. Compose per-state semantic plans with source-history membership, object-presence validation, and multi-state output without reusing a global closure.
+5. Advance Unix publication from path-identity detection to descriptor-relative handles and authenticated restart evidence.
+6. Add a maintained transport adapter and durable freshness/checkpoint integration without weakening the adapter-neutral contracts.
+7. Update this handoff and `docs/PHASE_3_FRONTIER_TRACKER.md` after every verified head, review decision, blocker, or next-task change.
