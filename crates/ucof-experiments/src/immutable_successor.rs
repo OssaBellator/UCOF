@@ -24,13 +24,22 @@ include!("immutable_successor/persistent_multi_put_streaming.rs");
 include!("immutable_successor/persistent_streaming_dispatch.rs");
 include!("immutable_successor/rewrite.rs");
 
-#[allow(clippy::len_without_is_empty, clippy::type_complexity)]
+#[allow(clippy::len_without_is_empty)]
 mod source_api {
     use super::*;
 
     include!("immutable_successor/source.rs");
     include!("immutable_successor/source_full.rs");
-    include!("immutable_successor/persistent_source_replacement.rs");
+
+    mod persistent_source_replacement_api {
+        #![allow(clippy::type_complexity)]
+
+        use super::*;
+
+        include!("immutable_successor/persistent_source_replacement.rs");
+    }
+
+    pub use persistent_source_replacement_api::*;
 }
 
 pub use source_api::*;
