@@ -30,59 +30,43 @@ jobs:
         run: cargo fuzz build
       - name: Smoke fuzz targets
         run: |
-          for target in \
-            full_file \
-            canonical_metadata \
-            metadata_inspect \
-            prefix_salvage \
-            sequential_reader \
-            writer_roundtrip \
-            paged_directory \
-            snapshot_selection \
-            root_enumeration \
-            publication_model \
-            recovery_scan \
-            compaction_plan \
-            repair_plan \
-            exp0002_strict \
-            exp0002_recovery \
-            exp0002_roundtrip \
-            exp0002_lookup \
-            exp0002_rewrite \
-            exp0002_source_lookup \
-            exp0002_source_strict_recovery \
-            exp0002_source_history \
-            immutable_successor_strict \
-            immutable_successor_roundtrip \
-            immutable_successor_history_recovery \
-            immutable_successor_rewrite \
-            immutable_successor_source_lookup \
-            immutable_successor_source_history_recovery \
-            immutable_successor_persistent_source_copy \
-            immutable_successor_persistent_versioned_source_copy \
-            immutable_successor_persistent_source_replacement \
-            immutable_successor_persistent_source_insertion \
-            immutable_successor_persistent_source_deletion \
-            immutable_successor_persistent_source_multi_put \
-            immutable_successor_persistent_source_mixed
-          do
+          mkdir -p fuzz-smoke-logs
+          cargo fuzz list | tee fuzz-smoke-logs/targets.txt
+
+          while IFS= read -r target; do
+            [[ -z "$target" ]] && continue
+            log="fuzz-smoke-logs/${target}.log"
+            echo "$target" > fuzz-smoke-logs/current-target.txt
             echo "::group::Smoke fuzz target: $target"
+
+            set +e
             if [[ "${{ github.event_name }}" == "schedule" ]]; then
-              if cargo fuzz run "$target" -- -max_total_time=30 -max_len=65536; then
-                status=0
-              else
-                status=$?
-              fi
+              cargo fuzz run "$target" -- -max_total_time=30 -max_len=65536 2>&1 | tee "$log"
             else
-              if cargo fuzz run "$target" -- -runs=256 -max_len=65536; then
-                status=0
-              else
-                status=$?
-              fi
+              cargo fuzz run "$target" -- -runs=256 -max_len=65536 2>&1 | tee "$log"
             fi
+            status=${PIPESTATUS[0]}
+            set -e
+
             echo "::endgroup::"
             if [[ $status -ne 0 ]]; then
+              echo "$target" > fuzz-smoke-logs/failing-target.txt
+              printf '## Fuzz smoke failure\n\n- Target: `%s`\n- Exit status: `%s`\n- Log artifact: `fuzz-smoke-diagnostics`\n' \
+                "$target" "$status" >> "$GITHUB_STEP_SUMMARY"
               echo "::error title=Fuzz smoke failure::Target $target exited with status $status"
               exit "$status"
             fi
-          done
+          done < fuzz-smoke-logs/targets.txt
+
+          rm -f fuzz-smoke-logs/current-target.txt
+          printf '## Fuzz smoke result\n\nAll listed targets passed.\n' >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload fuzz smoke diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: fuzz-smoke-diagnostics
+          path: |
+            fuzz-smoke-logs/
+            fuzz/artifacts/
+          if-no-files-found: warn
+          retention-days: 7
