@@ -91,6 +91,7 @@ mod source_api {
 
 pub use source_api::*;
 
+include!("immutable_successor/persistent_source_mixed_regression.rs");
 include!("immutable_successor/persistent_source_copy.rs");
 include!("immutable_successor/persistent_versioned_source_copy.rs");
 
