@@ -305,3 +305,10 @@ path = "fuzz_targets/immutable_successor_persistent_source_insertion.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_deletion"
+path = "fuzz_targets/immutable_successor_persistent_source_deletion.rs"
+test = false
+doc = false
+bench = false
