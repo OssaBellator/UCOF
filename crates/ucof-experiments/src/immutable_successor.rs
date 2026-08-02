@@ -30,6 +30,16 @@ mod source_api {
 
     include!("immutable_successor/source.rs");
     include!("immutable_successor/source_full.rs");
+
+    mod persistent_source_replacement_api {
+        #![allow(clippy::type_complexity)]
+
+        use super::*;
+
+        include!("immutable_successor/persistent_source_replacement.rs");
+    }
+
+    pub use persistent_source_replacement_api::*;
 }
 
 pub use source_api::*;
