@@ -39,6 +39,48 @@ mod source_api {
         include!("immutable_successor/persistent_source_replacement.rs");
         include!("immutable_successor/persistent_source_insertion.rs");
         include!("immutable_successor/persistent_source_insertion_error.rs");
+
+        mod persistent_source_deletion_api {
+            use super::*;
+
+            fn persistent_source_canonical_envelope<S: ImmutableReadAt>(
+                source: &mut S,
+                limits: ImmutableSourceLimits,
+                expected: &ImmutableReport,
+            ) -> Result<(LookupEnvelope, ImmutableSourceStats), ImmutableSourceError> {
+                let (mut envelope, mut stats) =
+                    super::persistent_source_canonical_envelope(source, limits, expected)?;
+                let extra_limits = remaining_source_limits(limits, stats)?;
+                let mut reader = SourceReader::new(source, extra_limits)?;
+                let page = reader.read_vec(envelope.root.offset, PAGE_SIZE, "deletion root page")?;
+                reader.stats.bytes_hashed = reader
+                    .stats
+                    .bytes_hashed
+                    .checked_add(
+                        u64::try_from(page.len())
+                            .map_err(|_| ImmutableSourceError::Limit("hashed bytes"))?,
+                    )
+                    .ok_or(ImmutableSourceError::Limit("hashed bytes"))?;
+                if digest(&[PAGE_DOMAIN, &page]) != envelope.root.digest
+                    || &page[..8] != PAGE_MAGIC
+                    || page[9] != envelope.root.level
+                {
+                    return Err(ImmutableSourceError::Format(ImmutableError::Invalid(
+                        "deletion root page",
+                    )));
+                }
+                envelope.root.range = Some((
+                    u64_at(&page, 20, "deletion root page")?,
+                    u64_at(&page, 28, "deletion root page")?,
+                ));
+                add_source_stats(&mut stats, reader.stats)?;
+                Ok((envelope, stats))
+            }
+
+            include!("immutable_successor/persistent_source_deletion.rs");
+        }
+
+        pub use persistent_source_deletion_api::*;
     }
 
     pub use persistent_source_replacement_api::*;
