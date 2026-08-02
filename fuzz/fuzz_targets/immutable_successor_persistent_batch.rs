@@ -64,7 +64,7 @@ fuzz_target!(|data: &[u8]| {
     assert_eq!(
         result.mode,
         if shape_change {
-            PersistentBatchMode::FullRebuildShapeChange
+            PersistentBatchMode::CopyOnWritePutBatch
         } else {
             PersistentBatchMode::CopyOnWriteReplacements
         }
