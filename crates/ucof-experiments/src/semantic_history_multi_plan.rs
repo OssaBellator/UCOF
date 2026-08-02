@@ -54,11 +54,17 @@ impl fmt::Display for HistoricalSemanticSelectionError {
         match self {
             Self::Empty => write!(formatter, "historical semantic selection is empty"),
             Self::DuplicateSequence(sequence) => {
-                write!(formatter, "duplicate historical semantic sequence {sequence}")
+                write!(
+                    formatter,
+                    "duplicate historical semantic sequence {sequence}"
+                )
             }
             Self::Limit(label) => write!(formatter, "historical semantic limit exceeded: {label}"),
             Self::Compaction { sequence, error } => {
-                write!(formatter, "historical semantic sequence {sequence} failed: {error}")
+                write!(
+                    formatter,
+                    "historical semantic sequence {sequence} failed: {error}"
+                )
             }
         }
     }
