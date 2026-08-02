@@ -2,10 +2,10 @@
 
 use libfuzzer_sys::fuzz_target;
 use ucof_experiments::immutable_successor::{
-    append_persistent_put_batch, build_genesis, plan_persistent_put_batch_tail_at,
-    ImmutableLimits, ImmutableObjectInput, ImmutableReadAt, ImmutableSourceError,
-    ImmutableSourceLimits, PersistentSourceMultiPutError, PersistentSourceVersion,
-    PersistentVersionedReadAt, LEAF_CAPACITY,
+    append_persistent_put_batch, build_genesis, plan_persistent_put_batch_tail_at, ImmutableLimits,
+    ImmutableObjectInput, ImmutableReadAt, ImmutableSourceError, ImmutableSourceLimits,
+    PersistentSourceMultiPutError, PersistentSourceVersion, PersistentVersionedReadAt,
+    LEAF_CAPACITY,
 };
 
 struct VersionedSource {
