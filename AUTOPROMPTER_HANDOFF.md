@@ -1,36 +1,59 @@
 # AUTOPROMPTER HANDOFF
 
-Last reconstructed from repository evidence: 2026-08-02 (Australia/Melbourne).
+Checkpoint recorded: 2026-08-02 17:49 Australia/Melbourne.
+
+## Goal
+
+Continue all current Phase 3 frontiers from repository-proven state. This checkpoint records continuity only and starts no new project work.
 
 ## Continuity boundary
 
-This file was not present on `main`, and repository search returned no prior copy. The unavailable previous ChatGPT transcript must not be treated as evidence. Continue only from committed files, branches, pull requests, reviews, and CI results.
+This file was not present on `main`, and repository search returned no prior copy. The unavailable previous ChatGPT transcript is not evidence. Continue only from committed files, branches, pull requests, reviews, and CI results.
 
-## Repository state proved during reconstruction
+## Current branch
 
-- `main` still presents the Phase 0 baseline and does not contain the active Phase 3 implementation stacks.
-- Active Phase 3 work is distributed across stacked `phase-3/*` branches and pull requests. Preserve each pull request's current base unless repository evidence supports changing it.
-- The newest visible persistent-writer/source sequence reaches PRs #65 through #69.
-- PR #69 is headed by `phase-3/persistent-source-mixed-plan` at commit `a84c47472cb233a27b4dc795525ed5b468c0b51b` and is stacked on the branch used by PR #68.
-- A separate proposal-convergence branch, `phase-3/successor-convergence-packet`, contains `docs/PHASE_3_FRONTIER_TRACKER.md`.
-- The tracker identifies independent Phase 3 frontiers including persistent writer/source planning, transport and retry semantics, publication durability, semantic compaction/history, and successor/proposal convergence.
-- Workflow run `30729158432` for PR #69's recorded head includes a failed fuzz job (`91446199336`). Its failure must be diagnosed from the job log before changing code or declaring that stack ready.
+- Branch: `autoprompter/phase-3-handoff-20260802`
+- Pull request: #70, `docs: add Phase 3 continuity handoff`
+- This branch is the continuity/checkpoint branch; implementation work belongs on the corresponding existing Phase 3 stack.
 
-## Current operating rules
+## Completed work
 
-1. Keep unrelated frontier work isolated in its existing branch/stack.
-2. Do not flatten, rebase, retarget, or merge stacked pull requests without proof from repository history and PR metadata.
-3. Treat branch-local trackers as evidence for that branch only; reconcile them with newer pull requests before claiming completeness.
-4. Inspect failing CI before editing implementation, then add the smallest test-backed fix on the affected branch.
-5. Record each frontier's verified head, CI state, blockers, and next action here as work proceeds.
+- Created this repository continuity handoff on PR #70. Its original handoff commit was `e254911a`.
+- Reconciled `docs/PHASE_3_FRONTIER_TRACKER.md` through PR #69 on `phase-3/successor-convergence-packet` and committed that reviewable change as `f618569b4ecc0eff7e60def039aeef396d8a37ba` on PR #8.
+- Re-ran PR #69 fuzz CI at head `a84c47472cb233a27b4dc795525ed5b468c0b51b`. Setup, formatting, and fuzz-target compilation passed, but the `Smoke fuzz targets` step failed again in workflow run `30729158432`, rerun job `91471309696`.
+- Verified the active frontier tips:
+  - source-backed persistent planning: PR #69
+  - transport/retry: PR #56
+  - publication durability: PR #64
+  - selected history output: PR #55
+  - semantic compaction: PR #45
+  - proposal convergence: PR #8
 
-## Immediate continuation order
+## Decisions
 
-1. Diagnose and resolve the recorded PR #69 fuzz failure, or document it as infrastructure-only if the log proves that.
-2. Reconcile `docs/PHASE_3_FRONTIER_TRACKER.md` with the newer #65-#69 writer/source stack.
-3. Audit the current heads and CI for the transport/retry, publication-durability, semantic-compaction/history, and convergence frontiers.
-4. Advance each frontier independently from its proven current head, with commits and PR updates kept on the corresponding stack.
+1. Repository contents and remote history are the source of truth; no missing prior-chat decision is assumed.
+2. Preserve existing stacked pull-request boundaries and bases unless repository evidence supports changing them.
+3. Keep unrelated frontier work isolated on its existing branch/stack.
+4. PR #69 remains draft/not green until PR #68 is verified and the hostile mixed-source fuzz assurance gate passes.
+5. Do not patch PR #69 speculatively without identifying the exact failing smoke target, seed, and input.
+6. Treat branch-local trackers as evidence for that branch only and reconcile them with newer pull requests before claiming completeness.
 
-## Handoff branch
+## Blockers
 
-This reconstructed handoff was first committed on `autoprompter/phase-3-handoff-20260802` so that continuity exists before any further implementation changes in this session.
+- PR #69's fuzz workflow reproducibly fails in `Smoke fuzz targets`; the available connector output has not exposed enough failure detail to identify the exact failing target, seed, or input.
+- PR #69 also requires verification of its PR #68 predecessor and hostile mixed-source fuzz assurance before the stack can be called green.
+- The remaining frontier stacks have integration/order dependencies, but no additional defect was proved during this checkpoint.
+
+## Uncommitted work
+
+- None identified. Every completed, reviewable change established during this checkpoint is committed remotely.
+- This connector session has no local working tree containing additional uncommitted changes.
+- The unresolved PR #69 failure investigation is not a completed reviewable change and therefore has not been patched or committed.
+
+## Exact next steps
+
+1. Retrieve the complete PR #69 smoke-fuzz failure output or reproduce it at head `a84c47472cb233a27b4dc795525ed5b468c0b51b`.
+2. Identify and minimize the exact failing target, seed, and input.
+3. Apply the smallest test-backed fix on PR #69's branch, then run the targeted smoke check and relevant CI.
+4. Update PR #69 and this handoff; do not mark the stack green until PR #68 and hostile mixed-source verification pass.
+5. Resume the remaining frontier stacks independently without collapsing their branch or pull-request boundaries.
