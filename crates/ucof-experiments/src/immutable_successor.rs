@@ -79,6 +79,7 @@ mod source_api {
             }
 
             include!("immutable_successor/persistent_source_deletion.rs");
+            include!("immutable_successor/persistent_source_multi_put.rs");
         }
 
         pub use persistent_source_deletion_api::*;
