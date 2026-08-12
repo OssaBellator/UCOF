@@ -37,6 +37,12 @@ impl PendingDeletionNode {
     }
 }
 
+#[derive(Default)]
+struct DeletionProgress {
+    pages_written: usize,
+    touched_original: usize,
+}
+
 fn deletion_minimum(level: u8) -> usize {
     if level == 0 {
         LEAF_MIN_OCCUPANCY
@@ -253,11 +259,10 @@ fn delete_persistent_node(
     reference: &PageRef,
     object_id: u64,
     limits: ImmutableLimits,
-    pages_written: &mut usize,
-    touched_original: &mut usize,
+    progress: &mut DeletionProgress,
     borrow_policy: ExperimentalDeleteBorrowPolicy,
 ) -> Result<PendingDeletionNode, ImmutableError> {
-    increment_touched(touched_original, limits)?;
+    increment_touched(&mut progress.touched_original, limits)?;
     let mut node = load_deletion_node(data, reference, limits)?;
     if let PendingDeletionNode::Leaf(entries) = &mut node {
         let position = entries
@@ -280,15 +285,18 @@ fn delete_persistent_node(
         &children[child_index],
         object_id,
         limits,
-        pages_written,
-        touched_original,
+        progress,
         borrow_policy,
     )?;
     let minimum = deletion_minimum(target.level());
 
     if target.occupancy() >= minimum {
-        children[child_index] =
-            materialize_deletion_node(output, &target, limits, pages_written)?;
+        children[child_index] = materialize_deletion_node(
+            output,
+            &target,
+            limits,
+            &mut progress.pages_written,
+        )?;
         return Ok(node);
     }
 
@@ -313,40 +321,64 @@ fn delete_persistent_node(
             let left_node = left
                 .as_mut()
                 .ok_or(ImmutableError::Invalid("deletion left borrow"))?;
-            increment_touched(touched_original, limits)?;
+            increment_touched(&mut progress.touched_original, limits)?;
             borrow_deletion_from_left(left_node, &mut target, limits)?;
-            children[child_index - 1] =
-                materialize_deletion_node(output, left_node, limits, pages_written)?;
-            children[child_index] =
-                materialize_deletion_node(output, &target, limits, pages_written)?;
+            children[child_index - 1] = materialize_deletion_node(
+                output,
+                left_node,
+                limits,
+                &mut progress.pages_written,
+            )?;
+            children[child_index] = materialize_deletion_node(
+                output,
+                &target,
+                limits,
+                &mut progress.pages_written,
+            )?;
             return Ok(node);
         }
         Some(DeletionBorrowSide::Right) => {
             let right_node = right
                 .as_mut()
                 .ok_or(ImmutableError::Invalid("deletion right borrow"))?;
-            increment_touched(touched_original, limits)?;
+            increment_touched(&mut progress.touched_original, limits)?;
             borrow_deletion_from_right(&mut target, right_node, limits)?;
-            children[child_index] =
-                materialize_deletion_node(output, &target, limits, pages_written)?;
-            children[child_index + 1] =
-                materialize_deletion_node(output, right_node, limits, pages_written)?;
+            children[child_index] = materialize_deletion_node(
+                output,
+                &target,
+                limits,
+                &mut progress.pages_written,
+            )?;
+            children[child_index + 1] = materialize_deletion_node(
+                output,
+                right_node,
+                limits,
+                &mut progress.pages_written,
+            )?;
             return Ok(node);
         }
         None => {}
     }
 
     if let Some(left_node) = left {
-        increment_touched(touched_original, limits)?;
+        increment_touched(&mut progress.touched_original, limits)?;
         let merged = merge_deletion_nodes(left_node, target, limits)?;
-        children[child_index - 1] =
-            materialize_deletion_node(output, &merged, limits, pages_written)?;
+        children[child_index - 1] = materialize_deletion_node(
+            output,
+            &merged,
+            limits,
+            &mut progress.pages_written,
+        )?;
         children.remove(child_index);
     } else if let Some(right_node) = right {
-        increment_touched(touched_original, limits)?;
+        increment_touched(&mut progress.touched_original, limits)?;
         let merged = merge_deletion_nodes(target, right_node, limits)?;
-        children[child_index] =
-            materialize_deletion_node(output, &merged, limits, pages_written)?;
+        children[child_index] = materialize_deletion_node(
+            output,
+            &merged,
+            limits,
+            &mut progress.pages_written,
+        )?;
         children.remove(child_index + 1);
     } else {
         return Err(ImmutableError::Invalid("deletion sibling"));
@@ -384,16 +416,14 @@ fn append_persistent_delete_from_previous_with_policy(
     let snapshot = checked_range(data, snapshot_offset, SNAPSHOT_LEN, "snapshot")?;
     let root = root_reference(data, snapshot, limits)?;
     let mut output = data.to_vec();
-    let mut pages_written = 0_usize;
-    let mut touched_original = 0_usize;
+    let mut progress = DeletionProgress::default();
     let pending = delete_persistent_node(
         data,
         &mut output,
         &root,
         object_id,
         limits,
-        &mut pages_written,
-        &mut touched_original,
+        &mut progress,
         borrow_policy,
     )?;
 
@@ -402,7 +432,7 @@ fn append_persistent_delete_from_previous_with_policy(
             &mut output,
             &PendingDeletionNode::Leaf(entries),
             limits,
-            &mut pages_written,
+            &mut progress.pages_written,
         )?,
         PendingDeletionNode::Internal { level: _, children } if children.len() == 1 => children
             .into_iter()
@@ -412,7 +442,7 @@ fn append_persistent_delete_from_previous_with_policy(
             &mut output,
             &PendingDeletionNode::Internal { level, children },
             limits,
-            &mut pages_written,
+            &mut progress.pages_written,
         )?,
     };
 
@@ -426,20 +456,20 @@ fn append_persistent_delete_from_previous_with_policy(
         &next_root,
         previous.public.snapshot_digest,
         u64_from_usize(previous.footer_offset)?,
-        pages_written,
+        progress.pages_written,
         limits,
     )?;
     let report = validate_canonical_occupancy(&output, limits)?;
     let pages_reused = previous
         .public
         .page_count
-        .checked_sub(touched_original)
+        .checked_sub(progress.touched_original)
         .ok_or(ImmutableError::Invalid("persistent page accounting"))?;
     Ok(PersistentBatchResult {
         bytes: output,
         report,
         mode: PersistentBatchMode::CopyOnWriteDeletion,
-        pages_written,
+        pages_written: progress.pages_written,
         pages_reused,
     })
 }
