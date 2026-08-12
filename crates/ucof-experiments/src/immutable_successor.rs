@@ -10,6 +10,9 @@ include!("immutable_successor/history.rs");
 include!("immutable_successor/part4.rs");
 include!("immutable_successor/occupancy.rs");
 include!("immutable_successor/part5.rs");
+include!("immutable_successor/streaming_genesis.rs");
+include!("immutable_successor/source_streaming_genesis.rs");
+include!("immutable_successor/active_file_streaming.rs");
 include!("immutable_successor/batch.rs");
 include!("immutable_successor/persistent_batch.rs");
 include!("immutable_successor/persistent_insert.rs");
@@ -30,6 +33,32 @@ mod source_api {
 
     include!("immutable_successor/source.rs");
     include!("immutable_successor/source_full.rs");
+    include!("immutable_successor/source_history_inventory.rs");
+    include!("immutable_successor/source_history_rewrite.rs");
+    include!("immutable_successor/source_inventory_conversion.rs");
+
+    #[allow(clippy::too_many_arguments)]
+    mod source_to_sink_api {
+        use super::*;
+
+        include!("immutable_successor/source_to_sink.rs");
+        include!("immutable_successor/source_selected_to_sink.rs");
+    }
+
+    pub use source_to_sink_api::*;
+
+    mod source_history_to_sink_api {
+        use super::*;
+
+        include!("immutable_successor/source_history_to_sink.rs");
+        include!("immutable_successor/source_history_selected_to_sink.rs");
+        include!("immutable_successor/source_history_chain_to_sink.rs");
+        include!("immutable_successor/source_history_chain_owned_cap.rs");
+    }
+
+    pub use source_history_to_sink_api::*;
+
+    include!("immutable_successor/source_inventory.rs");
 
     mod persistent_source_replacement_api {
         #![allow(clippy::type_complexity)]
