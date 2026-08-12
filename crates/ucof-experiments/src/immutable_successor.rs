@@ -26,6 +26,7 @@ include!("immutable_successor/persistent_delete_streaming.rs");
 include!("immutable_successor/persistent_multi_put_streaming.rs");
 include!("immutable_successor/persistent_streaming_dispatch.rs");
 include!("immutable_successor/rewrite.rs");
+include!("immutable_successor/freshness.rs");
 
 #[allow(clippy::len_without_is_empty)]
 mod source_api {
@@ -119,6 +120,19 @@ mod source_api {
 }
 
 pub use source_api::*;
+
+mod conditional_source_api {
+    use super::*;
+
+    include!("immutable_successor/conditional_source.rs");
+    include!("immutable_successor/conditional_retry.rs");
+    include!("immutable_successor/conditional_backoff.rs");
+    include!("immutable_successor/conditional_http.rs");
+    include!("immutable_successor/conditional_wait.rs");
+    include!("immutable_successor/conditional_authentication.rs");
+}
+
+pub use conditional_source_api::*;
 
 include!("immutable_successor/persistent_source_mixed_regression.rs");
 include!("immutable_successor/persistent_source_copy.rs");
