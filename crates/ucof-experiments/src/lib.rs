@@ -8,6 +8,7 @@
 //! Range-source APIs deliberately separate targeted authenticated lookup from
 //! full exact-end validation and explicitly requested recovery.
 
+mod active_file_selected_streaming;
 mod compaction;
 mod directory;
 mod enumeration;
@@ -29,8 +30,13 @@ mod mixed_update_plan;
 mod publication;
 mod recovery;
 mod repair;
+mod semantic_history_streaming_compaction;
+mod semantic_streaming_compaction;
 mod snapshots;
 
+pub use active_file_selected_streaming::{
+    rewrite_selected_active_file_to, ImmutableSelectedActiveStreamingReport,
+};
 pub use compaction::{CompactionError, CompactionLimits, CompactionPlan, ObjectGraph};
 pub use directory::{
     DirectoryBuildError, DirectoryLookupError, DirectoryStats, LookupResult, ObjectLocator,
@@ -71,6 +77,14 @@ pub use recovery::{
     RecoveryScanReport, ScannedCandidate,
 };
 pub use repair::{CopyRange, RepairError, RepairLimits, RepairPlan};
+pub use semantic_history_streaming_compaction::{
+    rewrite_compacted_versioned_history_sequence_to, ImmutableHistoricalSemanticStreamingError,
+    ImmutableHistoricalSemanticStreamingOptions, ImmutableHistoricalSemanticStreamingReport,
+};
+pub use semantic_streaming_compaction::{
+    rewrite_compacted_active_file_to, ImmutableSemanticStreamingError,
+    ImmutableSemanticStreamingReport,
+};
 pub use snapshots::{
     CandidateStatus, CheckpointKind, RejectedCandidate, RootRejection, RootSelectionError,
     RootSelectionLimits, RootSelectionMode, RootSelectionReport, SnapshotCandidate,
