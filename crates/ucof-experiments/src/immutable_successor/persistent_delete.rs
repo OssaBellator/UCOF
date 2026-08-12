@@ -1,3 +1,20 @@
+/// Non-normative borrower-selection variants for the persistent deletion experiment.
+///
+/// `LeftFirst` preserves the current byte-significant behavior exactly. The alternate
+/// variant is exposed only so review can measure a fuller-eligible-sibling rule before
+/// EXP-0003 mutation bytes are frozen.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ExperimentalDeleteBorrowPolicy {
+    LeftFirst,
+    FullerSiblingLeftTie,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum DeletionBorrowSide {
+    Left,
+    Right,
+}
+
 #[derive(Clone, Debug)]
 enum PendingDeletionNode {
     Leaf(Vec<Locator>),
@@ -20,11 +37,56 @@ impl PendingDeletionNode {
     }
 }
 
+#[derive(Default)]
+struct DeletionProgress {
+    pages_written: usize,
+    touched_original: usize,
+}
+
 fn deletion_minimum(level: u8) -> usize {
     if level == 0 {
         LEAF_MIN_OCCUPANCY
     } else {
         INTERNAL_MIN_OCCUPANCY
+    }
+}
+
+fn choose_deletion_borrow_side(
+    policy: ExperimentalDeleteBorrowPolicy,
+    left_occupancy: Option<usize>,
+    right_occupancy: Option<usize>,
+    minimum: usize,
+) -> Option<DeletionBorrowSide> {
+    let left_can_lend = left_occupancy.is_some_and(|occupancy| occupancy > minimum);
+    let right_can_lend = right_occupancy.is_some_and(|occupancy| occupancy > minimum);
+
+    match policy {
+        ExperimentalDeleteBorrowPolicy::LeftFirst => {
+            if left_can_lend {
+                Some(DeletionBorrowSide::Left)
+            } else if right_can_lend {
+                Some(DeletionBorrowSide::Right)
+            } else {
+                None
+            }
+        }
+        ExperimentalDeleteBorrowPolicy::FullerSiblingLeftTie => match (
+            left_can_lend,
+            right_can_lend,
+        ) {
+            (true, true) => {
+                if left_occupancy.expect("eligible left occupancy")
+                    >= right_occupancy.expect("eligible right occupancy")
+                {
+                    Some(DeletionBorrowSide::Left)
+                } else {
+                    Some(DeletionBorrowSide::Right)
+                }
+            }
+            (true, false) => Some(DeletionBorrowSide::Left),
+            (false, true) => Some(DeletionBorrowSide::Right),
+            (false, false) => None,
+        },
     }
 }
 
@@ -197,10 +259,10 @@ fn delete_persistent_node(
     reference: &PageRef,
     object_id: u64,
     limits: ImmutableLimits,
-    pages_written: &mut usize,
-    touched_original: &mut usize,
+    progress: &mut DeletionProgress,
+    borrow_policy: ExperimentalDeleteBorrowPolicy,
 ) -> Result<PendingDeletionNode, ImmutableError> {
-    increment_touched(touched_original, limits)?;
+    increment_touched(&mut progress.touched_original, limits)?;
     let mut node = load_deletion_node(data, reference, limits)?;
     if let PendingDeletionNode::Leaf(entries) = &mut node {
         let position = entries
@@ -223,14 +285,18 @@ fn delete_persistent_node(
         &children[child_index],
         object_id,
         limits,
-        pages_written,
-        touched_original,
+        progress,
+        borrow_policy,
     )?;
     let minimum = deletion_minimum(target.level());
 
     if target.occupancy() >= minimum {
-        children[child_index] =
-            materialize_deletion_node(output, &target, limits, pages_written)?;
+        children[child_index] = materialize_deletion_node(
+            output,
+            &target,
+            limits,
+            &mut progress.pages_written,
+        )?;
         return Ok(node);
     }
 
@@ -239,46 +305,80 @@ fn delete_persistent_node(
     } else {
         None
     };
-    if let Some(left_node) = &mut left {
-        if left_node.occupancy() > minimum {
-            increment_touched(touched_original, limits)?;
-            borrow_deletion_from_left(left_node, &mut target, limits)?;
-            children[child_index - 1] =
-                materialize_deletion_node(output, left_node, limits, pages_written)?;
-            children[child_index] =
-                materialize_deletion_node(output, &target, limits, pages_written)?;
-            return Ok(node);
-        }
-    }
-
     let mut right = if child_index + 1 < children.len() {
         Some(load_deletion_node(data, &children[child_index + 1], limits)?)
     } else {
         None
     };
-    if let Some(right_node) = &mut right {
-        if right_node.occupancy() > minimum {
-            increment_touched(touched_original, limits)?;
-            borrow_deletion_from_right(&mut target, right_node, limits)?;
-            children[child_index] =
-                materialize_deletion_node(output, &target, limits, pages_written)?;
-            children[child_index + 1] =
-                materialize_deletion_node(output, right_node, limits, pages_written)?;
+
+    match choose_deletion_borrow_side(
+        borrow_policy,
+        left.as_ref().map(PendingDeletionNode::occupancy),
+        right.as_ref().map(PendingDeletionNode::occupancy),
+        minimum,
+    ) {
+        Some(DeletionBorrowSide::Left) => {
+            let left_node = left
+                .as_mut()
+                .ok_or(ImmutableError::Invalid("deletion left borrow"))?;
+            increment_touched(&mut progress.touched_original, limits)?;
+            borrow_deletion_from_left(left_node, &mut target, limits)?;
+            children[child_index - 1] = materialize_deletion_node(
+                output,
+                left_node,
+                limits,
+                &mut progress.pages_written,
+            )?;
+            children[child_index] = materialize_deletion_node(
+                output,
+                &target,
+                limits,
+                &mut progress.pages_written,
+            )?;
             return Ok(node);
         }
+        Some(DeletionBorrowSide::Right) => {
+            let right_node = right
+                .as_mut()
+                .ok_or(ImmutableError::Invalid("deletion right borrow"))?;
+            increment_touched(&mut progress.touched_original, limits)?;
+            borrow_deletion_from_right(&mut target, right_node, limits)?;
+            children[child_index] = materialize_deletion_node(
+                output,
+                &target,
+                limits,
+                &mut progress.pages_written,
+            )?;
+            children[child_index + 1] = materialize_deletion_node(
+                output,
+                right_node,
+                limits,
+                &mut progress.pages_written,
+            )?;
+            return Ok(node);
+        }
+        None => {}
     }
 
     if let Some(left_node) = left {
-        increment_touched(touched_original, limits)?;
+        increment_touched(&mut progress.touched_original, limits)?;
         let merged = merge_deletion_nodes(left_node, target, limits)?;
-        children[child_index - 1] =
-            materialize_deletion_node(output, &merged, limits, pages_written)?;
+        children[child_index - 1] = materialize_deletion_node(
+            output,
+            &merged,
+            limits,
+            &mut progress.pages_written,
+        )?;
         children.remove(child_index);
     } else if let Some(right_node) = right {
-        increment_touched(touched_original, limits)?;
+        increment_touched(&mut progress.touched_original, limits)?;
         let merged = merge_deletion_nodes(target, right_node, limits)?;
-        children[child_index] =
-            materialize_deletion_node(output, &merged, limits, pages_written)?;
+        children[child_index] = materialize_deletion_node(
+            output,
+            &merged,
+            limits,
+            &mut progress.pages_written,
+        )?;
         children.remove(child_index + 1);
     } else {
         return Err(ImmutableError::Invalid("deletion sibling"));
@@ -290,11 +390,12 @@ fn delete_persistent_node(
     Ok(node)
 }
 
-fn append_persistent_delete_from_previous(
+fn append_persistent_delete_from_previous_with_policy(
     data: &[u8],
     object_id: u64,
     previous: InternalReport,
     limits: ImmutableLimits,
+    borrow_policy: ExperimentalDeleteBorrowPolicy,
 ) -> Result<PersistentBatchResult, ImmutableError> {
     if object_id == 0 {
         return Err(ImmutableError::Invalid("batch object id"));
@@ -315,16 +416,15 @@ fn append_persistent_delete_from_previous(
     let snapshot = checked_range(data, snapshot_offset, SNAPSHOT_LEN, "snapshot")?;
     let root = root_reference(data, snapshot, limits)?;
     let mut output = data.to_vec();
-    let mut pages_written = 0_usize;
-    let mut touched_original = 0_usize;
+    let mut progress = DeletionProgress::default();
     let pending = delete_persistent_node(
         data,
         &mut output,
         &root,
         object_id,
         limits,
-        &mut pages_written,
-        &mut touched_original,
+        &mut progress,
+        borrow_policy,
     )?;
 
     let next_root = match pending {
@@ -332,7 +432,7 @@ fn append_persistent_delete_from_previous(
             &mut output,
             &PendingDeletionNode::Leaf(entries),
             limits,
-            &mut pages_written,
+            &mut progress.pages_written,
         )?,
         PendingDeletionNode::Internal { level: _, children } if children.len() == 1 => children
             .into_iter()
@@ -342,7 +442,7 @@ fn append_persistent_delete_from_previous(
             &mut output,
             &PendingDeletionNode::Internal { level, children },
             limits,
-            &mut pages_written,
+            &mut progress.pages_written,
         )?,
     };
 
@@ -356,22 +456,37 @@ fn append_persistent_delete_from_previous(
         &next_root,
         previous.public.snapshot_digest,
         u64_from_usize(previous.footer_offset)?,
-        pages_written,
+        progress.pages_written,
         limits,
     )?;
     let report = validate_canonical_occupancy(&output, limits)?;
     let pages_reused = previous
         .public
         .page_count
-        .checked_sub(touched_original)
+        .checked_sub(progress.touched_original)
         .ok_or(ImmutableError::Invalid("persistent page accounting"))?;
     Ok(PersistentBatchResult {
         bytes: output,
         report,
         mode: PersistentBatchMode::CopyOnWriteDeletion,
-        pages_written,
+        pages_written: progress.pages_written,
         pages_reused,
     })
+}
+
+fn append_persistent_delete_from_previous(
+    data: &[u8],
+    object_id: u64,
+    previous: InternalReport,
+    limits: ImmutableLimits,
+) -> Result<PersistentBatchResult, ImmutableError> {
+    append_persistent_delete_from_previous_with_policy(
+        data,
+        object_id,
+        previous,
+        limits,
+        ExperimentalDeleteBorrowPolicy::LeftFirst,
+    )
 }
 
 /// Deletes one active object through a persistent path with deterministic left-first borrowing,
@@ -386,4 +501,74 @@ pub fn append_persistent_delete(
     }
     let previous = validate_canonical_internal(data, limits)?;
     append_persistent_delete_from_previous(data, object_id, previous, limits)
+}
+
+/// Runs the persistent deletion experiment with an explicit non-normative borrower policy.
+///
+/// This API exists only to compare deterministic transition rules. `LeftFirst` is byte-identical
+/// to [`append_persistent_delete`]. `FullerSiblingLeftTie` changes which eligible sibling lends
+/// when both can lend; it does not change the occupancy floor or merge direction.
+pub fn append_persistent_delete_experimental(
+    data: &[u8],
+    object_id: u64,
+    limits: ImmutableLimits,
+    borrow_policy: ExperimentalDeleteBorrowPolicy,
+) -> Result<PersistentBatchResult, ImmutableError> {
+    if data.len() > limits.max_output_bytes {
+        return Err(ImmutableError::Limit("output"));
+    }
+    let previous = validate_canonical_internal(data, limits)?;
+    append_persistent_delete_from_previous_with_policy(
+        data,
+        object_id,
+        previous,
+        limits,
+        borrow_policy,
+    )
+}
+
+#[cfg(test)]
+mod borrow_policy_tests {
+    use super::*;
+
+    #[test]
+    fn fuller_policy_prefers_fuller_eligible_sibling_and_left_on_ties() {
+        let minimum = 93;
+        assert_eq!(
+            choose_deletion_borrow_side(
+                ExperimentalDeleteBorrowPolicy::LeftFirst,
+                Some(94),
+                Some(101),
+                minimum,
+            ),
+            Some(DeletionBorrowSide::Left)
+        );
+        assert_eq!(
+            choose_deletion_borrow_side(
+                ExperimentalDeleteBorrowPolicy::FullerSiblingLeftTie,
+                Some(94),
+                Some(101),
+                minimum,
+            ),
+            Some(DeletionBorrowSide::Right)
+        );
+        assert_eq!(
+            choose_deletion_borrow_side(
+                ExperimentalDeleteBorrowPolicy::FullerSiblingLeftTie,
+                Some(101),
+                Some(101),
+                minimum,
+            ),
+            Some(DeletionBorrowSide::Left)
+        );
+        assert_eq!(
+            choose_deletion_borrow_side(
+                ExperimentalDeleteBorrowPolicy::FullerSiblingLeftTie,
+                Some(minimum),
+                Some(minimum),
+                minimum,
+            ),
+            None
+        );
+    }
 }
