@@ -16,6 +16,8 @@ It does **not** stabilize UCOF, allocate permanent registry identifiers, promise
 
 The proposed `UCOF-EXP-0003` marker remains unallocated while this FCP is Draft.
 
+The first self-contained byte-layout review target is now `spec/experimental/UCOF-EXP-0003.md`.
+
 ## Motivation
 
 `UCOF-EXP-0002` Candidate 1 demonstrated bounded lookup, strict validation, append publication, linked history, recovery, repair, rewrite, and cross-language bytes. It also authenticated the active snapshot sequence inside every directory page. An unchanged historical page therefore could not be reused byte-for-byte: changing the sequence changed the page digest and every ancestor.
@@ -56,15 +58,47 @@ This FCP defines a small structural core. Application semantics, semantic depend
 
 Acceptance for experimentation requires one self-contained `spec/experimental/UCOF-EXP-0003.md` containing the complete field table and algorithms. Existing research files are evidence, not normative by reference.
 
+The first Draft currently proposes these concrete review values:
+
+- 64-byte bootstrap header;
+- 64-byte object header;
+- 128-bit opaque object identifier;
+- 16 KiB page size;
+- 80-byte page header;
+- 64-byte primary leaf locator;
+- 72-byte internal child reference;
+- 96-byte snapshot;
+- 128-byte commit footer;
+- SHA-256 with epoch-specific domain separation.
+
+From those proposed widths, leaf capacity is 254 with minimum 127 and internal fanout is 226 with minimum 113.
+
+All remain Draft until explicitly accepted.
+
 ### Identifiers
 
-- Primary object identifiers are proposed as **128-bit opaque unsigned values**.
-- Canonical key ordering is lexicographic over the 16-byte big-endian key representation.
-- Zero is reserved as absent and is not a valid object identifier.
+- Primary object identifiers are proposed as exactly **16 opaque bytes**.
+- Canonical key ordering is lexicographic over those 16 bytes, equivalent to an unsigned 128-bit big-endian key ordering.
+- All-zero is reserved as absent and is not a valid object identifier.
 - Identifiers are lookup keys, not content digests, authenticity claims, or globally collision-free names.
 - Applications choosing random identifiers remain responsible for adequate collision policy.
 
 Rationale: identifier longevity and namespace independence should be decided separately from locator density. The current 64-bit research layout is useful implementation evidence but is not automatically the proposed epoch layout.
+
+### Object header
+
+The proposed EXP-0003 object header expands from the research 48-byte/u64-ID layout to a 64-byte header containing:
+
+- 8-byte magic;
+- 2-byte header length;
+- 2-byte non-zero kind;
+- 4-byte flags;
+- 16-byte `ObjectId`;
+- 8-byte stored payload length;
+- 8-byte logical payload length;
+- 16 zero reserved bytes.
+
+Transforms are outside EXP-0003, so the Draft requires stored and logical payload lengths to match.
 
 ### Primary locator
 
@@ -82,13 +116,17 @@ Profiles needing broad inventory without per-object header reads may define an a
 ### Page geometry
 
 - Page size: **16 KiB** for this disposable epoch unless review evidence justifies a change.
-- Page identity: domain-separated digest over complete canonical page bytes.
+- Proposed page header: **80 bytes** with 16-byte minimum and maximum key bounds.
+- Proposed leaf entry: **64 bytes**.
+- Proposed internal child reference: **72 bytes** containing 16-byte minimum, 16-byte maximum, 8-byte child-page offset, and 32-byte child-page digest.
+- Child page length is implicit because all epoch pages have the fixed page size.
+- Child level is implicit as parent level minus one.
+- Page identity is a domain-separated digest over complete canonical page bytes.
 - Page identity excludes active snapshot sequence, physical offset, and file-instance commit identity.
-- Leaf and internal entry layouts are fixed for the epoch.
 - Unknown page kinds fail closed.
 - All unused page bytes are zero and participate in page identity.
 
-The exact internal child-reference field table must be specified explicitly in the EXP-0003 document before this FCP moves to Review.
+This geometry yields proposed leaf capacity 254 and internal fanout 226.
 
 ### Occupancy
 
@@ -97,25 +135,26 @@ The proposed occupancy policy is specified by `docs/spec/IMMUTABLE_SUCCESSOR_OCC
 In summary:
 
 - non-root pages contain at least half maximum capacity, rounded up;
+- proposed leaf minimum is 127;
+- proposed internal minimum is 113;
 - a root leaf may contain one or more entries;
 - an internal root contains at least two children;
 - the active tree is non-empty;
-- canonical full construction packs left-to-right, redistributing only the final two pages when required to satisfy minimum occupancy;
+- canonical bulk/rewrite construction packs left-to-right, redistributing only the final two pages when required to satisfy minimum occupancy;
 - the same policy applies independently at leaf and internal levels.
-
-Exact capacities are derived from the accepted EXP-0003 entry layouts rather than copied from the current 64-bit/88-byte research geometry.
 
 ### Deterministic insertion
 
-- Route by inclusive child key ranges.
+- Route by inclusive child key ranges and ordered gap position.
 - Replacing an existing identifier produces new immutable bytes along the affected path.
 - Insert a missing identifier into the target leaf in canonical key order.
-- On overflow, split deterministically so both pages satisfy the occupancy policy.
+- On overflow, split using `ceil((C+1)/2)` entries on the left and the remainder on the right.
+- Proposed leaf overflow is `255 -> 128,127`.
+- Proposed internal overflow is `227 -> 114,113`.
 - Propagate replacement/new-right-child information upward.
-- Apply the same rule to internal overflow.
 - Create a new root when the previous root splits.
 
-The exact split formula is byte-significant and must agree with the occupancy companion and authoritative vectors.
+The split formula is byte-significant and must agree with the occupancy companion and authoritative vectors.
 
 ### Deterministic deletion
 
@@ -134,16 +173,26 @@ Sibling preference and merge direction are byte-significant.
 
 - A batch contains at most one operation per identifier.
 - Duplicate operation identifiers are rejected.
-- Caller operation order does not affect canonical bytes.
+- Caller operation order does not affect bytes for the selected transition algorithm.
 - The writer canonicalizes operations by identifier and computes one complete next snapshot.
-- Multiple updates sharing ancestors emit each changed page once for the selected canonical algorithm.
+- Multiple updates sharing ancestors emit each changed page once.
 - Publication occurs only after all object/page/snapshot bytes needed by the commit are complete.
 
-### Canonical final-state question
+### Scoped determinism: canonical rewrite versus persistent transition
 
-Review must explicitly decide whether two valid construction paths that produce the same active logical object set are required to produce the same canonical page partition and root identity.
+The first EXP-0003 Draft proposes the following resolution of the canonical-final-state question:
 
-The current research canonical mixed/full-construction path aims for this property. Persistent path-local mutation can preserve additional historical page identity. EXP-0003 must state which identity guarantees are normative rather than leaving this as an implementation accident.
+**Canonical bulk/rewrite form:** given the same ordered active object/locator set and epoch-level metadata, a fresh genesis or canonical rewrite uses the prescribed full-construction grouping and produces one deterministic fresh-tree layout.
+
+**Persistent transition form:** a normal append transition is deterministic from the exact prior valid tree plus canonicalized operation batch. It may reuse unchanged historical pages and therefore is not required to have the same page partition/root digest as a fresh canonical rewrite of the resulting logical state.
+
+Consequently, EXP-0003 structural root/snapshot identity is proposed to be **history-sensitive under persistent mutation**.
+
+Equal logical active object sets are not automatically claimed to have equal structural root identity across different update histories. Profiles needing a history-independent logical-state identity must define one separately or use canonical rewrite output.
+
+Rationale: imposing one globally canonical page partition after every mutation can force broad repartitioning and defeat the principal scale benefit of immutable-page copy-on-write. Determinism should be scoped rather than confused with semantic identity.
+
+This is a substantive Draft proposal and requires explicit Review approval.
 
 ## Assurance boundaries
 
@@ -215,15 +264,15 @@ This proposal may move from Draft to Review when the proposal is sufficiently pr
 
 Required before Review:
 
-1. complete the self-contained EXP-0003 field table and binary grammar;
-2. resolve identifier, locator, internal-reference, occupancy, split, deletion, empty-tree, batch, identity, capability, and canonical-final-state questions;
+1. review and resolve the proposed object/page/locator/internal-reference field tables in the self-contained EXP-0003 Draft;
+2. resolve identifier, occupancy, split, deletion, empty-tree, batch, digest, capability/catalog, and scoped-determinism questions;
 3. integrate the exact occupancy companion into the normative package;
 4. transfer every material FCP-0002 objection into FCP-0003, a rejected alternative, or an explicitly owned later phase;
 5. produce authoritative structural boundary vectors for genesis, replacement/reuse, split/root growth, deletion/borrow/merge/root collapse, mixed batch, history, and recovery;
 6. document mismatches between current research bytes and proposed EXP-0003 bytes;
 7. commit a maintainer-review-ready Candidate 1 disposition record.
 
-The consolidated Rust implementation already supplies substantial evidence for item 5, but the authoritative vectors must be regenerated from the accepted EXP-0003 layout rather than inheriting research identities.
+The consolidated Rust implementation already supplies substantial algorithm evidence for item 5, but authoritative vectors must be regenerated from accepted EXP-0003 bytes rather than inheriting research identities.
 
 ## Review → Accepted-for-experimentation gates
 
@@ -269,6 +318,10 @@ Deferred to optional authenticated inventory structures. Mirroring reduces heade
 
 Rejected for this epoch. Offset tables, canonical packing, and parser-differential risk add complexity before the fixed-entry design has independent reproduction.
 
+### Require globally canonical page partition after every mutation
+
+Not selected in the first EXP-0003 Draft. It provides a stronger history-independent structural identity but can force broad repartitioning after local updates, undermining copy-on-write scale behavior. The proposed alternative is scoped determinism: canonical fresh rewrite plus deterministic history-sensitive persistent transitions.
+
 ### Make recovery part of ordinary open/validation
 
 Rejected. Recovery evidence is weaker and more ambiguous than exact-end validity and must remain explicitly requested.
@@ -282,15 +335,16 @@ Rejected. A stable source token prevents mixed-version reads but cannot prove th
 Review should focus especially on:
 
 - 128-bit identifier cost/order;
-- minimal locator density versus broad inventory I/O;
-- exact internal child-reference layout;
-- 16 KiB page-size trade-offs;
+- 64-byte minimal locator density versus broad inventory I/O;
+- 80-byte page header and 72-byte internal child-reference layout;
+- 16 KiB page-size trade-offs and resulting 254/226 capacities;
 - occupancy and split compatibility;
 - deterministic deletion sibling preference;
 - empty-tree policy;
-- canonical final-state identity versus historical page reuse;
+- scoped determinism/history-sensitive roots versus global final-state canonicality;
 - batch duplicate/canonicalization semantics;
 - catalog/capability/extension placement;
+- epoch-specific SHA-256 domain separation and algorithm rigidity;
 - source-version and freshness boundaries;
 - rewrite/compaction preservation rules;
 - when independent implementation evidence is mandatory relative to Review and epoch allocation.
