@@ -140,24 +140,15 @@ include!("immutable_successor/persistent_versioned_source_copy.rs");
 include!("immutable_successor/persistent_staged_publication.rs");
 
 #[cfg(unix)]
-mod persistent_unix_staging_api {
+mod persistent_unix_api {
     use super::*;
 
     include!("immutable_successor/persistent_unix_staging.rs");
-}
-
-#[cfg(unix)]
-pub use persistent_unix_staging_api::*;
-
-#[cfg(unix)]
-mod persistent_unix_directory_pinning_api {
-    use super::*;
-
     include!("immutable_successor/persistent_unix_directory_pinning.rs");
 }
 
 #[cfg(unix)]
-pub use persistent_unix_directory_pinning_api::*;
+pub use persistent_unix_api::*;
 
 /// Convenience methods completing the synchronous random-access source contract.
 pub trait ImmutableReadAtExt: ImmutableReadAt {
