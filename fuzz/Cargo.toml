@@ -397,3 +397,17 @@ path = "fuzz_targets/immutable_successor_history_chain_to_sink.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "conditional_wait_executor"
+path = "fuzz_targets/conditional_wait_executor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "conditional_authentication_refresh"
+path = "fuzz_targets/conditional_authentication_refresh.rs"
+test = false
+doc = false
+bench = false
