@@ -1,0 +1,28 @@
+name: Immutable Page Adversarial
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_adversarial.py"
+      - "docs/experiments/0029-exp0002-immutable-page-adversarial.md"
+      - ".github/workflows/immutable-page-adversarial.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_adversarial.py"
+      - "docs/experiments/0029-exp0002-immutable-page-adversarial.md"
+      - ".github/workflows/immutable-page-adversarial.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise layer-targeted immutable-page mutations
+        run: python3 tools/experiment_exp0002_immutable_page_adversarial.py

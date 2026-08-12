@@ -1,0 +1,40 @@
+name: Immutable Page Recovery
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_objects.py"
+      - "tools/experiment_exp0002_immutable_page_object_history.py"
+      - "tools/experiment_exp0002_immutable_page_object_source.py"
+      - "tools/experiment_exp0002_immutable_page_recovery.py"
+      - "tools/experiment_exp0002_immutable_fork_recipes.py"
+      - "docs/experiments/0035-exp0002-immutable-page-recovery.md"
+      - "docs/experiments/0041-exp0002-immutable-fork-recipes.md"
+      - ".github/workflows/immutable-page-recovery.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_objects.py"
+      - "tools/experiment_exp0002_immutable_page_object_history.py"
+      - "tools/experiment_exp0002_immutable_page_object_source.py"
+      - "tools/experiment_exp0002_immutable_page_recovery.py"
+      - "tools/experiment_exp0002_immutable_fork_recipes.py"
+      - "docs/experiments/0035-exp0002-immutable-page-recovery.md"
+      - "docs/experiments/0041-exp0002-immutable-fork-recipes.md"
+      - ".github/workflows/immutable-page-recovery.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise bounded recovery and verified source history
+        run: python3 tools/experiment_exp0002_immutable_page_recovery.py
+      - name: Exercise deterministic fork and interrupted-publication recipes
+        run: python3 tools/experiment_exp0002_immutable_fork_recipes.py

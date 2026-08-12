@@ -1,0 +1,26 @@
+name: External Sort Evidence
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_external_sort.py"
+      - "docs/experiments/0013-exp0002-external-sort.md"
+      - ".github/workflows/external-sort.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_external_sort.py"
+      - "docs/experiments/0013-exp0002-external-sort.md"
+      - ".github/workflows/external-sort.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reproduce bounded deterministic external sort
+        run: python3 tools/experiment_exp0002_external_sort.py

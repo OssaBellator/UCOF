@@ -1,0 +1,31 @@
+name: Verify Phase 3 Integration
+
+on:
+  pull_request:
+    paths:
+      - "crates/ucof-experiments/**"
+      - "tests/vectors/exp-0002-invalid/**"
+      - "tools/exp0002_invalid_vectors.py"
+      - ".github/workflows/integrate-phase3-evidence.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint Phase 3 experiment crate
+        run: cargo clippy --locked -p ucof-experiments --all-targets -- -D warnings
+      - name: Test Phase 3 experiment crate
+        run: cargo test --locked -p ucof-experiments --all-targets
+      - name: Verify invalid vector reproducibility
+        run: python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid

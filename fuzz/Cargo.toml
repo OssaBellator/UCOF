@@ -1,0 +1,413 @@
+[package]
+name = "ucof-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+sha2 = "0.10"
+ucof-core = { path = "../crates/ucof-core" }
+ucof-experiments = { path = "../crates/ucof-experiments" }
+
+[[bin]]
+name = "full_file"
+path = "fuzz_targets/full_file.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "canonical_metadata"
+path = "fuzz_targets/canonical_metadata.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "metadata_inspect"
+path = "fuzz_targets/metadata_inspect.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "prefix_salvage"
+path = "fuzz_targets/prefix_salvage.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "sequential_reader"
+path = "fuzz_targets/sequential_reader.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "writer_roundtrip"
+path = "fuzz_targets/writer_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "paged_directory"
+path = "fuzz_targets/paged_directory.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "snapshot_selection"
+path = "fuzz_targets/snapshot_selection.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "root_enumeration"
+path = "fuzz_targets/root_enumeration.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "publication_model"
+path = "fuzz_targets/publication_model.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "recovery_scan"
+path = "fuzz_targets/recovery_scan.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "compaction_plan"
+path = "fuzz_targets/compaction_plan.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "repair_plan"
+path = "fuzz_targets/repair_plan.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exp0002_strict"
+path = "fuzz_targets/exp0002_strict.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exp0002_recovery"
+path = "fuzz_targets/exp0002_recovery.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exp0002_roundtrip"
+path = "fuzz_targets/exp0002_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exp0002_lookup"
+path = "fuzz_targets/exp0002_lookup.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exp0002_rewrite"
+path = "fuzz_targets/exp0002_rewrite.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exp0002_source_lookup"
+path = "fuzz_targets/exp0002_source_lookup.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exp0002_source_strict_recovery"
+path = "fuzz_targets/exp0002_source_strict_recovery.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "exp0002_source_history"
+path = "fuzz_targets/exp0002_source_history.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_strict"
+path = "fuzz_targets/immutable_successor_strict.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_roundtrip"
+path = "fuzz_targets/immutable_successor_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_history_recovery"
+path = "fuzz_targets/immutable_successor_history_recovery.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_rewrite"
+path = "fuzz_targets/immutable_successor_rewrite.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_source_lookup"
+path = "fuzz_targets/immutable_successor_source_lookup.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_source_history_recovery"
+path = "fuzz_targets/immutable_successor_source_history_recovery.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_batch"
+path = "fuzz_targets/immutable_successor_persistent_batch.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_insert"
+path = "fuzz_targets/immutable_successor_persistent_insert.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_delete"
+path = "fuzz_targets/immutable_successor_persistent_delete.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_multi_put"
+path = "fuzz_targets/immutable_successor_persistent_multi_put.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_mixed"
+path = "fuzz_targets/immutable_successor_persistent_mixed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_mixed_streaming"
+path = "fuzz_targets/immutable_successor_persistent_mixed_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_replacement_streaming"
+path = "fuzz_targets/immutable_successor_persistent_replacement_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_insertion_streaming"
+path = "fuzz_targets/immutable_successor_persistent_insertion_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_deletion_streaming"
+path = "fuzz_targets/immutable_successor_persistent_deletion_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_multi_put_streaming"
+path = "fuzz_targets/immutable_successor_persistent_multi_put_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_streaming_dispatch"
+path = "fuzz_targets/immutable_successor_persistent_streaming_dispatch.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_copy"
+path = "fuzz_targets/immutable_successor_persistent_source_copy.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_versioned_source_copy"
+path = "fuzz_targets/immutable_successor_persistent_versioned_source_copy.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_replacement"
+path = "fuzz_targets/immutable_successor_persistent_source_replacement.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_insertion"
+path = "fuzz_targets/immutable_successor_persistent_source_insertion.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_deletion"
+path = "fuzz_targets/immutable_successor_persistent_source_deletion.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_multi_put"
+path = "fuzz_targets/immutable_successor_persistent_source_multi_put.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_mixed"
+path = "fuzz_targets/immutable_successor_persistent_source_mixed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_staged_publication"
+path = "fuzz_targets/immutable_successor_persistent_staged_publication.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_source_streaming"
+path = "fuzz_targets/immutable_successor_source_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_active_file_streaming"
+path = "fuzz_targets/immutable_successor_active_file_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_selected_active_streaming"
+path = "fuzz_targets/immutable_successor_selected_active_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_semantic_streaming"
+path = "fuzz_targets/immutable_successor_semantic_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_source_inventory"
+path = "fuzz_targets/immutable_successor_source_inventory.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_source_to_sink"
+path = "fuzz_targets/immutable_successor_source_to_sink.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_history_to_sink"
+path = "fuzz_targets/immutable_successor_history_to_sink.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_historical_semantic_streaming"
+path = "fuzz_targets/immutable_successor_historical_semantic_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_history_chain_to_sink"
+path = "fuzz_targets/immutable_successor_history_chain_to_sink.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "conditional_wait_executor"
+path = "fuzz_targets/conditional_wait_executor.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "conditional_authentication_refresh"
+path = "fuzz_targets/conditional_authentication_refresh.rs"
+test = false
+doc = false
+bench = false

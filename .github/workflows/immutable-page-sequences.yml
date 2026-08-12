@@ -1,0 +1,30 @@
+name: Immutable Page Sequences
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_splits.py"
+      - "tools/experiment_exp0002_immutable_page_sequences.py"
+      - "docs/experiments/0024-exp0002-immutable-page-sequences.md"
+      - ".github/workflows/immutable-page-sequences.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_splits.py"
+      - "tools/experiment_exp0002_immutable_page_sequences.py"
+      - "docs/experiments/0024-exp0002-immutable-page-sequences.md"
+      - ".github/workflows/immutable-page-sequences.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Differentially exercise mixed immutable-page operations
+        run: python3 tools/experiment_exp0002_immutable_page_sequences.py

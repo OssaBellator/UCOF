@@ -1,0 +1,4 @@
+{
+  "expected_error": "unsupported_required_capability",
+  "capability": 42
+}

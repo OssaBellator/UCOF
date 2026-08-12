@@ -1,0 +1,32 @@
+name: Immutable Page Metadata
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_extension_preservation.py"
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_objects.py"
+      - "tools/experiment_exp0002_immutable_page_metadata.py"
+      - "docs/experiments/0034-exp0002-immutable-page-metadata.md"
+      - ".github/workflows/immutable-page-metadata.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_extension_preservation.py"
+      - "tools/experiment_exp0002_immutable_page_cow.py"
+      - "tools/experiment_exp0002_immutable_page_objects.py"
+      - "tools/experiment_exp0002_immutable_page_metadata.py"
+      - "docs/experiments/0034-exp0002-immutable-page-metadata.md"
+      - ".github/workflows/immutable-page-metadata.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise authenticated roots, capabilities, and extensions
+        run: python3 tools/experiment_exp0002_immutable_page_metadata.py

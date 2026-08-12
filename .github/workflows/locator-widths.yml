@@ -1,0 +1,26 @@
+name: Locator Width Evidence
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_locator_widths.py"
+      - "docs/experiments/0010-exp0002-locator-widths.md"
+      - ".github/workflows/locator-widths.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_locator_widths.py"
+      - "docs/experiments/0010-exp0002-locator-widths.md"
+      - ".github/workflows/locator-widths.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reproduce locator-width comparison
+        run: python3 tools/experiment_exp0002_locator_widths.py

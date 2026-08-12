@@ -1,0 +1,26 @@
+name: Spill Page Emission
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_spill_page_emission.py"
+      - "docs/experiments/0016-exp0002-spill-page-emission.md"
+      - ".github/workflows/spill-page-emission.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_spill_page_emission.py"
+      - "docs/experiments/0016-exp0002-spill-page-emission.md"
+      - ".github/workflows/spill-page-emission.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Stream spill-sorted locators into immutable pages
+        run: python3 tools/experiment_exp0002_spill_page_emission.py

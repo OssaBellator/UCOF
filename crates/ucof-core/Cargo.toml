@@ -1,0 +1,19 @@
+[package]
+name = "ucof-core"
+description = "Experimental UCOF core framing, canonical metadata, reader, and writer"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+sha2 = "0.10"
+
+[dev-dependencies]
+ciborium = "=0.2.2"
+proptest = "=1.6.0"
+
+[lints]
+workspace = true

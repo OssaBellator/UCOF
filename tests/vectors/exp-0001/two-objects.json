@@ -1,0 +1,11 @@
+{
+  "length": 457,
+  "manifest_id": 3,
+  "sha256": "a4cf1b0f5acf992f8bef992cbfc874b6aa44fc97df71bfd798a5b414652c138f",
+  "entries": [
+    {"id": 1, "kind": 1, "offset": 32, "stored_len": 5, "logical_len": 5},
+    {"id": 2, "kind": 1, "offset": 77, "stored_len": 0, "logical_len": 0},
+    {"id": 3, "kind": 2, "offset": 117, "stored_len": 33, "logical_len": 33}
+  ],
+  "expected": "valid"
+}

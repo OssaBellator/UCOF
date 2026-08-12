@@ -573,3 +573,131 @@ The following remain intentionally unresolved:
 - signature and provenance claim envelope.
 
 These must be resolved through Format Change Proposals with adversarial vectors, not hidden implementation choices.
+
+## 16. Executable findings from UCOF-EXP-0001
+
+The Phase 1 and Phase 2 implementations provide executable evidence for the following controls and limitations. These findings refine the initial threat catalogue but do not stabilize the experimental epoch.
+
+### 16.1 Confirmed controls
+
+- file-size policy is applied before structural parsing;
+- offsets and lengths are checked before range construction and host-size conversion;
+- record, payload, metadata, text, byte-string, nesting, container-item, allocation, logical-byte, read-byte, and diagnostic limits are caller controlled;
+- unknown required capabilities fail closed for conforming interpretation while remaining visible to structural inventory;
+- the restricted deterministic-CBOR subset rejects non-shortest arguments, indefinite forms, duplicate or unordered map keys, invalid UTF-8, negative integers, and floating-point values;
+- directories are cross-checked against physical framing rather than treated as authoritative;
+- strict validation uses exact-end footer discovery and does not silently fall back to recovery scanning;
+- metadata-only inspection can skip multi-gigabyte virtual payload ranges while reading only bounded structural bytes;
+- sequential validation hashes the committed prefix incrementally and publishes a verified commit event only after footer, directory, manifest, digest, and exact-end checks pass;
+- strict random-access validation hashes payloads in bounded blocks under the same cumulative read budget as metadata inspection;
+- streaming writers emit the footer only through explicit successful finalization and become terminal after source or sink failure;
+- strict diagnosis remains invalid after integrity failure even when structural context is available;
+- prefix salvage reports only complete in-bounds records and always labels its result `UnverifiedPrefix`.
+
+### 16.2 Validation-order finding
+
+A changed committed byte does not imply one universal error category. Framing mutations may fail structural checks before digest comparison. Payload mutations that preserve framing reach `DigestMismatch`. A record-identity mutation with a recomputed digest can reach directory cross-validation and fail as `DirectoryMismatch`.
+
+Tests must therefore target and assert the intended validation layer. Implementations must not reorder checks in a way that exposes unsafe allocation or semantic use before required structural checks.
+
+### 16.3 Footer and recovery finding
+
+EXP-0001 stores footer fields outside the committed-prefix digest, so manifest identity, record count, directory location, and digest bytes require explicit structural and semantic checks. The current strict readers perform those checks.
+
+A bounded 64 KiB backward-search region can contain thousands of attacker-selected footer-magic candidates. Normal validation must remain exact-end. Future recovery scanning must independently bound scan bytes, candidate count, validation work, and diagnostics, and must never upgrade a recovery candidate to strict validity without satisfying the active-root rules defined in Phase 3.
+
+### 16.4 Scale finding
+
+The flat EXP-0001 directory is not suitable for UC-02-scale archives. One million zero-byte objects require a lower bound of approximately 40 MB of record headers and about 52 MB of directory payload before application data. Raising parser limits does not solve this architecture failure. Phase 3 must use a paged or hierarchical lookup structure whose single-object lookup does not require materializing every entry.
+
+### 16.5 Differential and fuzz evidence
+
+- Rust and independent Python implementations agree on the valid and malformed shared corpus;
+- supported primitive encodings and deterministic map order match pinned Ciborium 0.2.2, while UCOF intentionally rejects broader general-CBOR forms;
+- property tests cover deterministic writer equivalence, truncation rejection, and payload mutation;
+- dedicated fuzz targets cover full-file validation, canonical metadata, metadata inspection, prefix salvage, sequential reading, and writer round trips;
+- fuzz targets compile and run bounded smoke campaigns in pull requests and scheduled campaigns weekly;
+- the core library compiles for 32-bit little-endian and 64-bit big-endian targets, while serialized integers remain explicitly little-endian.
+
+### 16.6 Residual risks
+
+- SHA-256 in EXP-0001 provides integrity relative to stored footer data, not authenticity, signer trust, freshness, or rollback protection;
+- strict random-access validation assumes a stable source view for one operation;
+- the directory and writer ledger remain materialized and therefore bounded by object count and metadata limits;
+- sequential payload events currently own their chunk buffers;
+- salvage stops at the first fatal framing error and does not resynchronize;
+- transforms, compression, schemas, signatures, provenance, encryption, external references, snapshots, and checkpoint recovery remain outside the experimental epoch;
+- native dependencies introduced by future transforms require sanitizer-backed and supply-chain review beyond the current pure-Rust core.
+
+The detailed Phase 1 evidence remains in `docs/security/EXP_0001_FINDINGS.md` and the FCP-0001 evidence appendix. Future experiments must update this section when they confirm, invalidate, or supersede these findings.
+
+## 17. Executable findings from UCOF-EXP-0002 Candidate 1
+
+Candidate 1 defines exact disposable bytes for authenticated pages, complete snapshots, append commits, source-based validation, recovery, verified history, lookup, repair, and caller-directed rewrite. It remains non-stable and Draft. Detailed evidence is recorded in `docs/security/EXP_0002_BYTE_FINDINGS.md`.
+
+### 17.1 Serialized-structure controls
+
+Rust and independent in-repository Python readers enforce exact magic, version, lengths, little-endian fields, zero flags, zero reserved bytes, zero page padding, checked range arithmetic, and an explicit SHA-256 algorithm identifier. Object, page, snapshot, and commit hashes use separate domain prefixes.
+
+An authenticated outer digest does not replace inner validation. Layer-targeted cases recompute outer hashes and still reach rejection for malformed padding, forged child ranges, inconsistent levels, invalid parent links, object-header disagreement, physical overlap, and strict trailing bytes.
+
+### 17.2 Directory, lookup, and page-identity findings
+
+Candidate 1 pages require sorted unique leaf keys, sorted non-overlapping child ranges, exact child levels, exact 16 KiB lengths, complete-page digests, and cycle or repeated-offset rejection during traversal.
+
+Full strict validation authenticates every reachable page and every referenced object. Targeted lookup instead authenticates the exact-end commit, active snapshot, one root-to-leaf path, and the selected object or absence result. It does not claim unrelated historical objects were rehashed.
+
+A concrete page-reuse experiment produced a blocking negative result: Candidate 1 requires each page sequence to equal the active snapshot sequence. An unchanged historical page therefore fails when referenced by a later snapshot. Re-encoding the page changes its digest and propagates through every ancestor. Candidate 1 cannot provide exact historical directory-page reuse; a successor must replace page-sequence equality with independently implementable immutable-page or page-birth semantics.
+
+The abstract persistent-tree model remains useful algorithm evidence, but it does not override the concrete byte-level rejection. Checkpoint-cadence evidence further shows that naive per-object path copying can write more metadata than one batched rebuild.
+
+### 17.3 Bounded source and transport findings
+
+Candidate 1 has bounded seekable-source implementations for targeted lookup, full strict validation, explicit recovery, and verified previous-footer history. They separately bound read operations, bytes read, maximum request size, pages, objects, bytes hashed, chain depth, scan work, candidate work, and returned results.
+
+ADR-0013 defines a stable-view adapter for mutable or remote sources. A caller supplies a strong 32-byte token derived from storage identity and immutable version evidence. The adapter checks it before and after every length or range read and fails on any change. The token is transport evidence, not a UCOF field or digest.
+
+Stable view is not freshness. A malicious source can consistently serve an older valid file and matching token. Whole-file rollback still requires external trusted state.
+
+A localhost immutable HTTP Range experiment over an append file containing an unrelated 1 MiB historical payload measured seven requests and 33,610 transferred bytes for targeted lookup, versus 25 requests and 1,082,288 bytes for full strict validation. Lookup did not request the large historical payload; strict validation did. Localhost elapsed time is not a wide-area latency guarantee.
+
+### 17.4 Publication, recovery, and history findings
+
+Only a complete 160-byte footer at exact file end publishes the active snapshot. Every tested incomplete append fails strict latest validation. Strict mode never invokes recovery.
+
+Recovery is separately requested and independently bounds suffix bytes, scan requests, footer-magic matches, candidate validations, cumulative reads spent on successful and failed candidates, chain depth, and returned results. Footer magic and previous-footer pointers have no authority without exact-prefix strict validation.
+
+Verified history validates the active exact-end file and each linked ancestor as an exact-end prefix. It cross-checks previous-footer locators, parent snapshot digests, sequence increments, roots, and commit identity under cumulative-read and depth limits. Equal verified forks remain ambiguous rather than being silently selected.
+
+### 17.5 Identity, repair, rewrite, and writer findings
+
+ADR-0011 separates structural snapshot identity from file-instance commit identity. A deterministic repair may preserve an identical snapshot digest while publishing a different commit digest. This does not preserve the original file instance or byte-scoped signatures.
+
+Repair and caller-directed rewrite accept only strictly verified complete sources, copy authenticated payload ranges, enforce object, copied-byte, and output-byte limits, require retained roots, validate generated output, and never claim automatic semantic dependency discovery.
+
+A bounded external-sort experiment processed 200,003 exact 88-byte locator-shaped records using sub-megabyte spill runs, deterministic output across run sizes, exact spill/output accounting, and duplicate rejection. Integration still requires spill cleanup, confidentiality, descriptor, storage-exhaustion, and page-emission policy.
+
+### 17.6 Differential, invalid-vector, fuzz, and portability evidence
+
+- Rust and independent Python implementations produce byte-identical genesis, append, and multi-leaf vectors;
+- thirteen pinned invalid and interrupted vectors carry strict-rejection and diagnostic-layer expectations;
+- 21 layer-targeted adversarial cases exercise headers, objects, pages, padding, links, footers, exact-end state, and append truncation;
+- 21 cargo-fuzz targets cover inherited byte paths, Phase 3 models, strict parsing, writers, lookup, source lookup, full source validation, recovery, rewrite, and source history;
+- the workspace compiles at Rust 1.85, on 32-bit little-endian, and on 64-bit big-endian targets;
+- all permanent workflows use read-only repository permissions.
+
+Both implementations remain in one repository and may share a specification misunderstanding. Independent maintenance or review is still required.
+
+### 17.7 Residual risks and open controls
+
+- SHA-256 integrity is not authenticity, signer trust, confidentiality, provenance, or external freshness;
+- a valid older whole file can be replayed without external trusted state;
+- Candidate 1 page-sequence semantics prevent true historical page reuse;
+- the 88-byte leaf entry dominates large-directory metadata cost;
+- external sorting is not yet integrated with the writer or spill-security policy;
+- retry, cancellation, deadline, and asynchronous transport behavior remain undefined;
+- normative minimum resource limits and future-field preservation rules remain unresolved;
+- semantic compaction requires profile, schema, or caller-supplied dependency information;
+- transforms, compression, signatures, provenance, encryption, protected metadata, and external references remain outside Candidate 1.
+
+FCP-0002 must not enter Review until the page-identity blocker, locator and identifier widths, writer integration, normative limits, preservation rules, transport behavior, independent evidence, external freshness, and substantive maintainer objections are resolved.

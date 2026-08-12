@@ -1,0 +1,26 @@
+name: Extension Preservation
+
+on:
+  pull_request:
+    paths:
+      - "tools/experiment_exp0002_extension_preservation.py"
+      - "docs/experiments/0020-exp0002-extension-preservation.md"
+      - ".github/workflows/extension-preservation.yml"
+  push:
+    branches: ["phase-3/**"]
+    paths:
+      - "tools/experiment_exp0002_extension_preservation.py"
+      - "docs/experiments/0020-exp0002-extension-preservation.md"
+      - ".github/workflows/extension-preservation.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  evidence:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise required and optional extension semantics
+        run: python3 tools/experiment_exp0002_extension_preservation.py

@@ -1,0 +1,19 @@
+[package]
+name = "ucof-cli"
+description = "Inspector and verifier for experimental UCOF files"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[[bin]]
+name = "ucof"
+path = "src/main.rs"
+
+[dependencies]
+ucof-core = { path = "../ucof-core" }
+
+[lints]
+workspace = true
