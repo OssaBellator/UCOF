@@ -122,8 +122,8 @@ fuzz_target!(|data: &[u8]| {
         .iter()
         .find(|entry| entry.report.sequence == sequence)
         .expect("selected sequence");
-    let prefix_len = entry.footer_offset
-        + u64::try_from(FOOTER_LEN).expect("footer length fits u64");
+    let prefix_len =
+        entry.footer_offset + u64::try_from(FOOTER_LEN).expect("footer length fits u64");
     let expected = rewrite_all(
         &source_bytes[..usize::try_from(prefix_len).expect("prefix")],
         format,
