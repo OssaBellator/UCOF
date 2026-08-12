@@ -25,6 +25,8 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: Test Rust implementation
         run: cargo test --locked --workspace --all-targets
+      - name: Reproduce deletion policy trace
+        run: cargo run --locked -p ucof-experiments --example exp0003_delete_policy_trace
       - name: Test Rust documentation
         run: cargo test --locked --workspace --doc
       - name: Test independent Python parser
