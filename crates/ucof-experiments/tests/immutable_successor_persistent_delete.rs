@@ -151,7 +151,10 @@ fn experimental_fuller_sibling_changes_transition_bytes_not_logical_state() {
         ExperimentalDeleteBorrowPolicy::LeftFirst,
     )
     .expect("explicit left-first");
-    assert_eq!(default, explicit_left, "default bytes must remain left-first");
+    assert_eq!(
+        default, explicit_left,
+        "default bytes must remain left-first"
+    );
 
     let fuller = append_persistent_delete_experimental(
         &state,
@@ -161,7 +164,10 @@ fn experimental_fuller_sibling_changes_transition_bytes_not_logical_state() {
     )
     .expect("fuller sibling");
 
-    assert_ne!(default.bytes, fuller.bytes, "borrow direction must affect bytes");
+    assert_ne!(
+        default.bytes, fuller.bytes,
+        "borrow direction must affect bytes"
+    );
     assert_ne!(
         default.report.snapshot_digest, fuller.report.snapshot_digest,
         "borrow direction must affect authenticated root/snapshot identity"
@@ -185,7 +191,10 @@ fn experimental_fuller_sibling_changes_transition_bytes_not_logical_state() {
     // payloads even though their authenticated persistent roots differ.
     let default_fresh = rewrite_all(&default.bytes, limits).expect("rewrite left-first");
     let fuller_fresh = rewrite_all(&fuller.bytes, limits).expect("rewrite fuller");
-    assert_eq!(default_fresh.retained_object_ids, fuller_fresh.retained_object_ids);
+    assert_eq!(
+        default_fresh.retained_object_ids,
+        fuller_fresh.retained_object_ids
+    );
     assert_eq!(default_fresh.bytes, fuller_fresh.bytes);
 }
 
