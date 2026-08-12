@@ -45,6 +45,10 @@ jobs:
         run: python3 tools/verify_exp0002_immutable_invalid_recipes.py
       - name: Regenerate immutable successor vector recipes
         run: python3 tools/verify_exp0002_immutable_generated_recipes.py
+      - name: Verify conditional retry traces
+        run: python3 tools/verify_exp0002_immutable_retry_traces.py
+      - name: Verify conditional HTTP classification traces
+        run: python3 tools/verify_conditional_http_classification_traces.py
       - name: Reproduce framing experiments
         run: |
           python3 tools/experiment_framing_widths.py
