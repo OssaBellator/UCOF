@@ -59,6 +59,7 @@ jobs:
           python3 tools/experiment_exp0002_cow_reuse.py
           python3 tools/experiment_exp0002_checkpoint_cadence.py
           python3 tools/experiment_exp0003_page_size.py > /dev/null
+          python3 tools/experiment_exp0003_id_width.py > /dev/null
 
   msrv:
     runs-on: ubuntu-latest
