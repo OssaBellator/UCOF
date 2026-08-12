@@ -114,7 +114,10 @@ fn main() {
         fuller_metrics.delete_pages_reused += fuller_delete.pages_reused;
         fuller_metrics.bytes_appended += fuller_delete.bytes.len() - fuller_before;
 
-        assert_eq!(left_delete.report.object_count, fuller_delete.report.object_count);
+        assert_eq!(
+            left_delete.report.object_count,
+            fuller_delete.report.object_count
+        );
         if left_delete.bytes != fuller_delete.bytes {
             delete_divergent_cycles += 1;
         }
@@ -136,7 +139,10 @@ fn main() {
 
         assert_eq!(left_insert.report.object_count, active_ids.len());
         assert_eq!(fuller_insert.report.object_count, active_ids.len());
-        assert_eq!(left_insert.report.object_count, fuller_insert.report.object_count);
+        assert_eq!(
+            left_insert.report.object_count,
+            fuller_insert.report.object_count
+        );
 
         left_state = left_insert.bytes;
         fuller_state = fuller_insert.bytes;
