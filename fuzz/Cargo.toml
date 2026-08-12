@@ -228,3 +228,101 @@ path = "fuzz_targets/immutable_successor_persistent_multi_put.rs"
 test = false
 doc = false
 bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_mixed"
+path = "fuzz_targets/immutable_successor_persistent_mixed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_mixed_streaming"
+path = "fuzz_targets/immutable_successor_persistent_mixed_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_replacement_streaming"
+path = "fuzz_targets/immutable_successor_persistent_replacement_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_insertion_streaming"
+path = "fuzz_targets/immutable_successor_persistent_insertion_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_deletion_streaming"
+path = "fuzz_targets/immutable_successor_persistent_deletion_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_multi_put_streaming"
+path = "fuzz_targets/immutable_successor_persistent_multi_put_streaming.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_streaming_dispatch"
+path = "fuzz_targets/immutable_successor_persistent_streaming_dispatch.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_copy"
+path = "fuzz_targets/immutable_successor_persistent_source_copy.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_versioned_source_copy"
+path = "fuzz_targets/immutable_successor_persistent_versioned_source_copy.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_replacement"
+path = "fuzz_targets/immutable_successor_persistent_source_replacement.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_insertion"
+path = "fuzz_targets/immutable_successor_persistent_source_insertion.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_deletion"
+path = "fuzz_targets/immutable_successor_persistent_source_deletion.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_multi_put"
+path = "fuzz_targets/immutable_successor_persistent_source_multi_put.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_source_mixed"
+path = "fuzz_targets/immutable_successor_persistent_source_mixed.rs"
+test = false
+doc = false
+bench = false
