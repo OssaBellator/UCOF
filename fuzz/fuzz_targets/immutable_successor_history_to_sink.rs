@@ -6,6 +6,7 @@ use ucof_experiments::immutable_successor::{
     validate_history, ImmutableHistoryToSinkError, ImmutableLimits, ImmutableObjectInput,
     ImmutableReadAt, ImmutableSourceError, ImmutableSourceLimits,
     ImmutableSourceStreamingWriteOptions, ImmutableStreamingWriteOptions, ImmutableVersionedReadAt,
+    FOOTER_LEN,
 };
 
 #[derive(Clone, Debug)]
@@ -121,7 +122,8 @@ fuzz_target!(|data: &[u8]| {
         .iter()
         .find(|entry| entry.report.sequence == sequence)
         .expect("selected sequence");
-    let prefix_len = entry.footer_offset + 192;
+    let prefix_len = entry.footer_offset
+        + u64::try_from(FOOTER_LEN).expect("footer length fits u64");
     let expected = rewrite_all(
         &source_bytes[..usize::try_from(prefix_len).expect("prefix")],
         format,
