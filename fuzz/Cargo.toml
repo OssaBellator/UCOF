@@ -9,6 +9,7 @@ cargo-fuzz = true
 
 [dependencies]
 libfuzzer-sys = "0.4"
+sha2 = "0.10"
 ucof-core = { path = "../crates/ucof-core" }
 ucof-experiments = { path = "../crates/ucof-experiments" }
 
@@ -323,6 +324,13 @@ bench = false
 [[bin]]
 name = "immutable_successor_persistent_source_mixed"
 path = "fuzz_targets/immutable_successor_persistent_source_mixed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "immutable_successor_persistent_staged_publication"
+path = "fuzz_targets/immutable_successor_persistent_staged_publication.rs"
 test = false
 doc = false
 bench = false
