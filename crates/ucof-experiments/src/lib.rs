@@ -25,6 +25,7 @@ mod publication;
 mod recovery;
 mod repair;
 mod snapshots;
+mod spill_publication;
 
 pub use compaction::{CompactionError, CompactionLimits, CompactionPlan, ObjectGraph};
 pub use directory::{
@@ -59,4 +60,9 @@ pub use snapshots::{
     CandidateStatus, CheckpointKind, RejectedCandidate, RootRejection, RootSelectionError,
     RootSelectionLimits, RootSelectionMode, RootSelectionReport, SnapshotCandidate,
     SnapshotIdentity,
+};
+pub use spill_publication::{
+    NoOverwriteLinkResult, SpillConfidentialityPolicy, SpillPublicationError,
+    SpillPublicationLimits, SpillPublicationOutcome, SpillPublicationSession,
+    SpillPublicationStage,
 };
