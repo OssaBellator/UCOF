@@ -62,6 +62,7 @@ jobs:
           python3 tools/experiment_exp0003_id_width.py > /dev/null
           python3 tools/experiment_exp0003_cost_envelope.py > /dev/null
           python3 tools/experiment_exp0003_mixed_leaf_restructuring.py --quick > /dev/null
+          python3 tools/experiment_exp0003_history_independent_partition.py --quick > /dev/null
 
   msrv:
     runs-on: ubuntu-latest
