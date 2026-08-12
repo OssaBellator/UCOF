@@ -66,6 +66,7 @@ jobs:
           python3 tools/experiment_exp0003_mixed_leaf_restructuring.py --quick > /dev/null
           python3 tools/experiment_exp0003_history_independent_partition.py --quick > /dev/null
           python3 tools/experiment_exp0003_workload_phase.py > /dev/null
+          python3 tools/experiment_exp0003_mean_field_gap.py > /dev/null
 
   msrv:
     runs-on: ubuntu-latest
