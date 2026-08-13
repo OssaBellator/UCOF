@@ -60,8 +60,10 @@ fn prepared_stage_releases_input_before_sorted_visit() {
         .map(|object_id| Ok::<_, &'static str>(descriptor(object_id)));
     let stage = prepare_bounded_source_descriptors(&directory, input, limits())
         .expect("prepare descriptors");
+    let descriptor_bytes =
+        u64::try_from(BOUNDED_SOURCE_DESCRIPTOR_BYTES).expect("descriptor size fits u64");
     assert_eq!(stage.records(), 4);
-    assert_eq!(stage.bytes(), 4 * BOUNDED_SOURCE_DESCRIPTOR_BYTES as u64);
+    assert_eq!(stage.bytes(), 4 * descriptor_bytes);
     assert_eq!(stage.report().output_records, 4);
     let mut visited = Vec::new();
     stage
@@ -80,14 +82,13 @@ fn prepared_stage_releases_input_before_sorted_visit() {
 #[test]
 fn preparation_failures_leave_no_stage_file() {
     let directory = directory("failures");
-    let input = vec![
-        Ok(descriptor(2)),
-        Ok(descriptor(1)),
-        Err("metadata read"),
-    ];
-    let error = prepare_bounded_source_descriptors(&directory, input, limits())
-        .expect_err("input failure");
-    assert!(matches!(error, BoundedSourceStageError::Input("metadata read")));
+    let input = vec![Ok(descriptor(2)), Ok(descriptor(1)), Err("metadata read")];
+    let error =
+        prepare_bounded_source_descriptors(&directory, input, limits()).expect_err("input failure");
+    assert!(matches!(
+        error,
+        BoundedSourceStageError::Input("metadata read")
+    ));
     assert!(std::fs::read_dir(&directory).unwrap().next().is_none());
 
     let duplicate = [1u64, 3, 2, 4, 2]
