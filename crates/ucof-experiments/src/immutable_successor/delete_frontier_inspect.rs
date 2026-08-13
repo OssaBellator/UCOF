@@ -119,6 +119,9 @@ pub fn inspect_persistent_delete_leaf_frontier_experimental(
     }
 
     let previous = validate_canonical_internal(data, limits)?;
+    if previous.locators.len() <= 1 {
+        return Err(ImmutableError::Invalid("batch result"));
+    }
     if previous
         .locators
         .binary_search_by_key(&object_id, |locator| locator.object_id)
