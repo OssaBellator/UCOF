@@ -1,0 +1,31 @@
+name: Diagnose Async Full Validation
+
+on:
+  push:
+    branches: ["phase-3/conditional-async-full-validation"]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@1.85.0
+      - name: Capture feature compiler output
+        shell: bash
+        run: |
+          set +e
+          cargo check --locked -p ucof-experiments --all-targets --features http-reqwest > compiler.txt 2>&1
+          status=$?
+          cat compiler.txt
+          echo "$status" > compiler.status
+          exit 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: async-full-compiler-diagnostics
+          path: |
+            compiler.txt
+            compiler.status
+          if-no-files-found: error
