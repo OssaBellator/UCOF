@@ -733,8 +733,9 @@ mod bounded_spill_sort_tests {
             limits(16, 4, 2),
         )
         .expect("empty spill sort");
+        let empty_digest: [u8; 32] = Sha256::digest([]).into();
         assert!(output.is_empty());
         assert_eq!(report.input_records, 0);
-        assert_eq!(report.output_sha256, Sha256::digest([]).into());
+        assert_eq!(report.output_sha256, empty_digest);
     }
 }
