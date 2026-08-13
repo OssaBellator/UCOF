@@ -1,7 +1,7 @@
 use ucof_experiments::immutable_successor::{
-    append_persistent_delete, append_persistent_insert, build_genesis, validate_canonical_occupancy,
-    FOOTER_LEN, INTERNAL_FANOUT, ImmutableLimits, ImmutableObjectInput, LEAF_CAPACITY,
-    LEAF_MIN_OCCUPANCY, PAGE_SIZE, SNAPSHOT_LEN,
+    append_persistent_delete, append_persistent_insert, build_genesis,
+    validate_canonical_occupancy, ImmutableLimits, ImmutableObjectInput, FOOTER_LEN,
+    INTERNAL_FANOUT, LEAF_CAPACITY, LEAF_MIN_OCCUPANCY, PAGE_SIZE, SNAPSHOT_LEN,
 };
 
 #[derive(Clone, Copy)]
@@ -75,7 +75,8 @@ fn emit_case(case: Case<'_>, source: &[u8], limits: ImmutableLimits) {
         .expect("touched original pages");
     let page_count_delta = i64::try_from(result.report.page_count).expect("result pages")
         - i64::try_from(source_report.page_count).expect("source pages");
-    let root_level_delta = i16::from(result.report.root_level) - i16::from(source_report.root_level);
+    let root_level_delta =
+        i16::from(result.report.root_level) - i16::from(source_report.root_level);
 
     println!(
         "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
@@ -160,8 +161,7 @@ fn main() {
         limits,
     );
 
-    let collapse =
-        build_genesis(&objects(2 * LEAF_MIN_OCCUPANCY), limits).expect("collapse base");
+    let collapse = build_genesis(&objects(2 * LEAF_MIN_OCCUPANCY), limits).expect("collapse base");
     emit_case(
         Case {
             name: "depth1-merge-root-collapse",
