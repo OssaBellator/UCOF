@@ -49,6 +49,17 @@ mod source_api {
     pub use async_source_lookup_api::*;
 
     include!("immutable_successor/source_full.rs");
+
+    #[cfg(feature = "http-reqwest")]
+    mod async_source_full_api {
+        use super::*;
+
+        include!("immutable_successor/conditional_async_source_full.rs");
+    }
+
+    #[cfg(feature = "http-reqwest")]
+    pub use async_source_full_api::*;
+
     include!("immutable_successor/source_history_inventory.rs");
     include!("immutable_successor/source_history_rewrite.rs");
     include!("immutable_successor/source_inventory_conversion.rs");

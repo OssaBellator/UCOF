@@ -29,6 +29,8 @@ jobs:
         run: cargo test --locked -p ucof-experiments --features http-reqwest conditional_reqwest
       - name: Test async HTTP targeted lookup
         run: cargo test --locked -p ucof-experiments --features http-reqwest conditional_async_source_lookup
+      - name: Test async HTTP full validation
+        run: cargo test --locked -p ucof-experiments --features http-reqwest conditional_async_source_full
       - name: Reproduce deletion policy trace
         run: cargo run --locked -p ucof-experiments --example exp0003_delete_policy_trace
       - name: Reproduce deletion policy trace matrix
