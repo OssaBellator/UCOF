@@ -2,7 +2,7 @@
 
 **Status:** In progress; implementation consolidated on `main`, normative successor choices remain pending  
 **Started:** 2026-07-30  
-**Authoritative implementation baseline:** `main` after PR #75 (`27956368289b6ebf230ff2baf5fa5313d4f83806`)  
+**Authoritative implementation baseline:** current `main`; Phase 3 implementation evidence is continuously consolidated rather than defined by an old stacked branch  
 **Current convergence milestone:** #76 — EXP-0003 Interoperability Candidate  
 **Current Draft→Review decision surface:** `docs/review/FCP_0003_DRAFT_TO_REVIEW_LEDGER.md`
 
@@ -10,7 +10,7 @@
 
 Phase 3 is no longer primarily an implementation-volume phase.
 
-The repository contains substantial executable evidence for bounded hostile-input parsing, immutable primary-directory pages, snapshots, persistent copy-on-write mutation, linked history, explicit recovery, rewrite/compaction inputs, source-backed operation planning, transport policy, and publication research.
+The repository contains substantial executable evidence for bounded hostile-input parsing, immutable primary-directory pages, snapshots, persistent copy-on-write mutation, linked history, explicit recovery, rewrite/compaction inputs, source-backed operation planning, concrete conditional HTTP access, and publication research.
 
 The remaining P0 objective is to turn that research into **one internally consistent, independently implementable experimental successor epoch** without treating green reference code or merged recommendation packets as normative acceptance.
 
@@ -96,7 +96,7 @@ Issue #9 is therefore closed as implementation-complete.
 
 Research implementations cover verified and strongly-versioned source copying, source-backed replacement/insertion/deletion/multi-put/mixed planning, bounded output, selected history, and historical semantic-selection planning.
 
-These demonstrate architectural feasibility without complete-file materialization. They do **not** qualify real provider behavior; #10 remains the maintained HTTP/cloud/native-async gate.
+These demonstrate architectural feasibility without complete-file materialization. Concrete Reqwest/Tokio work now also demonstrates a maintained strong-version HTTP transport, native async cancellation/deadlines, explicit retry/backoff authority, application-owned authentication refresh, authenticated targeted lookup, strict full active-state validation, and linked-history validation over real loopback HTTP. This remains implementation/qualification evidence for the current research bytes, not an EXP-0003 normative dependency or a claim that all providers are qualified.
 
 ### History and recovery
 
@@ -106,7 +106,7 @@ The repository keeps these assurance modes separate:
 - **linked-history verification** — explicitly requested ancestry validation;
 - **recovery** — explicitly requested, bounded, report-only candidate-prefix discovery.
 
-Recovery never silently replaces the active state.
+Recovery never silently replaces the active state. The concrete async HTTP path now covers active validation and linked-history verification; recovery over that path remains a separate #10 gate.
 
 ### Rewrite/compaction boundary
 
@@ -256,12 +256,23 @@ Only after normative bytes are selected:
 
 ### #10 — maintained remote adapters
 
-Still required:
+Current maintained HTTP evidence includes:
 
-- maintained real HTTP range adapter with strong conditional semantics;
-- one versioned cloud-object source;
-- native async cancellation;
-- provider/TLS/redirect/cache/decompression/request-budget qualification.
+- Reqwest/Tokio conditional range transport with strong ETag/`If-Match` semantics;
+- exact range/status/header/body validation before parser acceptance;
+- native async cancellation and deadlines for requests, retry waits, and authentication refresh;
+- operation-wide explicit retry/backoff accounting;
+- application-owned one-refresh authentication flow;
+- async authenticated targeted lookup and absence;
+- async strict exact-end full active-state validation;
+- async linked-history validation while preserving one full-object strong-version view.
+
+Still required before #10 is complete:
+
+- async recovery-candidate validation through the concrete strong-version source;
+- one maintained immutable/versioned cloud-object source with provider-specific version/signing semantics and emulator/provider evidence;
+- explicit provider/TLS/credential/redirect/proxy/cache/decompression qualification;
+- final operation/provider accounting covering targeted lookup, full validation, history, and recovery.
 
 ### #11 — production-candidate publication subsystem
 
@@ -287,7 +298,7 @@ Current evidence does **not** establish:
 - allocated EXP-0003;
 - migration/compatibility guarantees;
 - production-qualified durable publication;
-- maintained provider adapters/native async cancellation;
+- versioned cloud-object/provider qualification or remote recovery assurance;
 - independent implementation agreement;
 - signatures/provenance semantics;
 - encryption/selective disclosure semantics;
