@@ -257,7 +257,12 @@ fn main() {
     println!("trace,policy,cycles,delete_pages_written,insert_pages_written,total_pages_written,delete_pages_reused,insert_pages_reused,total_pages_reused,bytes_appended,final_file_bytes");
     for spec in TRACES {
         let result = run_trace(&base, &active_ids, spec, limits);
-        print_policy(spec.name, "left-first", &result.left, result.left_final_bytes);
+        print_policy(
+            spec.name,
+            "left-first",
+            &result.left,
+            result.left_final_bytes,
+        );
         print_policy(
             spec.name,
             "fuller-sibling",
