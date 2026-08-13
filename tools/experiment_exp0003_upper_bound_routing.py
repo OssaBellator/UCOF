@@ -1,13 +1,16 @@
 #!/usr/bin/env python3
 """Model EXP-0003 upper-bound-only internal routing.
 
-The experiment separates three questions:
+The experiment separates four questions:
 
-1. Is routing by strictly increasing child maxima equivalent to the current
-   explicit [child_min, child_max] rule on a valid sparse B+tree?
-2. Can strict recursive validation reconstruct the omitted minima from
-   authenticated child headers and enforce the same non-overlap invariant?
-3. What density/height benefit does removing the duplicated child minimum buy
+1. Is insertion routing by strictly increasing child maxima equivalent to the
+   Draft's current explicit [child_min, child_max] gap-routing rule?
+2. Does upper-bound lookup produce the same result on a valid sparse tree, and
+   how often does it need one extra child-page authentication for a gap absence
+   that explicit ranges can prove at the parent?
+3. Can strict recursive validation reconstruct omitted minima from authenticated
+   child headers and enforce the same non-overlap invariant?
+4. What density/height benefit does removing the duplicated child minimum buy
    under compact 128-bit and 64-bit geometry?
 
 This is evidence only. It does not change the EXP-0003 Draft.
@@ -73,8 +76,14 @@ class GeometryRow:
 class RoutingSummary:
     generated_parents: int
     query_checks: int
-    lookup_mismatches: int
+    in_range_lookup_checks: int
+    gap_absence_checks: int
+    outside_parent_absence_checks: int
+    lookup_result_mismatches: int
+    in_range_selected_child_mismatches: int
     insertion_mismatches: int
+    full_range_parent_gap_shortcuts: int
+    upper_bound_extra_child_reads_for_gaps: int
     valid_full_strict_failures: int
     valid_upper_strict_failures: int
     malformed_overlap_cases: int
@@ -126,10 +135,8 @@ def geometry_rows() -> list[GeometryRow]:
     ]
 
 
-def full_range_route(
-    ranges: list[tuple[int, int]], query: int, *, insertion: bool
-) -> int | None:
-    """Route using the Draft's explicit child ranges and gap rule."""
+def full_range_insertion_route(ranges: list[tuple[int, int]], query: int) -> int:
+    """Route insertion using the Draft's explicit range/gap rule."""
     if not ranges:
         raise ValueError("parent must contain at least one child")
 
@@ -137,10 +144,8 @@ def full_range_route(
         if minimum <= query <= maximum:
             return index
         if query < minimum:
-            # Before the first child or in a sparse gap: choose the next child.
             return index
-
-    return len(ranges) - 1 if insertion else None
+    return len(ranges) - 1
 
 
 def upper_bound_route(maxima: list[int], query: int, *, insertion: bool) -> int | None:
@@ -151,11 +156,52 @@ def upper_bound_route(maxima: list[int], query: int, *, insertion: bool) -> int 
     for index, maximum in enumerate(maxima):
         if query <= maximum:
             return index
-
     return len(maxima) - 1 if insertion else None
 
 
-def full_parent_local_valid(ranges: list[tuple[int, int]], parent_min: int, parent_max: int) -> bool:
+def full_range_lookup_child(ranges: list[tuple[int, int]], query: int) -> int | None:
+    """Return a child only when explicit parent ranges contain the query.
+
+    This matches the existing authenticated EXP-0002 lookup behavior: a query
+    in an inter-child gap can be returned absent from the authenticated parent
+    without opening another child page.
+    """
+    if not ranges:
+        raise ValueError("parent must contain at least one child")
+    if query < ranges[0][0] or query > ranges[-1][1]:
+        return None
+    for index, (minimum, maximum) in enumerate(ranges):
+        if minimum <= query <= maximum:
+            return index
+    return None
+
+
+def upper_bound_lookup_result(
+    ranges: list[tuple[int, int]], maxima: list[int], query: int
+) -> tuple[int | None, int]:
+    """Return final child selection plus extra child-header reads.
+
+    Parent min/max reject queries outside the parent range. Inside that range,
+    max-only metadata must descend to the first child with max >= query. If the
+    authenticated child header then says query < child.min, the lookup is absent
+    and paid one child-page authentication that full ranges could avoid.
+    """
+    if query < ranges[0][0] or query > ranges[-1][1]:
+        return None, 0
+    child = upper_bound_route(maxima, query, insertion=False)
+    if child is None:
+        return None, 0
+    minimum, maximum = ranges[child]
+    if query < minimum:
+        return None, 1
+    if query <= maximum:
+        return child, 0
+    raise AssertionError("upper-bound routing selected an impossible child")
+
+
+def full_parent_local_valid(
+    ranges: list[tuple[int, int]], parent_min: int, parent_max: int
+) -> bool:
     if not ranges or ranges[0][0] != parent_min or ranges[-1][1] != parent_max:
         return False
     previous_maximum: int | None = None
@@ -236,8 +282,14 @@ def routing_summary() -> RoutingSummary:
     rng = random.Random(RANDOM_SEED)
     generated_parents = 0
     query_checks = 0
-    lookup_mismatches = 0
+    in_range_lookup_checks = 0
+    gap_absence_checks = 0
+    outside_parent_absence_checks = 0
+    lookup_result_mismatches = 0
+    in_range_selected_child_mismatches = 0
     insertion_mismatches = 0
+    full_range_parent_gap_shortcuts = 0
+    upper_bound_extra_child_reads_for_gaps = 0
     valid_full_strict_failures = 0
     valid_upper_strict_failures = 0
     malformed_overlap_cases = 0
@@ -259,15 +311,28 @@ def routing_summary() -> RoutingSummary:
             if not upper_strict_valid(maxima, ranges, parent_min, parent_max):
                 valid_upper_strict_failures += 1
 
-            # Exhaust the small generated key domain, including keys before and
-            # after the parent range and every sparse gap.
             for query in range(max(0, parent_min - 3), parent_max + 4):
                 query_checks += 1
-                if full_range_route(ranges, query, insertion=False) != upper_bound_route(
-                    maxima, query, insertion=False
-                ):
-                    lookup_mismatches += 1
-                if full_range_route(ranges, query, insertion=True) != upper_bound_route(
+                full_child = full_range_lookup_child(ranges, query)
+                upper_child, extra_reads = upper_bound_lookup_result(ranges, maxima, query)
+
+                inside_parent = parent_min <= query <= parent_max
+                inside_child = any(minimum <= query <= maximum for minimum, maximum in ranges)
+                if inside_child:
+                    in_range_lookup_checks += 1
+                    if full_child != upper_child:
+                        in_range_selected_child_mismatches += 1
+                elif inside_parent:
+                    gap_absence_checks += 1
+                    full_range_parent_gap_shortcuts += int(full_child is None)
+                    upper_bound_extra_child_reads_for_gaps += extra_reads
+                else:
+                    outside_parent_absence_checks += 1
+
+                if (full_child is None) != (upper_child is None):
+                    lookup_result_mismatches += 1
+
+                if full_range_insertion_route(ranges, query) != upper_bound_route(
                     maxima, query, insertion=True
                 ):
                     insertion_mismatches += 1
@@ -279,11 +344,9 @@ def routing_summary() -> RoutingSummary:
             malformed = list(ranges)
             overlap_index = rng.randrange(1, len(malformed))
             previous_maximum = malformed[overlap_index - 1][1]
-            old_minimum, old_maximum = malformed[overlap_index]
+            _, old_maximum = malformed[overlap_index]
             malformed_minimum = max(1, previous_maximum)
             if malformed_minimum > old_maximum:
-                # This should be impossible for the generated geometry, but keep
-                # the mutation total-order safe if parameters change later.
                 old_maximum = malformed_minimum
             malformed[overlap_index] = (malformed_minimum, old_maximum)
             malformed_overlap_cases += 1
@@ -300,8 +363,14 @@ def routing_summary() -> RoutingSummary:
     summary = RoutingSummary(
         generated_parents=generated_parents,
         query_checks=query_checks,
-        lookup_mismatches=lookup_mismatches,
+        in_range_lookup_checks=in_range_lookup_checks,
+        gap_absence_checks=gap_absence_checks,
+        outside_parent_absence_checks=outside_parent_absence_checks,
+        lookup_result_mismatches=lookup_result_mismatches,
+        in_range_selected_child_mismatches=in_range_selected_child_mismatches,
         insertion_mismatches=insertion_mismatches,
+        full_range_parent_gap_shortcuts=full_range_parent_gap_shortcuts,
+        upper_bound_extra_child_reads_for_gaps=upper_bound_extra_child_reads_for_gaps,
         valid_full_strict_failures=valid_full_strict_failures,
         valid_upper_strict_failures=valid_upper_strict_failures,
         malformed_overlap_cases=malformed_overlap_cases,
@@ -311,8 +380,11 @@ def routing_summary() -> RoutingSummary:
         upper_strict_overlap_detections=upper_strict_overlap_detections,
     )
 
-    assert summary.lookup_mismatches == 0
+    assert summary.lookup_result_mismatches == 0
+    assert summary.in_range_selected_child_mismatches == 0
     assert summary.insertion_mismatches == 0
+    assert summary.full_range_parent_gap_shortcuts == summary.gap_absence_checks
+    assert summary.upper_bound_extra_child_reads_for_gaps == summary.gap_absence_checks
     assert summary.valid_full_strict_failures == 0
     assert summary.valid_upper_strict_failures == 0
     assert summary.full_parent_local_overlap_detections == summary.malformed_overlap_cases
