@@ -2,7 +2,7 @@
 
 **Status:** non-normative research evidence  
 **Date:** 2026-08-13  
-**Related:** Experiments 0108, 0135; FCP-0003; issues #13, #16, #76
+**Related:** Experiments 0108, 0134, 0135; FCP-0003; issues #10, #13, #16, #76
 
 ## Question
 
@@ -19,13 +19,20 @@ child page digest        32
 
 The parent page header separately stores the parent minimum and maximum, and strict validation recursively authenticates every reachable child page and cross-checks each child's header bounds.
 
-The Draft's insertion routing rule is already expressed primarily in terms of child maxima: an ID in a sparse gap routes to the first child whose maximum is greater than the ID, and an ID beyond every maximum routes to the final child.
+The Draft's **insertion** routing rule is already expressed primarily in terms of child maxima: an ID in a sparse gap routes to the first child whose maximum is greater than the ID, and an ID beyond every maximum routes to the final child.
 
-This experiment asks whether the duplicated child minimum can be removed from the internal entry without changing valid-tree routing semantics, and what that buys under the compact 128-bit and 64-bit geometries considered by Experiments 0108 and 0135.
+That does not mean the duplicated child minimum is free to remove. Explicit child minima also let a targeted lookup prove an **inter-child gap absence at the parent** without authenticating another child page.
+
+This experiment therefore asks four separate questions:
+
+1. Is insertion routing equivalent with upper-bound-only entries?
+2. Is targeted lookup result-equivalent, and what extra page information does a gap absence require?
+3. Can strict recursive validation reconstruct omitted minima and preserve the same final non-overlap checks?
+4. What density/height benefit does removing the duplicated minimum buy under compact 128-bit and 64-bit geometry?
 
 ## Candidate internal reference
 
-For an identifier width `I`, the upper-bound-only entry is:
+For identifier width `I`, the upper-bound-only entry is:
 
 ```text
 child maximum ObjectId   I bytes
@@ -35,87 +42,124 @@ child page digest       32 bytes
 
 Thus:
 
-| Identifier width | Current/full-range compact entry | Upper-bound-only entry |
+| Identifier width | Full-range compact entry | Upper-bound-only entry |
 |---:|---:|---:|
 | 128 bits | 72 bytes | 56 bytes |
 | 64 bits | 56 bytes | 48 bytes |
 
 The candidate still authenticates the exact child page bytes through the child digest. It removes only the duplicated child minimum from the parent entry.
 
-## Routing interpretation
+## Insertion routing equivalence
 
-Let the ordered child maxima stored in one parent be:
+Let ordered child maxima be:
 
 ```text
 U0 < U1 < ... < Un
 ```
 
-For lookup or insertion of key `q`, choose the first child whose upper bound satisfies:
+For insertion of key `q`, choose the first child with:
 
 ```text
 q <= Ui
 ```
 
-For insertion only, if `q > Un`, choose the final child.
+and choose the final child when `q > Un`.
 
-This makes the parent-authenticated routing intervals implicit:
+For a valid sparse ordered tree this is exactly the current Draft rule:
 
-```text
-first child:              q <= U0
-child i, i > 0:    U(i-1) < q <= Ui
-```
+- inside an existing child range: choose that child;
+- in a sparse gap: choose the next child;
+- before the first actual minimum: choose the first child;
+- beyond every maximum: choose the final child.
 
-The child's *actual* minimum may be greater than the lower routing boundary. That is how sparse gaps remain representable: a key in the gap routes to the next child and is then absent from that child.
-
-The stored `Ui` is still required to equal the authenticated child page's actual maximum during strict validation.
-
-## Valid-tree routing equivalence
-
-For a valid ordered set of child ranges:
-
-```text
-[min0, max0], [min1, max1], ...
-```
-
-with:
-
-```text
-min(i) > max(i-1)
-```
-
-the first child selected by the Draft's current rules is exactly the first child with:
-
-```text
-max(i) >= q
-```
-
-when such a child exists.
-
-That covers all cases:
-
-- `q` lies inside a child range: that child's maximum is the first maximum at or above `q`;
-- `q` lies in a sparse gap: the next child's maximum is the first maximum at or above `q`;
-- `q` lies before the first actual minimum: the first child is selected;
-- `q` exceeds every maximum: lookup can return out-of-parent-range absence, while insertion selects the final child exactly as the current Draft requires.
-
-The executable generated **992** valid sparse parents with 2–32 children and exhaustively checked **170,947** integer query positions spanning the generated parent ranges and surrounding gaps.
+The executable generated **992** valid sparse parents with 2–32 children and exhaustively checked **170,947** query positions.
 
 Result:
 
 ```text
-lookup routing mismatches:    0
 insertion routing mismatches: 0
 ```
 
-The integer model is only a compact test domain. The proof depends solely on total ordering, so it applies equally to lexicographically ordered fixed-width opaque `ObjectId` bytes.
+The proof depends only on total ordering and therefore applies equally to lexicographically ordered fixed-width opaque `ObjectId` bytes.
+
+## Targeted lookup is result-equivalent, not path-equivalent
+
+The current experimental authenticated lookup implementation uses explicit child ranges differently from insertion.
+
+For every authenticated internal page it:
+
+1. validates all stored `[minimum, maximum]` sibling ranges for ordering/non-overlap;
+2. selects a child only when the query is actually inside that child's explicit range;
+3. returns absence immediately when the query is inside the parent range but in no child range.
+
+See `crates/ucof-experiments/src/exp0002_lookup.rs`.
+
+That means a query in this sparse gap:
+
+```text
+left child max < q < right child min
+```
+
+can terminate at the current full-range parent.
+
+With upper-bound-only entries, the parent knows the right child's maximum but not its actual minimum. A valid lookup therefore selects the right child by upper bound, authenticates that page, then learns:
+
+```text
+q < right_child.min
+```
+
+and returns the same absence result.
+
+So the candidate is **lookup-result equivalent on a valid tree but can require one additional authenticated child page for an inter-child gap absence**.
+
+### Deterministic stress-corpus result
+
+Across the 170,947 tested positions:
+
+```text
+queries inside one child range:        117,698
+inter-child gap absences:               47,680
+outside-parent absences:                 5,569
+end-to-end lookup result mismatches:          0
+in-range selected-child mismatches:           0
+full-range parent gap shortcuts:         47,680
+upper-bound extra child reads for gaps:  47,680
+```
+
+The synthetic corpus deliberately creates sparse gaps of varying sizes. Therefore:
+
+> `47,680 / 170,947 ~= 27.9%` is a **stress-corpus exposure fraction, not a predicted production workload frequency**.
+
+The transport-independent result is narrower and stronger:
+
+```text
+one uncached inter-child gap absence
+  -> full-range: may stop at authenticated parent
+  -> upper-bound: needs one additional child-page authentication
+```
+
+At the Experiment 0134 stress cap of 257 bytes per bounded source read, one uncached 16 KiB page corresponds to 64 bounded reads, 16,384 bytes, and 128 strong-version checks under that current source architecture. This is not a claim of 64 network round trips; a maintained adapter allowed to fetch one whole page could map the same information need to one range request.
+
+## Why the local-ID scope matters to gap frequency
+
+Experiment 0135 recommends treating `ObjectId` as a container-context structural key rather than a globally random semantic identity.
+
+That scope can make dense/coordinated allocation practical, which may reduce large inter-child gaps in fresh trees. It does not eliminate gaps:
+
+- deletion creates holes;
+- sparse application allocation remains permitted unless the eventual allocator contract forbids it;
+- persistent history can move page minima/maxima without making every numeric/key interval dense;
+- opaque lexicographic identifiers need not have meaningful arithmetic adjacency.
+
+Therefore the format should not assume gap absences are negligible merely because a coordinated allocator is possible.
 
 ## Strict recursive validation
 
 The current full-range entry lets a validator check declared sibling non-overlap from the parent page alone before opening children.
 
-With upper-bound-only entries, strict validation instead reconstructs the omitted facts while recursively authenticating child pages:
+With upper-bound-only entries, strict validation can reconstruct the omitted facts while recursively authenticating child pages:
 
-1. parent maxima are non-zero and strictly increasing;
+1. stored child maxima are non-zero and strictly increasing;
 2. each stored maximum equals the authenticated child header maximum;
 3. first child minimum equals parent minimum;
 4. for each later child:
@@ -125,44 +169,42 @@ With upper-bound-only entries, strict validation instead reconstructs the omitte
    ```
 
 5. final stored child maximum equals parent maximum;
-6. expected level, page digest, occupancy, and all ordinary page checks still apply.
+6. expected level, page digest, occupancy, and ordinary page checks still apply.
 
-This preserves the same final strict non-overlap invariant because Section 21 of the Draft already requires recursive authentication of every reachable directory page.
+Section 21 already requires strict validation to recursively authenticate every reachable directory page, so the same **final** non-overlap invariant remains enforceable.
 
 The executable injected **992** overlapping-child cases while leaving stored maxima strictly increasing.
-
-Results:
 
 | Check | Full-range parent | Upper-bound parent |
 |---|---:|---:|
 | Detect overlap from parent metadata alone | 992 / 992 | 0 / 992 |
 | Detect overlap after strict child-header authentication | 992 / 992 | 992 / 992 |
 
-So the candidate does **not** preserve the same *early parent-local rejection point*. It does preserve full strict-validation detection once the child header is authenticated.
+Thus the candidate preserves final strict rejection, but loses the current parent-local rejection point.
 
-That distinction is material and should remain visible in Review.
+## Targeted lookup / absence assurance boundary
 
-## Targeted lookup / absence boundary
+Section 22 gives targeted lookup a narrower assurance scope than full validation: it authenticates one root-to-leaf path rather than every reachable sibling page.
 
-Section 22 deliberately gives targeted lookup a narrower assurance scope than full validation: it authenticates one root-to-leaf path rather than recursively opening unrelated siblings.
+The reference implementation audit exposes two distinct properties of the current full-range form:
 
-Upper-bound-only routing can still provide a deterministic authenticated routing interval from the parent maxima, but it cannot independently verify the omitted actual minima of unopened sibling pages.
+1. **Authenticated routing metadata:** one parent page carries explicit claimed child minima/maxima and can reject overlapping claimed ranges locally.
+2. **Gap short-circuit:** a query in no explicit child range can return absence without descending.
 
-The current full-range design is stronger at the parent-metadata layer because it carries explicit declared minima and maxima for every sibling. Even there, a one-path lookup does not authenticate unopened sibling page bodies, so it also does not independently cross-check every declared sibling bound against the corresponding child header.
+A one-path lookup still does not authenticate unopened sibling page bodies, so it cannot independently prove that every sibling header agrees with every stored parent claim. Complete strict validation is what closes that gap.
 
-Therefore the normative question is not simply "does max-only routing work?" It does on valid trees. The real question is what Section 22 means by an authenticated absence result on input that has **not** already passed complete strict validation.
+Upper-bound-only entries preserve deterministic routing and strict validation, but weaken both parent-local properties above.
 
-A safe adoption needs one of these explicit contracts:
+If Review adopts max-only, Section 22 must say clearly that:
 
-1. **Routing-interval contract:** parent maxima define the authenticated routing partition used by targeted lookup, while targeted mode does not claim it verified unopened child-header conformance. Complete strict validation remains the mode that proves every child fits that partition.
-2. **Prior-validation/cache contract:** targeted absence is offered only against a tree/prefix whose structural validity has already been established and retained under a suitable trust/cache contract.
-3. **Extra-evidence contract:** targeted lookup authenticates additional sibling/header evidence sufficient for the stronger absence claim.
-
-The first option is the smallest wire design, but it must be stated rather than inferred.
+- parent maxima define the authenticated routing partition;
+- targeted mode does not verify unopened child-header minima/conformance;
+- an inter-child gap absence may require authenticating the selected next child to prove `q < child.min`;
+- full global structural validity requires strict validation or an explicitly trusted prior-validation/cache contract.
 
 ## Geometry
 
-The experiment keeps 16 KiB pages and the compact header candidates from Experiment 0108.
+The experiment keeps 16 KiB pages and compact header candidates from Experiment 0108.
 
 ### Compact 128-bit
 
@@ -170,13 +212,9 @@ The experiment keeps 16 KiB pages and the compact header candidates from Experim
 page header: 64 bytes
 leaf entry:  64 bytes
 leaf cap:   255
-```
 
-Internal geometry:
-
-```text
-full-range entry: 72 bytes -> fanout 226
-upper-bound entry: 56 bytes -> fanout 291
+full-range internal:   72 bytes -> fanout 226
+upper-bound internal:  56 bytes -> fanout 291
 ```
 
 ### Compact 64-bit
@@ -185,18 +223,14 @@ upper-bound entry: 56 bytes -> fanout 291
 page header: 48 bytes
 leaf entry:  56 bytes
 leaf cap:   291
-```
 
-Internal geometry:
-
-```text
-full-range entry: 56 bytes -> fanout 291
-upper-bound entry: 48 bytes -> fanout 340
+full-range internal:   56 bytes -> fanout 291
+upper-bound internal:  48 bytes -> fanout 340
 ```
 
 ## Directory-byte effect
 
-Because leaf pages dominate the primary directory, reducing only internal-reference width has a modest steady-state byte effect at scales where tree height does not change.
+Leaf pages dominate the primary directory, so reducing only internal-reference width has a modest steady-state byte effect while tree height stays unchanged.
 
 | Layout | Objects | Full-range directory bytes | Upper-bound directory bytes | Saving | Saving % |
 |---|---:|---:|---:|---:|---:|
@@ -207,7 +241,7 @@ Because leaf pages dominate the primary directory, reducing only internal-refere
 | compact-64 | 100M | 5,649,694,720 | 5,646,876,672 | 2,818,048 | 0.0499% |
 | compact-64 | 1B | 56,496,603,136 | 56,468,537,344 | 28,065,792 | 0.0497% |
 
-This is useful but not a reason by itself to complicate targeted semantics.
+That is not a large steady-state directory-byte win relative to the new gap-absence information cost.
 
 ## Height-threshold effect
 
@@ -226,7 +260,7 @@ leaf_capacity * internal_fanout^3
 
 That is a ~2.13× four-level capacity increase for compact-128 and ~1.60× for compact-64.
 
-At 10 billion objects in this simple fully packed geometry model:
+At 10 billion objects in the simple packed model:
 
 ```text
 compact-128 full-range:  5 levels
@@ -235,42 +269,53 @@ compact-64 full-range:   5 levels
 compact-64 upper-bound:  4 levels
 ```
 
-Thus the internal-width change can remove an entire page read/write/hash level near a scale threshold even though its ordinary directory-byte percentage is small.
+So max-only can remove an entire page level near a very large scale threshold even though ordinary directory-byte savings remain small.
 
-## Interaction with mutation cost
+## Mutation effect
 
-Every changed immutable child already changes its digest, so the parent reference must be rewritten whether or not the child's minimum changed. Omitting child minima therefore does **not** eliminate parent rewrites for ordinary copy-on-write mutation.
+Every changed immutable child changes its digest, so its parent reference must be rewritten whether or not the child's minimum changed. Omitting child minima does **not** remove ordinary parent copy-on-write rewrites.
 
-The benefit is instead:
+The candidate benefit is therefore:
 
 - higher internal fanout;
-- fewer internal pages in bulk/rewrite form;
+- fewer internal pages;
 - higher object-count thresholds before tree height grows;
-- smaller parent entry parsing/state;
-- one fewer duplicated range claim per child.
+- smaller internal-entry parsing/state.
 
-The cost is weaker parent-local malformed-range rejection unless the child is opened.
+The costs are:
+
+- loss of parent-local child-minimum overlap checking;
+- one additional child-page authentication for uncached inter-child gap absences;
+- more complicated targeted-absence wording.
 
 ## Decision consequence
 
-The evidence supports treating upper-bound-only internal references as a serious Draft amendment candidate, but **not silently adopting them yet**.
+After the reference-implementation audit, the evidence is less favorable to immediate max-only adoption than the raw fanout numbers suggest.
 
-A reasonable Review disposition is:
+For the **first EXP-0003 interoperability Draft**, a conservative recommendation is now:
 
-> Adopt upper-bound-only child references only if the targeted lookup/absence section explicitly defines parent upper bounds as authenticated routing intervals and clearly states that targeted mode does not verify unopened child-header conformance. Complete strict validation must still reconstruct child minima and reject overlap.
+> **Retain explicit child minimum + maximum ranges unless Review explicitly prioritizes the multi-billion-object height threshold over parent-local gap absence and supplies a precise targeted-assurance contract for the extra child read.**
 
-If Review instead wants one authenticated internal page to carry explicit declared non-overlapping child ranges without relying on implicit routing partitions, retain the 72-byte/56-byte full-range forms.
+Why this default is reasonable:
 
-This is primarily an assurance-contract decision, not a capacity decision.
+- steady-state directory-byte savings are only ~0.05–0.10% in the modeled 10M–1B range;
+- explicit ranges already provide useful authenticated gap short-circuit behavior in the existing implementation;
+- remote/random access is a core UCOF design target;
+- full-range fanout is already 226 for compact-128 and 291 for compact-64;
+- max-only remains available as a future incompatible epoch/profile choice if real workloads justify the higher fanout.
+
+This is not a final normative disposition. It is the evidence-backed recommendation for the next Review decision.
 
 ## CI assertions
 
 `tools/experiment_exp0003_upper_bound_routing.py` runs in the normal experiment block and requires:
 
-- zero lookup-routing mismatches on the deterministic sparse-parent corpus;
 - zero insertion-routing mismatches;
-- both full-range and upper-bound strict validators to accept every generated valid parent;
-- full-range parent metadata to reject every injected declared overlap locally;
+- zero end-to-end lookup-result mismatches on the valid stress corpus;
+- zero selected-child mismatches for queries actually inside child ranges;
+- every inter-child gap absence to be a full-range parent shortcut and an upper-bound one-child-read exposure;
+- both strict validators to accept every generated valid parent;
+- full-range parent metadata to reject every injected overlap locally;
 - upper-bound parent metadata to miss those hidden-minimum overlaps locally;
 - strict upper-bound validation to reject every injected overlap after child-header authentication;
 - compact geometry calculations to remain reproducible.
@@ -282,12 +327,12 @@ This experiment does **not**:
 - change `UCOF-EXP-0003.md`;
 - change ObjectId width;
 - change the Rust research microformat;
-- change current `LeftFirst` deletion bytes;
+- change current deletion-policy bytes;
 - accept FCP-0003;
 - allocate EXP-0003;
 - regenerate authoritative vectors.
 
-The next Review step is to decide whether the targeted-absence assurance contract permits the implicit upper-bound routing partition. Only after that decision should the compact geometry and ObjectId-width recommendation be folded into the Draft.
+The next Review step is to decide whether EXP-0003 keeps the explicit full-range child reference. That decision should happen before the compact-header/ObjectId-width amendment and before authoritative structural vectors are generated.
 
 ## Reproduction
 
