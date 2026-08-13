@@ -17,6 +17,14 @@ jobs:
         with:
           components: rustfmt, clippy
       - uses: Swatinem/rust-cache@v2
+      - name: Generate candidate lockfile for HTTP dependencies
+        run: cargo generate-lockfile
+      - name: Upload generated Cargo.lock
+        uses: actions/upload-artifact@v4
+        with:
+          name: conditional-reqwest-cargo-lock
+          path: Cargo.lock
+          if-no-files-found: error
       - name: Check locked dependency graph
         run: cargo metadata --locked --no-deps --format-version 1 > /dev/null
       - name: Check formatting
@@ -25,6 +33,8 @@ jobs:
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: Test Rust implementation
         run: cargo test --locked --workspace --all-targets
+      - name: Test concrete Reqwest conditional HTTP transport
+        run: cargo test --locked -p ucof-experiments --features http-reqwest conditional_reqwest
       - name: Reproduce deletion policy trace
         run: cargo run --locked -p ucof-experiments --example exp0003_delete_policy_trace
       - name: Reproduce deletion policy trace matrix
@@ -105,8 +115,12 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: msrv-1.85.0
+      - name: Generate candidate lockfile for HTTP dependencies
+        run: cargo generate-lockfile
       - name: Check MSRV
         run: cargo check --locked --workspace --all-targets
+      - name: Check HTTP feature MSRV
+        run: cargo check --locked -p ucof-experiments --all-targets --features http-reqwest
 
   portability:
     runs-on: ubuntu-latest
@@ -124,6 +138,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: ${{ matrix.target }}
+      - name: Generate candidate lockfile for HTTP dependencies
+        run: cargo generate-lockfile
       - name: Install 32-bit linker support
         if: matrix.target == 'i686-unknown-linux-gnu'
         run: sudo apt-get update && sudo apt-get install -y gcc-multilib
