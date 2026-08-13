@@ -78,14 +78,20 @@ impl Metrics {
         self.delete_pages_written += pages_written;
         self.delete_pages_reused += pages_reused;
         self.bytes_appended += appended_bytes;
-        *self.delete_write_histogram.entry(pages_written).or_default() += 1;
+        *self
+            .delete_write_histogram
+            .entry(pages_written)
+            .or_default() += 1;
     }
 
     fn record_insert(&mut self, pages_written: usize, pages_reused: usize, appended_bytes: usize) {
         self.insert_pages_written += pages_written;
         self.insert_pages_reused += pages_reused;
         self.bytes_appended += appended_bytes;
-        *self.insert_write_histogram.entry(pages_written).or_default() += 1;
+        *self
+            .insert_write_histogram
+            .entry(pages_written)
+            .or_default() += 1;
     }
 
     fn histogram_total(histogram: &BTreeMap<usize, usize>) -> usize {
@@ -93,10 +99,7 @@ impl Metrics {
     }
 
     fn histogram_weighted_pages(histogram: &BTreeMap<usize, usize>) -> usize {
-        histogram
-            .iter()
-            .map(|(pages, count)| pages * count)
-            .sum()
+        histogram.iter().map(|(pages, count)| pages * count).sum()
     }
 
     fn assert_histograms(&self) {
@@ -306,12 +309,7 @@ fn print_policy(trace: &str, policy: &str, metrics: &Metrics, final_file_bytes: 
     );
 }
 
-fn print_histogram(
-    trace: &str,
-    policy: &str,
-    operation: &str,
-    histogram: &BTreeMap<usize, usize>,
-) {
+fn print_histogram(trace: &str, policy: &str, operation: &str, histogram: &BTreeMap<usize, usize>) {
     for (pages_written, count) in histogram {
         println!("histogram,{trace},{policy},{operation},{pages_written},{count}");
     }
