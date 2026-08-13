@@ -140,6 +140,9 @@ pub fn inspect_persistent_delete_repair_path_experimental(
     }
 
     let previous = validate_canonical_internal(data, limits)?;
+    if previous.locators.len() <= 1 {
+        return Err(ImmutableError::Invalid("batch result"));
+    }
     if previous
         .locators
         .binary_search_by_key(&object_id, |locator| locator.object_id)
@@ -251,12 +254,8 @@ pub fn inspect_persistent_delete_repair_path_experimental(
         .occupancy
         .checked_sub(1)
         .ok_or(ImmutableError::Invalid("deletion repair leaf occupancy"))?;
-    let leaf_event = experimental_classify_repair_level(
-        leaf_frame,
-        leaf_after,
-        false,
-        borrow_policy,
-    );
+    let leaf_event =
+        experimental_classify_repair_level(leaf_frame, leaf_after, false, borrow_policy);
     let mut child_removed = leaf_event.would_merge;
     let mut levels = vec![leaf_event];
 
