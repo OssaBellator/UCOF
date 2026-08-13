@@ -82,6 +82,7 @@ jobs:
           python3 tools/experiment_exp0003_frontier_hazard.py --quick
           python3 tools/experiment_exp0003_minimum_frontier_flow.py --quick
           python3 tools/experiment_exp0003_minimum_frontier_drift.py --quick
+          python3 tools/experiment_exp0003_minimum_frontier_fixed_point.py --quick
 
   msrv:
     runs-on: ubuntu-latest
