@@ -1,3 +1,6 @@
+use std::fmt::Write as _;
+use std::fs;
+use std::path::Path;
 use ucof_experiments::immutable_successor::{
     append_persistent_delete, append_persistent_insert, build_genesis,
     validate_canonical_occupancy, ImmutableLimits, ImmutableObjectInput, FOOTER_LEN,
@@ -41,7 +44,7 @@ fn comparison_fixture(limits: ImmutableLimits) -> Vec<u8> {
 fn three_minimum_leaves(limits: ImmutableLimits) -> Vec<u8> {
     let mut state = comparison_fixture(limits);
 
-    // The comparison fixture has leaves [94, 93, 101].  Shrink the outer leaves
+    // The comparison fixture has leaves [94, 93, 101]. Shrink the outer leaves
     // without underflow so deleting 186 forces a leaf merge while the level-one
     // root still retains two children.
     state = append_persistent_delete(&state, 92, limits)
@@ -55,7 +58,7 @@ fn three_minimum_leaves(limits: ImmutableLimits) -> Vec<u8> {
     state
 }
 
-fn emit_case(case: Case<'_>, source: &[u8], limits: ImmutableLimits) {
+fn append_case(output: &mut String, case: Case<'_>, source: &[u8], limits: ImmutableLimits) {
     let source_report = validate_canonical_occupancy(source, limits).expect("source canonical");
     let result = append_persistent_delete(source, case.object_id, limits).expect("delete case");
     let appended_bytes = result.bytes.len() - source.len();
@@ -78,7 +81,8 @@ fn emit_case(case: Case<'_>, source: &[u8], limits: ImmutableLimits) {
     let root_level_delta =
         i16::from(result.report.root_level) - i16::from(source_report.root_level);
 
-    println!(
+    writeln!(
+        output,
         "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
         case.name,
         case.repair_class,
@@ -95,22 +99,27 @@ fn emit_case(case: Case<'_>, source: &[u8], limits: ImmutableLimits) {
         expected_appended_bytes,
         source_report.object_count,
         result.report.object_count,
-    );
+    )
+    .expect("write reward row");
 }
 
-fn main() {
+fn render() -> String {
     let limits = ImmutableLimits::default();
     assert_eq!(PAGE_SIZE, 16_384);
     assert_eq!(SNAPSHOT_LEN + FOOTER_LEN, 224);
     assert_eq!(LEAF_CAPACITY, 185);
     assert_eq!(LEAF_MIN_OCCUPANCY, 93);
 
-    println!(
+    let mut output = String::new();
+    writeln!(
+        &mut output,
         "case,repair_class,source_root_level,result_root_level,root_level_delta,source_page_count,result_page_count,page_count_delta,touched_original,pages_reused,pages_written,bytes_appended,expected_affine_bytes,source_objects,result_objects"
-    );
+    )
+    .expect("write reward header");
 
     let root_leaf = build_genesis(&objects(10), limits).expect("root leaf");
-    emit_case(
+    append_case(
+        &mut output,
         Case {
             name: "root-leaf",
             repair_class: "root-leaf-rewrite",
@@ -121,7 +130,8 @@ fn main() {
     );
 
     let stable_depth_one = build_genesis(&objects(400), limits).expect("stable depth one");
-    emit_case(
+    append_case(
+        &mut output,
         Case {
             name: "depth1-no-underflow",
             repair_class: "path-copy-no-underflow",
@@ -132,7 +142,8 @@ fn main() {
     );
 
     let borrow_left = build_genesis(&objects(LEAF_CAPACITY + 2), limits).expect("left borrow");
-    emit_case(
+    append_case(
+        &mut output,
         Case {
             name: "depth1-borrow-left",
             repair_class: "leaf-borrow-parent-rewrite",
@@ -151,7 +162,8 @@ fn main() {
     )
     .expect("grow right sibling")
     .bytes;
-    emit_case(
+    append_case(
+        &mut output,
         Case {
             name: "depth1-borrow-right",
             repair_class: "leaf-borrow-parent-rewrite",
@@ -162,7 +174,8 @@ fn main() {
     );
 
     let collapse = build_genesis(&objects(2 * LEAF_MIN_OCCUPANCY), limits).expect("collapse base");
-    emit_case(
+    append_case(
+        &mut output,
         Case {
             name: "depth1-merge-root-collapse",
             repair_class: "leaf-merge-root-collapse",
@@ -173,7 +186,8 @@ fn main() {
     );
 
     let keep_root = three_minimum_leaves(limits);
-    emit_case(
+    append_case(
+        &mut output,
         Case {
             name: "depth1-merge-keep-root",
             repair_class: "leaf-merge-parent-rewrite",
@@ -188,7 +202,8 @@ fn main() {
         .and_then(|value| value.checked_add(2 * LEAF_MIN_OCCUPANCY))
         .expect("level-two object count");
     let recursive = build_genesis(&objects(count), limits).expect("level-two recursive case");
-    emit_case(
+    append_case(
+        &mut output,
         Case {
             name: "depth2-recursive-internal-borrow",
             repair_class: "leaf-merge-internal-borrow-root-rewrite",
@@ -197,4 +212,26 @@ fn main() {
         &recursive,
         limits,
     );
+
+    output
+}
+
+fn verify(path: &Path, rendered: &str) {
+    let expected = fs::read_to_string(path).expect("read reward catalog manifest");
+    assert_eq!(expected, rendered, "deletion reward catalog drifted");
+    println!("verified_delete_reward_catalog={}", path.display());
+}
+
+fn main() {
+    let rendered = render();
+    let mut arguments = std::env::args_os().skip(1);
+    match arguments.next() {
+        None => print!("{rendered}"),
+        Some(flag) if flag == "--verify" => {
+            let path = arguments.next().expect("--verify requires a manifest path");
+            assert!(arguments.next().is_none(), "unexpected extra argument");
+            verify(Path::new(&path), &rendered);
+        }
+        Some(other) => panic!("unknown argument: {}", other.to_string_lossy()),
+    }
 }
