@@ -6,7 +6,7 @@ use crate::bounded_spill_sort::{
 };
 use std::cell::Cell;
 use std::fs::{self, File, OpenOptions};
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::io::{BufReader, BufWriter, Read, Seek, SeekFrom, Write};
 #[cfg(unix)]
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::{Path, PathBuf};
@@ -22,6 +22,17 @@ pub enum BoundedSourceStageError<InputError> {
     Io(std::io::ErrorKind),
 }
 
+impl<InputError: std::fmt::Display> std::fmt::Display for BoundedSourceStageError<InputError> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Input(error) => write!(formatter, "source descriptor input failed: {error}"),
+            Self::Sort(error) => write!(formatter, "source descriptor sort failed: {error}"),
+            Self::Invalid(label) => write!(formatter, "invalid source descriptor stage: {label}"),
+            Self::Io(kind) => write!(formatter, "source descriptor stage I/O failed: {kind:?}"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub enum BoundedSourceStageVisitError<VisitError> {
     Invalid(&'static str),
@@ -29,9 +40,20 @@ pub enum BoundedSourceStageVisitError<VisitError> {
     Visit(VisitError),
 }
 
+impl<VisitError: std::fmt::Display> std::fmt::Display for BoundedSourceStageVisitError<VisitError> {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Invalid(label) => write!(formatter, "invalid prepared source descriptor: {label}"),
+            Self::Io(kind) => write!(formatter, "prepared source descriptor I/O failed: {kind:?}"),
+            Self::Visit(error) => write!(formatter, "source descriptor visitor failed: {error}"),
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct PreparedBoundedSourceDescriptors {
     path: PathBuf,
+    file: Option<File>,
     records: u64,
     bytes: u64,
     report: BoundedSpillSortReport,
@@ -57,7 +79,13 @@ impl PreparedBoundedSourceDescriptors {
     where
         F: FnMut(BoundedSourceDescriptor) -> Result<(), VisitError>,
     {
-        let file = File::open(&self.path)
+        let mut file = self
+            .file
+            .as_ref()
+            .ok_or(BoundedSourceStageVisitError::Invalid("closed stage"))?
+            .try_clone()
+            .map_err(|error| BoundedSourceStageVisitError::Io(error.kind()))?;
+        file.seek(SeekFrom::Start(0))
             .map_err(|error| BoundedSourceStageVisitError::Io(error.kind()))?;
         let mut reader = BufReader::new(file);
         let mut bytes = [0u8; BOUNDED_SOURCE_DESCRIPTOR_BYTES];
@@ -82,6 +110,7 @@ impl PreparedBoundedSourceDescriptors {
 
 impl Drop for PreparedBoundedSourceDescriptors {
     fn drop(&mut self) {
+        drop(self.file.take());
         let _ = fs::remove_file(&self.path);
     }
 }
@@ -155,6 +184,15 @@ where
         retire_stage(&path);
         return Err(BoundedSourceStageError::Io(kind));
     }
+    let retained = match writer.get_ref().try_clone() {
+        Ok(file) => file,
+        Err(error) => {
+            let kind = error.kind();
+            drop(writer);
+            retire_stage(&path);
+            return Err(BoundedSourceStageError::Io(kind));
+        }
+    };
     drop(writer);
 
     let descriptor_bytes =
@@ -162,21 +200,24 @@ where
     let expected = match report.output_records.checked_mul(descriptor_bytes) {
         Some(expected) => expected,
         None => {
+            drop(retained);
             retire_stage(&path);
             return Err(BoundedSourceStageError::Invalid(
                 "source descriptor stage bytes",
             ));
         }
     };
-    let on_disk = match fs::metadata(&path) {
+    let on_disk = match retained.metadata() {
         Ok(metadata) => metadata.len(),
         Err(error) => {
             let kind = error.kind();
+            drop(retained);
             retire_stage(&path);
             return Err(BoundedSourceStageError::Io(kind));
         }
     };
     if report.output_payload_bytes != expected || on_disk != expected {
+        drop(retained);
         retire_stage(&path);
         return Err(BoundedSourceStageError::Invalid(
             "source descriptor stage bytes",
@@ -184,6 +225,7 @@ where
     }
     Ok(PreparedBoundedSourceDescriptors {
         path,
+        file: Some(retained),
         records: report.output_records,
         bytes: expected,
         report,
