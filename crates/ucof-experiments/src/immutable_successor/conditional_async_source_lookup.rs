@@ -73,7 +73,7 @@ impl AsyncStrongVersionReadAt for AsyncRetryingReqwestConditionalClient {
 
 impl<R> AsyncStrongVersionReadAt for AsyncAuthenticatedReqwestConditionalClient<R>
 where
-    R: AsyncConditionalAuthenticationRefresher + Send,
+    R: AsyncConditionalAuthenticationRefresher + Send + Sync,
 {
     fn metadata_async<'a>(
         &'a mut self,
