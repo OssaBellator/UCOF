@@ -1,214 +1,294 @@
-# Phase 3 Status — Directory, Snapshots, Recovery, and Successor Convergence
+# Phase 3 Status — EXP-0003 Successor Convergence
 
-**Status:** In progress; implementation consolidated on `main`, normative successor convergence remains open  
+**Status:** In progress; implementation consolidated on `main`, normative successor choices remain pending  
 **Started:** 2026-07-30  
 **Authoritative implementation baseline:** `main` after PR #75 (`27956368289b6ebf230ff2baf5fa5313d4f83806`)  
 **Current convergence milestone:** #76 — EXP-0003 Interoperability Candidate  
-**Convergence plan:** `docs/EXP_0003_INTEROP_PLAN.md`
+**Current Draft→Review decision surface:** `docs/review/FCP_0003_DRAFT_TO_REVIEW_LEDGER.md`
 
 ## Current objective
 
 Phase 3 is no longer primarily an implementation-volume phase.
 
-The repository now contains substantial executable evidence for bounded random access, immutable primary-directory pages, append-only snapshots, persistent copy-on-write mutation, linked history, explicit recovery, rewrite/compaction inputs, source-backed operation planning, transport policy, and staged publication research.
+The repository contains substantial executable evidence for bounded hostile-input parsing, immutable primary-directory pages, snapshots, persistent copy-on-write mutation, linked history, explicit recovery, rewrite/compaction inputs, source-backed operation planning, transport policy, and publication research.
 
-The remaining Phase 3 objective is to turn that research into **one internally consistent, independently implementable experimental successor epoch** without mistaking green reference code for normative specification acceptance.
+The remaining P0 objective is to turn that research into **one internally consistent, independently implementable experimental successor epoch** without treating green reference code or merged recommendation packets as normative acceptance.
 
-Until that convergence is complete, Phase 4 transform/compression work should not establish new byte-level dependencies on unresolved successor layout decisions.
+Until P0 convergence is complete, Phase 4 transform/compression work should not establish new byte-level dependencies on unresolved successor choices.
 
-## Post-consolidation repository state
+## Authority split
 
-PR #75 consolidated the Phase 1–3 research implementation and the active green Phase 3 frontier into `main`. The former deep stacked-PR topology is no longer the authoritative implementation structure.
+The current repository authority is:
 
-Older Phase 3 pull requests, handoffs, experiments, and status snapshots remain useful historical evidence, but statements that identify PR #3 or another stacked branch as the current implementation baseline are historical rather than current.
+- **`main`** — authoritative implementation/research baseline;
+- **FCP-0003 Draft + review packets/ledger** — normative proposals awaiting maintainer disposition;
+- **current research implementation/vectors** — executable evidence, not accepted EXP-0003 bytes;
+- **EXP-0001 / EXP-0002 Candidate 1** — disposable historical experimental evidence with no compatibility promise;
+- **future candidate corpus** — must be generated only after selected EXP-0003 bytes are merged normatively.
 
-The current authority split is:
-
-- **`main`** — authoritative repository implementation baseline;
-- **open FCP/policy PRs and issues** — unresolved normative decisions;
-- **open evidence/research PRs** — independent measurements or review boundaries that are not implementation dependencies;
-- **EXP-0001 / EXP-0002 Candidate 1** — disposable historical experimental evidence with no compatibility promise.
-
-## Epoch boundaries
+## Experimental-epoch status
 
 ### UCOF-EXP-0001
 
-EXP-0001 remains the disposable minimal framing experiment and Phase 2 safety-first codec evidence. It demonstrates deterministic framing, bounded hostile-input handling, streaming and random-access reader/writer APIs, independent corpus checking, and explicit assurance boundaries.
-
-It is not a promotion candidate and has no stable compatibility promise.
+EXP-0001 remains the disposable minimal framing/Phase 2 safety-first codec experiment. It is historical interoperability evidence, not a promotion candidate and not a compatibility promise.
 
 ### UCOF-EXP-0002 Candidate 1
 
 Candidate 1 remains executable historical evidence for authenticated paged directories, snapshots, exact-end publication, bounded source access, history, recovery, repair, and rewrite.
 
-Candidate 1 is rejected as the reusable-page successor baseline because its page identity binds the active snapshot sequence into page authentication, preventing byte-for-byte reuse of unchanged historical pages. It should be retained as negative/security evidence rather than silently upgraded into the next epoch.
+The current **recommendation** is to supersede Candidate 1 as the reusable-page Phase 3 baseline because its page identity binds active snapshot sequence into page authentication and therefore prevents byte-for-byte reuse of unchanged historical pages.
 
-Candidate 1 remains unpublished and has no compatibility promise.
+That recommendation is **not yet the formal maintainer disposition**. Issue #13 and D1 of the Draft→Review ledger own the actual decision.
 
-### Immutable-page successor research
+Candidate 1 should remain buildable/testable while its corpora and negative/security findings remain useful. No migration or compatibility promise is proposed.
 
-The current research successor removes active snapshot sequence from immutable page identity and uses content-addressed pages. It is the implementation direction currently represented most fully on `main`, but it is still **non-normative research**, not an allocated stable or experimental successor epoch by itself.
+### Immutable-page successor / FCP-0003
 
-FCP-0003 / Candidate-1 disposition remains a maintainer decision under issue #13.
+The immutable-page successor removes active snapshot sequence from page identity and is the current research direction represented most fully on `main`.
 
-A future `UCOF-EXP-0003` should be allocated only after the byte-significant policy package is internally consistent and explicitly accepted for experimentation.
+FCP-0003 remains **Draft**. `UCOF-EXP-0003` remains **unallocated**. The first self-contained Draft contains provisional first-Draft bytes that are intentionally allowed to differ from later Review recommendations.
 
-## What `main` now demonstrates
+No recommendation packet on `main` by itself changes those statuses.
 
-### Bounded hostile-input core behavior
+## What `main` demonstrates
 
-The repository demonstrates:
+### Bounded hostile-input behavior
 
-- checked offset/range arithmetic;
-- caller-controlled read, byte, allocation, object, page, depth, and diagnostic budgets;
+Research evidence includes:
+
+- checked arithmetic and bounded ranges;
+- caller-controlled read/byte/allocation/object/page/depth/diagnostic budgets;
 - strict exact-end validation;
-- separate diagnostic and salvage/recovery assurance modes;
-- bounded slice, seekable, and random-access source handling;
-- Rust 1.85 MSRV checks;
-- 32-bit and big-endian portability checks;
+- explicit recovery/salvage modes kept separate from strict validity;
+- bounded slice, seekable, and random-access sources;
+- Rust 1.85 MSRV;
+- i686 and powerpc64 portability checks;
 - continuous fuzz/property/adversarial evidence.
 
-### Immutable-page directory and identity model
+### Immutable primary directory and identity scopes
 
-Current research evidence includes:
+Research evidence includes:
 
 - immutable content-addressed pages;
-- authenticated object records and locators;
-- separate object, page, snapshot, and commit/file-instance identity scopes;
+- authenticated object records and primary locators;
+- separate object/page/snapshot/commit identity scopes;
 - authenticated lookup and absence;
-- object/object and object/structural overlap rejection;
-- unknown-required capability handling;
-- byte-preservation requirements for unknown optional extension data where rewrite APIs claim preservation.
-
-### Canonical occupancy
-
-The current research implementation enforces:
-
-- half-full non-root leaf occupancy;
-- half-full non-root internal occupancy;
-- root exceptions;
-- deterministic final-two-page redistribution;
-- strict occupancy validation;
-- shared canonical grouping for full construction and canonical mixed reconstruction.
-
-This is implemented for the current research geometry. Whether the same policy is normative for EXP-0003 remains open under issue #16 because EXP-0003 may adopt different identifier/locator widths and therefore different capacities.
+- overlap/range/ordering validation;
+- exact page reuse where unchanged bytes remain valid;
+- distinct structural integrity, semantic support, freshness, and authorization claims.
 
 ### Persistent copy-on-write mutation
 
-The consolidated Rust implementation now includes:
+The consolidated implementation includes:
 
-- replacement-only persistent batches;
-- persistent insertion through one authenticated path;
-- deterministic leaf/internal split propagation;
-- root-height growth;
-- persistent deletion;
-- deterministic left-first borrow, right-borrow fallback, merge fallback, recursive internal repair, and root collapse;
-- shared multi-`Put` planning;
+- replacement-only batches;
+- insertion through authenticated paths;
+- leaf/internal split propagation and root growth;
+- deletion, borrow, merge, recursive internal repair, and root collapse;
 - canonical mixed insertion/replacement/deletion batches;
-- exact page body reuse where safe;
-- page-written/page-reused accounting;
-- bounded append-tail streaming variants;
-- unified streaming dispatch.
+- exact page reuse accounting;
+- bounded append-tail streaming;
+- source-backed planning variants.
 
-Issue #9 is therefore closed as implementation-complete after the PR #75 audit.
+Issue #9 is therefore closed as implementation-complete.
 
-### Source-backed mutation and output
+### Source-backed mutation/output
 
-The repository also contains research implementations for:
+Research implementations cover verified and strongly-versioned source copying, source-backed replacement/insertion/deletion/multi-put/mixed planning, bounded output, selected history, and historical semantic-selection planning.
 
-- verified source copying;
-- strong-version source copying;
-- source-backed replacement planning;
-- source-backed insertion planning;
-- source-backed deletion planning;
-- source-backed multi-`Put` planning;
-- source-backed canonical mixed planning;
-- bounded source-to-sink output;
-- selected active/historical output;
-- bounded selected-history output;
-- per-historical-state semantic selection planning.
-
-These provide strong evidence that the core can operate without requiring complete-file materialization, but they do not by themselves qualify real HTTP/cloud provider semantics.
+These demonstrate architectural feasibility without complete-file materialization. They do **not** qualify real provider behavior; #10 remains the maintained HTTP/cloud/native-async gate.
 
 ### History and recovery
 
-Current evidence keeps the assurance modes separate:
+The repository keeps these assurance modes separate:
 
-**Strict active validation**
-- exact-end;
-- never invokes recovery;
-- validates only the claimed active state under the selected assurance contract.
+- **strict active validation** — exact-end, no recovery fallback;
+- **linked-history verification** — explicitly requested ancestry validation;
+- **recovery** — explicitly requested, bounded, report-only candidate-prefix discovery.
 
-**Linked history**
-- explicitly requested;
-- revalidates linked prefixes;
-- checks parent/sequence/footer relationships;
-- can reject corrupted ancestry even when the newest active state is valid.
+Recovery never silently replaces the active state.
 
-**Recovery**
-- explicitly requested;
-- independently bounded;
-- treats footer magic as a hint rather than authority;
-- returns validated candidate prefixes;
-- never silently selects a replacement active state.
+### Rewrite/compaction boundary
 
-### Rewrite and semantic-compaction inputs
+Core can determine structural validity/reachability but cannot infer arbitrary application dependency semantics from opaque payloads.
 
-The repository supports verified rewrite and selected rewrite, and contains substantial semantic-compaction research.
+Profiles/applications supply semantic dependency edges; unknown dependency semantics must fail closed or use an explicit conservative-retention policy. Rewrite/compaction creates new identity and cannot falsely preserve byte-scoped signatures/provenance across changed bytes.
 
-The core cannot infer arbitrary application dependency semantics from opaque payloads. The intended boundary is:
+## P0 — current Draft→Review decision ledger
 
-- core defines structural validity and structural reachability;
-- profiles/applications define semantic dependency edges;
-- unknown semantic dependencies fail closed or trigger explicit conservative retention policy;
-- compaction/rewrite produces new identity;
-- byte-scoped signatures are not falsely reported as preserved after rewrite.
+PR #117 consolidated the remaining byte-significant policy choices into seven explicit maintainer dispositions. **Every checkbox remains unselected.**
 
-Normative application-profile adoption remains open.
+### D1 — Candidate 1 / FCP-0002 disposition
 
-### Transport policy research
+Recommended: supersede Candidate 1 as reusable-page baseline, retain historical/security/regression evidence and explicit non-promises.
 
-The repository contains reusable evidence for:
+Primary tracker: #13.
 
-- strong source-version tokens;
-- conditional range response validation;
-- operation-wide retry budgets;
-- bounded backoff planning;
-- cooperative wait execution;
-- one explicitly authorized authentication refresh;
-- cancellation/deadline/version-change classifications;
-- freshness-policy separation from mere stable-source integrity.
+### D2 — ObjectId and primary-directory geometry
 
-This is not yet a maintained production HTTP/cloud adapter. Issue #10 remains open for real adapter qualification and native asynchronous cancellation.
+Recommended Review candidate:
 
-### Writer staging and publication research
+```text
+ObjectId                  8 opaque bytes, unsigned lexicographic
+scope                     container-context structural lookup key
+Core no-remap merge       no generic guarantee
+page size                 16,384
+object header             40
+page header               40
+leaf locator              56
+internal reference        56, explicit child min + max
+leaf/internal C           291
+leaf/internal M           146
+leaf/internal overflow    292 -> 146,146
+```
 
-Current research includes:
+Tight 128-bit remains the explicit alternative if Core intentionally adopts a stronger uncoordinated/no-remap identifier contract.
 
-- bounded external sorting and descriptor-limited merging;
-- deterministic final output across run-size/fan-in variations;
-- private staging contracts;
-- no-overwrite publication modeling;
-- Unix research staging/publication;
-- destination-directory identity pinning;
-- fault injection and restart classification evidence;
-- explicit not-published / publication-indeterminate / published-durable distinctions.
+Evidence: Experiments 0107, 0108, 0135–0137 and `EXP_0003_IDENTIFIER_GEOMETRY_DECISION_PACKET.md`.
 
-This does not establish universal production durability. Issue #11 remains open for encrypted spill, descriptor-relative hardening, authenticated journaling, fault qualification, and platform/filesystem-specific durability evidence.
+### D3 — occupancy and split policy
 
-## What `main` does **not** establish
+Recommended: half-full non-root occupancy, deterministic final-two redistribution, root exceptions, and deterministic split arithmetic derived from selected geometry.
 
-Green implementation evidence does not mean that UCOF has:
+Primary tracker: #16.
+
+### D4 — deletion borrower policy
+
+Recommended: borrow from the fuller eligible sibling, exact left tie-break, preserve deterministic merge fallback order.
+
+Current research bytes still use LeftFirst; no normative/default-byte change occurs until disposition.
+
+Evidence: Experiments 0110–0134 and `EXP_0003_DELETE_POLICY_DECISION_PACKET.md`.
+
+### D5 — catalog/root/capability/extension binding
+
+Recommended catalog-v2 architecture:
+
+- one ordinary snapshot-selected authenticated catalog object;
+- stable catalog structural slot across linked snapshots;
+- zero-or-more application roots;
+- catalog-only valid application-empty state;
+- capability records carry REQUIRED support semantics;
+- extension records are sorted opaque length-delimited metadata with explicit preservation behavior.
+
+Current proposal: `EXP_0003_CATALOG_CAPABILITY_PROPOSAL_V2.md`.
+
+### D6 — hash/domain/magic/kind package
+
+Recommended:
+
+- SHA-256 only for this disposable epoch;
+- exact current epoch domains/magics;
+- page kinds `1=leaf`, `2=internal`, others invalid;
+- object kind `0` invalid;
+- kind `1` catalog if D5 is accepted, otherwise Core-reserved;
+- kinds `2..65535` structurally opaque application/profile tags.
+
+Current packet: `EXP_0003_HASH_MAGIC_KIND_DECISION_PACKET.md`.
+
+### D7 — scoped determinism
+
+Recommended:
+
+- fresh canonical rewrite is the normalized current-set structural form;
+- persistent mutation is deterministic from exact prior validated bytes + canonicalized batch;
+- equal logical active states reached through different histories need not have equal persistent root/snapshot digests.
+
+Experiment 0138 updates the rationale: history-independent half-full B-tree partitioning is possible, but EXP-0003 authenticates physical object/page/root offsets and deliberately reuses immutable physical bytes. Canonical partition boundaries alone therefore do not make persistent structural identity placement-independent.
+
+Current packet: `EXP_0003_SCOPED_DETERMINISM_DECISION_PACKET.md`.
+
+## P0 — what happens after D1–D7
+
+Do not apply packet recommendations piecemeal while the maintainer ballot is unresolved.
+
+After dispositions are committed, make **one coordinated normative amendment** so these artifacts agree:
+
+1. `docs/proposals/0003-immutable-page-successor.md`
+2. `spec/experimental/UCOF-EXP-0003.md`
+3. `docs/spec/IMMUTABLE_SUCCESSOR_OCCUPANCY_POLICY.md`
+4. Candidate 1/FCP-0002 disposition/status records
+5. this status document
+6. objection-transfer blocker status
+7. #13, #16, #76
+
+Earlier first-Draft/research numeric identities must be marked historical/non-authoritative.
+
+## P0 — candidate interoperability corpus
+
+After the coordinated amendment, generate a **new** EXP-0003 candidate valid/invalid corpus from those exact selected bytes. Existing research identities must not be relabeled as authoritative.
+
+The corpus must pin framing/digest domains, object/locator contradictions, occupancy/split boundaries, insertion/deletion/mixed mutation, history/recovery, selected catalog semantics, and canonical-rewrite versus persistent-history identity behavior.
+
+Rust/in-repository checks must reproduce it while existing safety, portability, fuzz, and adversarial gates remain green.
+
+## Draft → Review gate
+
+FCP-0003 should move Draft→Review only after:
+
+- D1–D7 actual maintainer dispositions are committed;
+- the coordinated normative amendment is merged and internally consistent;
+- all lengths/capacities derive from selected byte tables rather than stale Draft constants;
+- Candidate 1/FCP-0002 disposition is recorded consistently;
+- the new candidate corpus is generated from selected bytes;
+- in-repository reproduction remains green;
+- rejected alternatives/non-promises remain explicit;
+- Phase 4 has introduced no dependency on unresolved successor bytes.
+
+## Review → experimental allocation remains separate
+
+FCP Review status does not allocate `UCOF-EXP-0003`.
+
+Before allocation, require a meaningful clean-room interpretation/reproduction of the normative byte tables and candidate corpus. Material mismatches must be classified as spec/reference/independent/vector defects before implementations are changed merely to agree.
+
+Allocation remains an explicit maintainer decision.
+
+## P1 — reference implementation migration
+
+Only after normative bytes are selected:
+
+- migrate Rust to the exact accepted EXP-0003 grammar;
+- keep current research/Candidate 1 bytes historical;
+- regenerate candidate/authoritative vectors from specification rules rather than implementation inertia;
+- preserve Rust 1.85, portability, docs, Clippy, fuzz, property, and adversarial gates.
+
+## P1 — broader Phase 3 exit gates
+
+### #10 — maintained remote adapters
+
+Still required:
+
+- maintained real HTTP range adapter with strong conditional semantics;
+- one versioned cloud-object source;
+- native async cancellation;
+- provider/TLS/redirect/cache/decompression/request-budget qualification.
+
+### #11 — production-candidate publication subsystem
+
+Still required:
+
+- encrypted spill when policy requires it;
+- descriptor-relative hardening;
+- authenticated restart/journal semantics;
+- bounded cleanup;
+- platform/filesystem durability qualification.
+
+### #12 — independent implementation / external clean-room evidence
+
+A meaningfully independent implementation or documented external clean-room review remains a hard Phase 3 exit gate. In-repository Rust/Python agreement can share the same misunderstanding.
+
+## What `main` does not establish
+
+Current evidence does **not** establish:
 
 - a stable wire format;
-- an accepted FCP-0003;
-- an allocated EXP-0003;
-- a compatibility promise;
-- a production-qualified durable publication model;
-- maintained HTTP/cloud adapters;
-- native asynchronous transport cancellation;
+- accepted FCP-0003 policy choices;
+- formal Candidate 1 disposition;
+- allocated EXP-0003;
+- migration/compatibility guarantees;
+- production-qualified durable publication;
+- maintained provider adapters/native async cancellation;
 - independent implementation agreement;
-- application-profile adoption;
 - signatures/provenance semantics;
 - encryption/selective disclosure semantics;
 - Archive/Table profile conformance;
@@ -216,97 +296,20 @@ Green implementation evidence does not mean that UCOF has:
 
 Integrity also does not establish authenticity, freshness, authorization, provenance, confidentiality, or rollback resistance by itself.
 
-## Current Phase 3 convergence gates
-
-### P0 — FCP-0003 and successor epoch decision
-
-Primary tracker: #13.
-
-Required outcomes:
-
-- explicit Candidate 1 disposition;
-- review of the proposed identifier/locator/page policy;
-- occupancy/split/deletion/batch policy decision;
-- exact identity and capability semantics;
-- explicit migration non-promises;
-- decision whether/when to allocate `UCOF-EXP-0003`.
-
-### P0 — EXP-0003 occupancy/vector convergence
-
-Primary tracker: #16.
-
-The current research geometry already implements canonical half-full occupancy. The remaining gate is to fix the policy for the accepted EXP-0003 layout and regenerate authoritative cross-language vectors from the new capacities.
-
-### P0 — authoritative EXP-0003 specification and compact corpus
-
-Primary tracker: #76.
-
-Required outputs:
-
-- one independently implementable experimental byte specification;
-- explicit canonical construction/mutation algorithms;
-- explicit validation/assurance semantics;
-- compact valid interoperability corpus;
-- compact invalid/adversarial corpus;
-- exact expected identities and semantic facts.
-
-### P1 — independent implementation or external clean-room review
-
-Primary tracker: #12.
-
-This remains a hard Phase 3 exit gate. Rust plus an in-repository Python implementation can share the same misunderstanding. Material disagreements must be recorded and classified rather than silently changed to match the reference implementation.
-
-### P1 — maintained remote adapters
-
-Primary tracker: #10.
-
-At least one HTTP adapter and one immutable-version cloud-object adapter should be qualified with strong version semantics, malformed-response handling, operation-wide budgets, retries, deadlines, and native asynchronous cancellation.
-
-### P1 — production-candidate publication subsystem
-
-Primary tracker: #11.
-
-Required work includes encrypted spill when policy requires it, descriptor-relative filesystem hardening, authenticated restart/journal semantics, bounded cleanup, and platform/filesystem-specific durability qualification.
-
-### P1 — semantic compaction/profile boundary
-
-The existing semantic/profile research must converge into an explicit core-versus-profile dependency contract and authoritative profile-defined vectors without making profile semantics mandatory core behavior.
-
 ## Phase 3 exit rule
 
-Phase 3 is complete only when all of the following are true:
+Phase 3 completes only when one disposable successor epoch is coherently selected/specifiable, its authoritative bytes/corpus and reference implementation agree, independent evidence exists, real remote-source behavior and publication claims are qualified at the level asserted, semantic/profile boundaries are explicit, continuous safety evidence remains green, and rejected alternatives/non-promises are recorded.
 
-1. one successor experimental epoch is explicitly selected for interoperability work;
-2. its byte-significant policies are documented normatively enough for independent implementation;
-3. authoritative valid and invalid corpora are published;
-4. the consolidated Rust implementation matches those rules and vectors;
-5. an independent implementation or external clean-room review satisfies issue #12;
-6. selected object lookup remains bounded and avoids unrelated payload reads;
-7. interrupted append never silently promotes damaged/recovered state;
-8. linked history and report-only recovery remain distinct assurance claims;
-9. repair/rewrite/compaction preservation and identity rules are explicit;
-10. real remote-source behavior is qualified through maintained adapters;
-11. large-writer/publication behavior has a documented production-candidate contract;
-12. continuous fuzzing, property, portability, adversarial, and vector evidence remains green;
-13. material rejected alternatives and compatibility non-promises are recorded;
-14. FCP/Candidate-1 maintainer disposition is committed.
-
-The intended milestone name is **EXP-0003 Interoperability Candidate**.
-
-EXP-0003 remains disposable and must not claim UCOF 1.0 compatibility.
+The intended milestone remains **EXP-0003 Interoperability Candidate**.
 
 ## Next phases
 
 Only after the successor interoperability candidate is coherent should feature phases resume:
 
-- Phase 4 — transform pipeline and compression;
+- Phase 4 — transforms and compression;
 - Phase 5 — schemas and lossless diagnostic text projection;
 - Phase 6 — signatures, provenance, and trust/freshness scopes;
 - Phase 7 — encryption and selective disclosure;
-- Phase 8 — Archive and Table profiles as the first universality proof;
-- Phase 9 — broader interoperability, conformance, benchmarks, and hardening;
+- Phase 8 — Archive and Table profiles;
+- Phase 9 — broader interoperability/conformance/benchmarks/hardening;
 - Phase 10 — specification freeze and UCOF 1.0.
-
-## Historical evidence
-
-Earlier versions of this document recorded the detailed stacked-PR implementation progression before PR #75. That history remains available in Git and in the closed Phase 1–3 pull requests. It should be treated as research provenance rather than current branch topology.
