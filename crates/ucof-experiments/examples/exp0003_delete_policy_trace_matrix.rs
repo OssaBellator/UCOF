@@ -63,6 +63,7 @@ struct FrontierMetrics {
     merges: usize,
     donor_cliffs: usize,
     avoidable_donor_cliffs: usize,
+    source_fuller_information_opportunities: usize,
     minimum_leaf_count_sum: usize,
     leaf_count_sum: usize,
 }
@@ -79,6 +80,16 @@ impl FrontierMetrics {
             } else {
                 assert!(frontier.would_merge);
                 self.merges += 1;
+            }
+            if frontier
+                .left_occupancy
+                .is_some_and(|occupancy| occupancy > LEAF_MIN_OCCUPANCY)
+                && frontier.right_occupancy.is_some()
+            {
+                // The current source planner can stop after authenticating a
+                // lendable left sibling. A fuller-sibling comparison needs the
+                // right sibling occupancy as well unless that page is cached.
+                self.source_fuller_information_opportunities += 1;
             }
         } else {
             assert!(frontier.selected_donor_occupancy.is_none());
@@ -98,6 +109,7 @@ impl FrontierMetrics {
         assert_eq!(self.underflows, self.borrows + self.merges);
         assert!(self.donor_cliffs <= self.borrows);
         assert!(self.avoidable_donor_cliffs <= self.donor_cliffs);
+        assert!(self.source_fuller_information_opportunities <= self.borrows);
     }
 }
 
@@ -416,6 +428,10 @@ fn print_frontier(trace: &str, policy: &str, frontier: &FrontierMetrics) {
         frontier.avoidable_donor_cliffs,
         frontier.minimum_leaf_count_sum,
         frontier.leaf_count_sum,
+    );
+    println!(
+        "source_info,{trace},{policy},{}",
+        frontier.source_fuller_information_opportunities
     );
 }
 
