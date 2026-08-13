@@ -84,7 +84,7 @@ fn prepared_descriptors_release_source_borrow_before_payload_streaming() {
     let directory = std::env::temp_dir().join(format!("ucof-source-borrow-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&directory);
     std::fs::create_dir(&directory).expect("create directory");
-    let mut sources = vec![
+    let mut sources = [
         MemorySource::new(5),
         MemorySource::new(1),
         MemorySource::new(4),
@@ -103,6 +103,11 @@ fn prepared_descriptors_release_source_borrow_before_payload_streaming() {
     });
     let stage = prepare_bounded_source_descriptors(&directory, descriptors, limits())
         .expect("prepare source descriptors");
+    let descriptor_bytes =
+        u64::try_from(BOUNDED_SOURCE_DESCRIPTOR_BYTES).expect("descriptor size fits u64");
+    assert_eq!(stage.records(), 5);
+    assert_eq!(stage.bytes(), 5 * descriptor_bytes);
+    assert_eq!(stage.report().output_records, 5);
 
     let mut actual = Sha256::new();
     stage
