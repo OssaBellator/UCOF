@@ -134,6 +134,8 @@ mod conditional_source_api {
     include!("immutable_successor/conditional_http.rs");
     include!("immutable_successor/conditional_wait.rs");
     include!("immutable_successor/conditional_authentication.rs");
+    #[cfg(feature = "http-reqwest")]
+    include!("immutable_successor/conditional_reqwest.rs");
 }
 
 pub use conditional_source_api::*;
