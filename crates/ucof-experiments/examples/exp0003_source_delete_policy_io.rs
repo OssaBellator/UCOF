@@ -98,19 +98,11 @@ fn source_limits(format: ImmutableLimits, file_len: usize) -> ImmutableSourceLim
 }
 
 fn u64_at(bytes: &[u8], offset: usize) -> u64 {
-    u64::from_le_bytes(
-        bytes[offset..offset + 8]
-            .try_into()
-            .expect("u64 field"),
-    )
+    u64::from_le_bytes(bytes[offset..offset + 8].try_into().expect("u64 field"))
 }
 
 fn u32_at(bytes: &[u8], offset: usize) -> u32 {
-    u32::from_le_bytes(
-        bytes[offset..offset + 4]
-            .try_into()
-            .expect("u32 field"),
-    )
+    u32::from_le_bytes(bytes[offset..offset + 4].try_into().expect("u32 field"))
 }
 
 struct RightSiblingReference {
@@ -120,7 +112,8 @@ struct RightSiblingReference {
 
 fn right_sibling_reference(bytes: &[u8], object_id: u64) -> RightSiblingReference {
     let footer_offset = bytes.len() - FOOTER_LEN;
-    let snapshot_offset = usize::try_from(u64_at(bytes, footer_offset + 16)).expect("snapshot offset");
+    let snapshot_offset =
+        usize::try_from(u64_at(bytes, footer_offset + 16)).expect("snapshot offset");
     let root_offset = usize::try_from(u64_at(bytes, snapshot_offset + 16)).expect("root offset");
     let root = &bytes[root_offset..root_offset + PAGE_SIZE];
     assert_eq!(root[8], 2, "comparison root must be internal");
@@ -139,7 +132,10 @@ fn right_sibling_reference(bytes: &[u8], object_id: u64) -> RightSiblingReferenc
     assert_eq!(child_index, 1, "target must be the middle leaf");
     let right_entry = PAGE_HEADER_LEN + (child_index + 1) * INTERNAL_ENTRY_LEN;
     let offset = usize::try_from(u64_at(root, right_entry + 16)).expect("right offset");
-    assert_eq!(usize::try_from(u64_at(root, right_entry + 24)).expect("right len"), PAGE_SIZE);
+    assert_eq!(
+        usize::try_from(u64_at(root, right_entry + 24)).expect("right len"),
+        PAGE_SIZE
+    );
     let digest = root[right_entry + 32..right_entry + 64]
         .try_into()
         .expect("right digest");
@@ -166,7 +162,10 @@ fn authenticate_page_probe(
     let mut version_checks = 0_u64;
     while completed < page.len() {
         let take = (page.len() - completed).min(REQUEST_CAP);
-        assert_eq!(source.version_token().expect("pre-read version"), expected_version);
+        assert_eq!(
+            source.version_token().expect("pre-read version"),
+            expected_version
+        );
         version_checks += 1;
         source
             .read_exact_at(
@@ -174,7 +173,10 @@ fn authenticate_page_probe(
                 &mut page[completed..completed + take],
             )
             .expect("right sibling read");
-        assert_eq!(source.version_token().expect("post-read version"), expected_version);
+        assert_eq!(
+            source.version_token().expect("post-read version"),
+            expected_version
+        );
         version_checks += 1;
         completed += take;
         read_operations += 1;
