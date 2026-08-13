@@ -1,6 +1,4 @@
-use crate::bounded_source_descriptor::{
-    BoundedSourceDescriptor, BOUNDED_SOURCE_DESCRIPTOR_BYTES,
-};
+use crate::bounded_source_descriptor::{BoundedSourceDescriptor, BOUNDED_SOURCE_DESCRIPTOR_BYTES};
 
 pub fn parse_bounded_source_descriptor(
     bytes: &[u8],
