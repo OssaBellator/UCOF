@@ -15,7 +15,10 @@ fn bounded_source_descriptor_has_fixed_private_layout() {
         strong_version: [23; 32],
     };
     let bytes = descriptor.encode().expect("encode descriptor");
-    assert_eq!(bytes.len(), bounded_source_descriptor::BOUNDED_SOURCE_DESCRIPTOR_BYTES);
+    assert_eq!(
+        bytes.len(),
+        bounded_source_descriptor::BOUNDED_SOURCE_DESCRIPTOR_BYTES
+    );
     assert_eq!(&bytes[..8], &7u64.to_le_bytes());
     assert_eq!(&bytes[8..16], &11u64.to_le_bytes());
     assert_eq!(&bytes[16..18], &3u16.to_le_bytes());
