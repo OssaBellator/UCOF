@@ -172,6 +172,9 @@ mod conditional_source_api {
 
     #[cfg(feature = "http-reqwest")]
     pub use async_auth_api::*;
+
+    #[cfg(feature = "http-reqwest")]
+    include!("immutable_successor/s3_versioned_reqwest.rs");
 }
 
 pub use conditional_source_api::*;
