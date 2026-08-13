@@ -59,7 +59,7 @@ pub struct BoundedSpillSortReport {
     pub initial_runs: usize,
     pub merge_passes: usize,
     pub peak_open_files: usize,
-    /// Maximum encoded bytes represented by the in-memory initial-run buffer.
+    /// Maximum encoded bytes represented by the configured in-memory initial-run buffer.
     pub peak_buffer_encoded_bytes: u64,
     pub initial_spill_bytes: u64,
     pub total_spill_bytes_written: u64,
@@ -88,7 +88,10 @@ impl std::fmt::Display for BoundedSpillSortError {
         match self {
             Self::InvalidLimits(label) => write!(formatter, "invalid spill-sort limit: {label}"),
             Self::RecordSize { expected, actual } => {
-                write!(formatter, "spill record has {actual} bytes; expected {expected}")
+                write!(
+                    formatter,
+                    "spill record has {actual} bytes; expected {expected}"
+                )
             }
             Self::DuplicateKey(key) => write!(formatter, "duplicate spill key {key}"),
             Self::TruncatedRun => write!(formatter, "truncated spill run"),
@@ -213,7 +216,11 @@ fn encoded_record_bytes(limits: BoundedSpillSortLimits) -> Result<u64, BoundedSp
     if limits.max_open_inputs < 2 {
         return Err(BoundedSpillSortError::InvalidLimits("open inputs"));
     }
-    checked_add(8, checked_u64(limits.record_bytes, "record bytes")?, "record bytes")
+    checked_add(
+        8,
+        checked_u64(limits.record_bytes, "record bytes")?,
+        "record bytes",
+    )
 }
 
 fn run_encoded_bytes(records: u64, frame_bytes: u64) -> Result<u64, BoundedSpillSortError> {
@@ -244,11 +251,8 @@ fn reserve_spill_write(
     accounting.live_spill_bytes = live;
     accounting.peak_live_spill_bytes = accounting.peak_live_spill_bytes.max(live);
     if initial {
-        accounting.initial_spill_bytes = checked_add(
-            accounting.initial_spill_bytes,
-            bytes,
-            "initial spill bytes",
-        )?;
+        accounting.initial_spill_bytes =
+            checked_add(accounting.initial_spill_bytes, bytes, "initial spill bytes")?;
     }
     Ok(())
 }
@@ -313,6 +317,7 @@ fn write_initial_run(
         write_frame(&mut writer, record)?;
     }
     writer.flush()?;
+    accounting.peak_open_files = accounting.peak_open_files.max(1);
     Ok(SpillRun {
         path,
         records: count,
@@ -329,11 +334,7 @@ fn reserve_merge_io(
     if read > limits.max_merge_bytes_read {
         return Err(BoundedSpillSortError::Limit("merge bytes read"));
     }
-    let written = checked_add(
-        accounting.merge_bytes_written,
-        bytes,
-        "merge bytes written",
-    )?;
+    let written = checked_add(accounting.merge_bytes_written, bytes, "merge bytes written")?;
     if written > limits.max_merge_bytes_written {
         return Err(BoundedSpillSortError::Limit("merge bytes written"));
     }
@@ -451,7 +452,9 @@ fn stream_final_run<W: Write>(
 ///
 /// Duplicate keys are rejected both inside initial runs and across merge passes. The result is
 /// independent of run size and merge fan-in for a given unique record set. Spill filenames and
-/// framing are private implementation details and have no UCOF compatibility meaning.
+/// framing are private implementation details and have no UCOF compatibility meaning. The output
+/// writer can receive a valid prefix before a later error; callers requiring atomic visibility must
+/// use private staging around the output writer.
 pub fn bounded_spill_sort_to<I, W>(
     directory: &Path,
     records: I,
@@ -620,7 +623,11 @@ mod bounded_spill_sort_tests {
             .collect()
     }
 
-    fn limits(record_bytes: usize, run_records: usize, max_open_inputs: usize) -> BoundedSpillSortLimits {
+    fn limits(
+        record_bytes: usize,
+        run_records: usize,
+        max_open_inputs: usize,
+    ) -> BoundedSpillSortLimits {
         BoundedSpillSortLimits {
             record_bytes,
             run_records,
@@ -706,14 +713,12 @@ mod bounded_spill_sort_tests {
         let records = [4, 1, 3, 2]
             .into_iter()
             .map(|key| BoundedSpillRecord::new(key, payload(key, record_bytes)));
-        let error = bounded_spill_sort_to(
-            &directory.0,
-            records,
-            &mut Vec::new(),
-            constrained,
-        )
-        .expect_err("merge amplification must exceed live budget");
-        assert!(matches!(error, BoundedSpillSortError::Limit("live spill bytes")));
+        let error = bounded_spill_sort_to(&directory.0, records, &mut Vec::new(), constrained)
+            .expect_err("merge amplification must exceed live budget");
+        assert!(matches!(
+            error,
+            BoundedSpillSortError::Limit("live spill bytes")
+        ));
         assert!(fs::read_dir(&directory.0).unwrap().next().is_none());
     }
 
