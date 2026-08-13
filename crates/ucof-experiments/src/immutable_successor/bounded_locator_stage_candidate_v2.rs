@@ -97,7 +97,11 @@ mod bounded_locator_stage_candidate_v2_tests {
         }
     }
 
-    fn groups(total: usize, capacity: usize, minimum: usize) -> CandidateResult<CanonicalGroupSizesIter> {
+    fn groups(
+        total: usize,
+        capacity: usize,
+        minimum: usize,
+    ) -> CandidateResult<CanonicalGroupSizesIter> {
         CanonicalGroupSizesIter::new(total, capacity, minimum)
             .map_err(|error| format!("canonical grouping failed: {error:?}"))
     }
@@ -116,7 +120,10 @@ mod bounded_locator_stage_candidate_v2_tests {
             let mut locators = Vec::with_capacity(size);
             let mut raw = [0u8; STAGED_LOCATOR_BYTES];
             for _ in 0..size {
-                stage.file.read_exact(&mut raw).map_err(|error| error.to_string())?;
+                stage
+                    .file
+                    .read_exact(&mut raw)
+                    .map_err(|error| error.to_string())?;
                 locators.push(decode_locator(&raw)?);
             }
             level.push(
@@ -126,7 +133,12 @@ mod bounded_locator_stage_candidate_v2_tests {
             pages += 1;
         }
         let mut trailing = [0u8; 1];
-        if stage.file.read(&mut trailing).map_err(|error| error.to_string())? != 0 {
+        if stage
+            .file
+            .read(&mut trailing)
+            .map_err(|error| error.to_string())?
+            != 0
+        {
             return Err("locator stage has trailing bytes".into());
         }
 
@@ -189,15 +201,19 @@ mod bounded_locator_stage_candidate_v2_tests {
         fn object_id(&self) -> u64 {
             self.object_id
         }
+
         fn kind(&self) -> u16 {
             self.kind
         }
+
         fn logical_len(&self) -> u64 {
             u64::try_from(self.bytes.len()).expect("payload length")
         }
+
         fn strong_version(&mut self) -> Result<[u8; 32], &'static str> {
             Ok(self.version)
         }
+
         fn read_exact_at(&mut self, offset: u64, buffer: &mut [u8]) -> Result<(), &'static str> {
             let start = usize::try_from(offset).map_err(|_| "offset")?;
             let end = start.checked_add(buffer.len()).ok_or("range")?;
@@ -207,6 +223,7 @@ mod bounded_locator_stage_candidate_v2_tests {
     }
 
     struct TestDirectory(PathBuf);
+
     impl TestDirectory {
         fn new() -> Self {
             let sequence = NEXT_STAGE.fetch_add(1, Ordering::Relaxed);
@@ -218,6 +235,7 @@ mod bounded_locator_stage_candidate_v2_tests {
             Self(path)
         }
     }
+
     impl Drop for TestDirectory {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
@@ -249,50 +267,56 @@ mod bounded_locator_stage_candidate_v2_tests {
         let preflight = preflight_source_streaming(&mut sources, options, limits)
             .expect("source preflight");
         let mut output = Vec::new();
-        let mut sink = StreamingSink::new(&mut output, options.output.max_write_request_bytes)
-            .expect("streaming sink");
-        let mut header = [0u8; FILE_HEADER_LEN];
-        header[..8].copy_from_slice(FILE_MAGIC);
-        sink.write_commit_bytes(&header).expect("write header");
         let mut stage = LocatorStage::create(&directory.0).expect("locator stage");
-        let mut buffer = vec![0u8; preflight.largest_source_buffer];
-        let mut counters = SourceStreamingCounters {
-            version_checks: preflight.version_checks,
-            ..SourceStreamingCounters::default()
-        };
-        for index in preflight.order {
-            let locator = write_source_streaming_object(
-                &mut sink,
-                &mut sources[index],
-                preflight.versions[index],
-                preflight.lengths[index],
-                &mut buffer,
-                &mut counters,
-            )
-            .expect("write source object");
-            stage.push(&locator).expect("stage locator");
+        let staged_report;
+        let peak_locator_entries;
+        let peak_frontier_entries;
+        {
+            let mut sink = StreamingSink::new(&mut output, options.output.max_write_request_bytes)
+                .expect("streaming sink");
+            let mut header = [0u8; FILE_HEADER_LEN];
+            header[..8].copy_from_slice(FILE_MAGIC);
+            sink.write_commit_bytes(&header).expect("write header");
+            let mut buffer = vec![0u8; preflight.largest_source_buffer];
+            let mut counters = SourceStreamingCounters {
+                version_checks: preflight.version_checks,
+                ..SourceStreamingCounters::default()
+            };
+            for index in preflight.order {
+                let locator = write_source_streaming_object(
+                    &mut sink,
+                    &mut sources[index],
+                    preflight.versions[index],
+                    preflight.lengths[index],
+                    &mut buffer,
+                    &mut counters,
+                )
+                .expect("write source object");
+                stage.push(&locator).expect("stage locator");
+            }
+            let (root, page_count, locator_peak, frontier_peak) =
+                write_tree(&mut sink, &mut stage, limits).expect("write staged tree");
+            peak_locator_entries = locator_peak;
+            peak_frontier_entries = frontier_peak;
+            assert_eq!(page_count, preflight.expected_pages);
+            assert_eq!(root.level, preflight.expected_root_level);
+            let mut report = write_streaming_publication(&mut sink, &root, page_count)
+                .expect("write publication");
+            report.object_count = stage.records;
+            assert_eq!(sink.offset, preflight.expected_bytes);
+            staged_report = ImmutableSourceStreamingWriteReport {
+                output: ImmutableStreamingWriteReport {
+                    report,
+                    bytes_written: sink.offset,
+                    largest_write_request: sink.largest_write_request,
+                    locator_entries: stage.records,
+                },
+                source_read_operations: counters.source_read_operations,
+                source_bytes_read: counters.source_bytes_read,
+                version_checks: counters.version_checks,
+                largest_source_buffer: buffer.len(),
+            };
         }
-        let (root, page_count, peak_locator_entries, peak_frontier_entries) =
-            write_tree(&mut sink, &mut stage, limits).expect("write staged tree");
-        assert_eq!(page_count, preflight.expected_pages);
-        assert_eq!(root.level, preflight.expected_root_level);
-        let mut report = write_streaming_publication(&mut sink, &root, page_count)
-            .expect("write publication");
-        report.object_count = stage.records;
-        assert_eq!(sink.offset, preflight.expected_bytes);
-        let staged_report = ImmutableSourceStreamingWriteReport {
-            output: ImmutableStreamingWriteReport {
-                report,
-                bytes_written: sink.offset,
-                largest_write_request: sink.largest_write_request,
-                locator_entries: stage.records,
-            },
-            source_read_operations: counters.source_read_operations,
-            source_bytes_read: counters.source_bytes_read,
-            version_checks: counters.version_checks,
-            largest_source_buffer: buffer.len(),
-        };
-        drop(sink);
 
         assert_eq!(output, baseline);
         assert_eq!(staged_report, baseline_report);
