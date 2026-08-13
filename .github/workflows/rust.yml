@@ -33,6 +33,8 @@ jobs:
         run: python3 tools/verify_exp0003_policy_reward_decomposition.py
       - name: Verify candidate deletion policy vectors
         run: cargo run --locked -p ucof-experiments --example exp0003_delete_policy_candidate_vectors -- --verify tests/vectors/exp-0003-candidate-delete-policy/manifest.txt
+      - name: Measure source deletion policy I/O
+        run: cargo run --locked -p ucof-experiments --example exp0003_source_delete_policy_io
       - name: Verify deletion parent reward catalog
         run: cargo run --locked -p ucof-experiments --example exp0003_delete_parent_reward_catalog -- --verify tests/vectors/exp-0003-delete-reward-catalog/manifest.csv
       - name: Test Rust documentation
