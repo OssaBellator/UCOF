@@ -3,9 +3,8 @@ use reqwest::header::{
     IF_MATCH, RANGE, RETRY_AFTER,
 };
 use std::future::Future;
-use std::time::Duration;
 
-const ASYNC_CONTROL_POLL_INTERVAL: Duration = Duration::from_millis(10);
+const ASYNC_CONTROL_POLL_INTERVAL: std::time::Duration = std::time::Duration::from_millis(10);
 
 /// Concrete asynchronous HTTP transport for the strong-version conditional-source experiments.
 ///
@@ -333,7 +332,7 @@ mod conditional_reqwest_tests {
     use super::*;
     use std::collections::VecDeque;
     use std::sync::{Arc, Mutex};
-    use std::time::Instant;
+    use std::time::{Duration, Instant};
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
     use tokio::net::TcpListener;
     use tokio::sync::oneshot;
