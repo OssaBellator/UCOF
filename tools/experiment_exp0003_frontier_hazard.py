@@ -1,31 +1,30 @@
 #!/usr/bin/env python3
 """Measure EXP-0003 underflow/split frontier arrival hazards.
 
-This experiment is a bridge between the finite-trace reward decomposition and a
-future Markov/semi-Markov model.  It deliberately does not assume that successive
-repair frontiers are iid renewals or that a small local post-repair state is
-Markovian.
+This is a bridge from Experiment 0123's finite-trace reward decomposition toward a
+Markov/semi-Markov model.  It deliberately does *not* assume that successive repair
+frontiers are iid renewals or that a small local post-repair state is Markovian.
 
-For the random-key/random-gap leaf model, two frontier-arrival probabilities are
-available exactly from the current global occupancy state:
+For the random-key/random-gap leaf process, frontier-arrival probabilities are
+available exactly from the current occupancy state:
 
-    P(underflow on the next deletion | state)
-        = MINIMUM * count(leaves == MINIMUM) / live_keys
+    P(underflow on next deletion | state)
+      = MINIMUM * count(leaves == MINIMUM) / live_keys
 
-    P(split on the next insertion | state)
-        = (CAPACITY + 1) * count(leaves == CAPACITY)
-          / (live_keys + leaf_count)
+    P(split on next insertion | state)
+      = (CAPACITY + 1) * count(leaves == CAPACITY)
+        / (live_keys + leaf_count)
 
-Those identities separate *arrival* from *repair outcome*.  Borrow-versus-merge
-still depends on sibling context, while immutable page-write reward still depends
-on parent/root structure.  The policy can therefore change long-run cost by
-changing how much stationary/finite-horizon mass sits at the minimum/full
-occupancy frontiers even though the conditional hazard formula itself is common.
+The borrower policy does not appear in either conditional hazard formula.  It can
+still change long-run arrival frequency by changing how much process mass sits at
+the minimum/full occupancy frontiers.  Borrow-versus-merge outcome remains a
+sibling-correlation problem, and full immutable reward remains a parent/root-state
+problem.
 
 The model keeps cardinality fixed with one insertion and one deletion per cycle,
 randomizes operation order, and compares half-full left-first borrowing with the
 experimental fuller-sibling/left-on-tie rule.  Results are deterministic-seed
-Monte Carlo evidence, not an equilibrium proof and not an epoch decision.
+Monte Carlo evidence, not an equilibrium proof or an epoch decision.
 """
 
 from __future__ import annotations
@@ -63,9 +62,9 @@ class Trial:
     burn_in_cycles: int
     observed_cycles: int
     live_keys: int
-    mean_leaf_count: float
-    mean_minimum_leaf_count: float
-    mean_full_leaf_count: float
+    mean_leaf_count_before_insert: float
+    mean_minimum_leaf_count_before_delete: float
+    mean_full_leaf_count_before_insert: float
     observed_underflows: int
     expected_underflows: float
     underflow_rate_per_operation: float
@@ -92,9 +91,9 @@ class Aggregate:
     burn_in_cycles: int
     observed_operations: int
     live_keys: int
-    mean_leaf_count: float
-    mean_minimum_leaf_count: float
-    mean_full_leaf_count: float
+    mean_leaf_count_before_insert: float
+    mean_minimum_leaf_count_before_delete: float
+    mean_full_leaf_count_before_insert: float
     observed_underflows: int
     expected_underflows: float
     underflow_rate_per_operation: float
@@ -172,10 +171,12 @@ def run_trial(policy: str, seed: int, cycles: int, burn_in: int) -> Trial:
     leaves = make_initial_leaves()
     live_keys = sum(leaves)
 
+    observed_cycles = 0
     observed_underflows = borrows = merges = observed_splits = 0
     expected_underflows = expected_splits = 0.0
-    minimum_leaf_count_sum = full_leaf_count_sum = leaf_count_sum = 0.0
-    observed_cycles = 0
+    minimum_before_delete_sum = 0.0
+    full_before_insert_sum = 0.0
+    leaf_count_before_insert_sum = 0.0
 
     seen_underflow = False
     operations_since_underflow = 0
@@ -183,10 +184,13 @@ def run_trial(policy: str, seed: int, cycles: int, burn_in: int) -> Trial:
 
     def insert_one(*, collect: bool) -> None:
         nonlocal observed_splits, expected_splits, operations_since_underflow
+        nonlocal full_before_insert_sum, leaf_count_before_insert_sum
 
         if collect:
             operations_since_underflow += 1
             full_leaves = sum(occupancy == CAPACITY for occupancy in leaves)
+            full_before_insert_sum += full_leaves
+            leaf_count_before_insert_sum += len(leaves)
             expected_splits += (
                 (CAPACITY + 1) * full_leaves / (live_keys + len(leaves))
             )
@@ -206,11 +210,12 @@ def run_trial(policy: str, seed: int, cycles: int, burn_in: int) -> Trial:
 
     def delete_one(*, collect: bool) -> None:
         nonlocal observed_underflows, expected_underflows, borrows, merges
-        nonlocal seen_underflow, operations_since_underflow
+        nonlocal seen_underflow, operations_since_underflow, minimum_before_delete_sum
 
         if collect:
             operations_since_underflow += 1
             minimum_leaves = sum(occupancy == MINIMUM for occupancy in leaves)
+            minimum_before_delete_sum += minimum_leaves
             expected_underflows += MINIMUM * minimum_leaves / live_keys
 
         index = choose_leaf(rng, leaves, insertion=False)
@@ -261,16 +266,14 @@ def run_trial(policy: str, seed: int, cycles: int, burn_in: int) -> Trial:
 
         assert sum(leaves) == live_keys
         assert all(MINIMUM <= occupancy <= CAPACITY for occupancy in leaves)
-
         if collect:
             observed_cycles += 1
-            minimum_leaf_count_sum += sum(
-                occupancy == MINIMUM for occupancy in leaves
-            )
-            full_leaf_count_sum += sum(occupancy == CAPACITY for occupancy in leaves)
-            leaf_count_sum += len(leaves)
 
     observed_operations = 2 * observed_cycles
+    mean_minimum = minimum_before_delete_sum / observed_cycles
+    mean_full = full_before_insert_sum / observed_cycles
+    mean_leaf_count = leaf_count_before_insert_sum / observed_cycles
+
     underflow_rate = observed_underflows / observed_operations
     predicted_underflow_rate = expected_underflows / observed_operations
     split_rate = observed_splits / observed_operations
@@ -278,6 +281,12 @@ def run_trial(policy: str, seed: int, cycles: int, burn_in: int) -> Trial:
 
     assert observed_underflows == borrows + merges
     assert len(complete_underflow_holding_times) == max(observed_underflows - 1, 0)
+    assert math.isclose(
+        predicted_underflow_rate,
+        0.5 * MINIMUM * mean_minimum / live_keys,
+        rel_tol=1e-12,
+        abs_tol=1e-15,
+    )
 
     return Trial(
         policy=policy,
@@ -286,9 +295,9 @@ def run_trial(policy: str, seed: int, cycles: int, burn_in: int) -> Trial:
         burn_in_cycles=burn_in,
         observed_cycles=observed_cycles,
         live_keys=live_keys,
-        mean_leaf_count=leaf_count_sum / observed_cycles,
-        mean_minimum_leaf_count=minimum_leaf_count_sum / observed_cycles,
-        mean_full_leaf_count=full_leaf_count_sum / observed_cycles,
+        mean_leaf_count_before_insert=mean_leaf_count,
+        mean_minimum_leaf_count_before_delete=mean_minimum,
+        mean_full_leaf_count_before_insert=mean_full,
         observed_underflows=observed_underflows,
         expected_underflows=expected_underflows,
         underflow_rate_per_operation=underflow_rate,
@@ -303,9 +312,7 @@ def run_trial(policy: str, seed: int, cycles: int, burn_in: int) -> Trial:
         expected_splits=expected_splits,
         split_rate_per_operation=split_rate,
         predicted_split_rate_per_operation=predicted_split_rate,
-        split_relative_residual=relative_residual(
-            float(observed_splits), expected_splits
-        ),
+        split_relative_residual=relative_residual(float(observed_splits), expected_splits),
         complete_underflow_intervals=len(complete_underflow_holding_times),
         mean_complete_underflow_holding_operations=statistics.fmean(
             complete_underflow_holding_times
@@ -331,8 +338,8 @@ def aggregate(trials: list[Trial]) -> Aggregate:
     borrows = sum(trial.borrows for trial in trials)
     merges = sum(trial.merges for trial in trials)
 
-    # Every trial has the same number of observed cycles, so arithmetic means are
-    # also the exact cycle-weighted means for the occupancy statistics.
+    # Every trial has the same observed cycle count, so arithmetic means are exact
+    # cycle-weighted means for these pre-operation occupancy statistics.
     def mean(field: str) -> float:
         return statistics.fmean(getattr(trial, field) for trial in trials)
 
@@ -347,6 +354,14 @@ def aggregate(trials: list[Trial]) -> Aggregate:
     predicted_underflow_rate = expected_underflows / observed_operations
     split_rate = observed_splits / observed_operations
     predicted_split_rate = expected_splits / observed_operations
+    mean_minimum = mean("mean_minimum_leaf_count_before_delete")
+
+    assert math.isclose(
+        predicted_underflow_rate,
+        0.5 * MINIMUM * mean_minimum / first.live_keys,
+        rel_tol=1e-12,
+        abs_tol=1e-15,
+    )
 
     return Aggregate(
         policy=first.policy,
@@ -355,9 +370,9 @@ def aggregate(trials: list[Trial]) -> Aggregate:
         burn_in_cycles=first.burn_in_cycles,
         observed_operations=observed_operations,
         live_keys=first.live_keys,
-        mean_leaf_count=mean("mean_leaf_count"),
-        mean_minimum_leaf_count=mean("mean_minimum_leaf_count"),
-        mean_full_leaf_count=mean("mean_full_leaf_count"),
+        mean_leaf_count_before_insert=mean("mean_leaf_count_before_insert"),
+        mean_minimum_leaf_count_before_delete=mean_minimum,
+        mean_full_leaf_count_before_insert=mean("mean_full_leaf_count_before_insert"),
         observed_underflows=observed_underflows,
         expected_underflows=expected_underflows,
         underflow_rate_per_operation=underflow_rate,
@@ -372,9 +387,7 @@ def aggregate(trials: list[Trial]) -> Aggregate:
         expected_splits=expected_splits,
         split_rate_per_operation=split_rate,
         predicted_split_rate_per_operation=predicted_split_rate,
-        split_relative_residual=relative_residual(
-            float(observed_splits), expected_splits
-        ),
+        split_relative_residual=relative_residual(float(observed_splits), expected_splits),
         complete_underflow_intervals=complete_intervals,
         mean_complete_underflow_holding_operations=(
             weighted_holding_sum / complete_intervals
@@ -404,46 +417,52 @@ def self_check(aggregates: list[Aggregate], *, quick: bool) -> None:
     left = by_policy["left-first"]
     fuller = by_policy["fuller-sibling"]
 
-    # Underflow is common enough that the exact conditional hazard should close
-    # tightly even in the shorter deterministic CI ensemble.
+    # Underflow is common enough for tight conditional-hazard closure in CI.
     assert abs(left.underflow_relative_residual) < 0.03
     assert abs(fuller.underflow_relative_residual) < 0.03
 
-    # Splits are much rarer, so tolerate larger finite-sample residuals while still
-    # requiring the exact conditional hazard to have the right scale.
+    # Splits are much rarer, so allow a wider finite-sample residual.
     split_tolerance = 0.20 if quick else 0.12
     assert abs(left.split_relative_residual) < split_tolerance
     assert abs(fuller.split_relative_residual) < split_tolerance
 
-    # These are deterministic finite-horizon evidence checks, not mathematical
-    # constants.  They guard the policy signal that motivates the renewal model.
-    assert fuller.mean_minimum_leaf_count < left.mean_minimum_leaf_count
+    # Deterministic finite-horizon evidence checks, not mathematical constants.
+    assert (
+        fuller.mean_minimum_leaf_count_before_delete
+        < left.mean_minimum_leaf_count_before_delete
+    )
     assert fuller.underflow_rate_per_operation < left.underflow_rate_per_operation
     assert (
         fuller.mean_complete_underflow_holding_operations
         > left.mean_complete_underflow_holding_operations
     )
-    assert fuller.mean_full_leaf_count < left.mean_full_leaf_count
+    assert (
+        fuller.mean_full_leaf_count_before_insert
+        < left.mean_full_leaf_count_before_insert
+    )
     assert fuller.split_rate_per_operation < left.split_rate_per_operation
 
 
 def print_csv(aggregates: list[Aggregate]) -> None:
     print(
         "policy,seeds,cycles_per_seed,burn_in_cycles,observed_operations,live_keys,"
-        "mean_leaf_count,mean_minimum_leaf_count,mean_full_leaf_count,"
-        "observed_underflows,expected_underflows,underflow_rate_per_operation,"
-        "predicted_underflow_rate_per_operation,underflow_relative_residual,"
-        "borrows,merges,borrow_share_of_underflows,observed_splits,expected_splits,"
-        "split_rate_per_operation,predicted_split_rate_per_operation,"
-        "split_relative_residual,complete_underflow_intervals,"
-        "mean_complete_underflow_holding_operations,reciprocal_underflow_rate_operations"
+        "mean_leaf_count_before_insert,mean_minimum_leaf_count_before_delete,"
+        "mean_full_leaf_count_before_insert,observed_underflows,expected_underflows,"
+        "underflow_rate_per_operation,predicted_underflow_rate_per_operation,"
+        "underflow_relative_residual,borrows,merges,borrow_share_of_underflows,"
+        "observed_splits,expected_splits,split_rate_per_operation,"
+        "predicted_split_rate_per_operation,split_relative_residual,"
+        "complete_underflow_intervals,mean_complete_underflow_holding_operations,"
+        "reciprocal_underflow_rate_operations"
     )
     for item in aggregates:
         seeds = "+".join(str(seed) for seed in item.seeds)
         print(
             f"{item.policy},{seeds},{item.cycles_per_seed},{item.burn_in_cycles},"
-            f"{item.observed_operations},{item.live_keys},{item.mean_leaf_count:.9f},"
-            f"{item.mean_minimum_leaf_count:.9f},{item.mean_full_leaf_count:.9f},"
+            f"{item.observed_operations},{item.live_keys},"
+            f"{item.mean_leaf_count_before_insert:.9f},"
+            f"{item.mean_minimum_leaf_count_before_delete:.9f},"
+            f"{item.mean_full_leaf_count_before_insert:.9f},"
             f"{item.observed_underflows},{item.expected_underflows:.9f},"
             f"{item.underflow_rate_per_operation:.12g},"
             f"{item.predicted_underflow_rate_per_operation:.12g},"
