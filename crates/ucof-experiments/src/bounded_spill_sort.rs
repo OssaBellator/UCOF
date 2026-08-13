@@ -297,7 +297,7 @@ fn read_frame<R: Read>(
 
 fn write_initial_run(
     workspace: &mut SpillWorkspace,
-    records: &mut Vec<BoundedSpillRecord>,
+    records: &mut [BoundedSpillRecord],
     frame_bytes: u64,
     limits: BoundedSpillSortLimits,
     accounting: &mut SpillAccounting,
