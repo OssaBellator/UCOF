@@ -29,6 +29,8 @@ jobs:
         run: cargo run --locked -p ucof-experiments --example exp0003_delete_policy_trace
       - name: Reproduce deletion policy trace matrix
         run: cargo run --locked -p ucof-experiments --example exp0003_delete_policy_trace_matrix
+      - name: Generate candidate deletion policy vectors
+        run: cargo run --locked -p ucof-experiments --example exp0003_delete_policy_candidate_vectors
       - name: Test Rust documentation
         run: cargo test --locked --workspace --doc
       - name: Test independent Python parser
