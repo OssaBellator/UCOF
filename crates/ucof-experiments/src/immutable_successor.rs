@@ -19,6 +19,8 @@ include!("immutable_successor/persistent_insert.rs");
 include!("immutable_successor/persistent_delete.rs");
 include!("immutable_successor/delete_frontier_inspect.rs");
 include!("immutable_successor/delete_repair_path_inspect.rs");
+#[cfg(test)]
+include!("immutable_successor/delete_repair_path_policy_tests.rs");
 include!("immutable_successor/persistent_multi_put.rs");
 include!("immutable_successor/persistent_mixed.rs");
 include!("immutable_successor/persistent_mixed_streaming.rs");
