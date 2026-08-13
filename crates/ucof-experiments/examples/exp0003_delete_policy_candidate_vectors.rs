@@ -89,7 +89,10 @@ fn render() -> String {
 
     let left_fresh = rewrite_all(&left.bytes, limits).expect("left fresh rewrite");
     let fuller_fresh = rewrite_all(&fuller.bytes, limits).expect("fuller fresh rewrite");
-    assert_eq!(left_fresh.retained_object_ids, fuller_fresh.retained_object_ids);
+    assert_eq!(
+        left_fresh.retained_object_ids,
+        fuller_fresh.retained_object_ids
+    );
     assert_eq!(left_fresh.bytes, fuller_fresh.bytes);
 
     let mut output = String::new();
@@ -101,8 +104,11 @@ fn render() -> String {
     .expect("write manifest");
     writeln!(&mut output, "leaf_capacity={LEAF_CAPACITY}").expect("write manifest");
     writeln!(&mut output, "leaf_minimum={LEAF_MIN_OCCUPANCY}").expect("write manifest");
-    writeln!(&mut output, "fixture_recipe=genesis-370;insert-371..379;delete-1..91-left-first")
-        .expect("write manifest");
+    writeln!(
+        &mut output,
+        "fixture_recipe=genesis-370;insert-371..379;delete-1..91-left-first"
+    )
+    .expect("write manifest");
     writeln!(&mut output, "fixture_bytes={}", fixture.len()).expect("write manifest");
     writeln!(&mut output, "fixture_sha256={}", sha256(&fixture)).expect("write manifest");
     writeln!(&mut output, "fixture_sequence={}", fixture_report.sequence).expect("write manifest");
@@ -112,33 +118,61 @@ fn render() -> String {
         hex(&fixture_report.snapshot_digest)
     )
     .expect("write manifest");
-    writeln!(&mut output, "fixture_object_count={}", fixture_report.object_count)
-        .expect("write manifest");
+    writeln!(
+        &mut output,
+        "fixture_object_count={}",
+        fixture_report.object_count
+    )
+    .expect("write manifest");
     writeln!(&mut output, "target_object_id={TARGET_OBJECT_ID}").expect("write manifest");
 
     for (name, result) in [("left-first", &left), ("fuller-sibling", &fuller)] {
         writeln!(&mut output, "{name}.output_bytes={}", result.bytes.len())
             .expect("write manifest");
-        writeln!(&mut output, "{name}.output_sha256={}", sha256(&result.bytes))
-            .expect("write manifest");
+        writeln!(
+            &mut output,
+            "{name}.output_sha256={}",
+            sha256(&result.bytes)
+        )
+        .expect("write manifest");
         writeln!(&mut output, "{name}.sequence={}", result.report.sequence)
             .expect("write manifest");
-        writeln!(&mut output, "{name}.snapshot_digest={}", hex(&result.report.snapshot_digest))
-            .expect("write manifest");
-        writeln!(&mut output, "{name}.object_count={}", result.report.object_count)
-            .expect("write manifest");
-        writeln!(&mut output, "{name}.page_count={}", result.report.page_count)
-            .expect("write manifest");
-        writeln!(&mut output, "{name}.root_level={}", result.report.root_level)
-            .expect("write manifest");
+        writeln!(
+            &mut output,
+            "{name}.snapshot_digest={}",
+            hex(&result.report.snapshot_digest)
+        )
+        .expect("write manifest");
+        writeln!(
+            &mut output,
+            "{name}.object_count={}",
+            result.report.object_count
+        )
+        .expect("write manifest");
+        writeln!(
+            &mut output,
+            "{name}.page_count={}",
+            result.report.page_count
+        )
+        .expect("write manifest");
+        writeln!(
+            &mut output,
+            "{name}.root_level={}",
+            result.report.root_level
+        )
+        .expect("write manifest");
         writeln!(&mut output, "{name}.pages_written={}", result.pages_written)
             .expect("write manifest");
         writeln!(&mut output, "{name}.pages_reused={}", result.pages_reused)
             .expect("write manifest");
     }
 
-    writeln!(&mut output, "canonical_fresh_bytes={}", left_fresh.bytes.len())
-        .expect("write manifest");
+    writeln!(
+        &mut output,
+        "canonical_fresh_bytes={}",
+        left_fresh.bytes.len()
+    )
+    .expect("write manifest");
     writeln!(
         &mut output,
         "canonical_fresh_sha256={}",
@@ -160,7 +194,10 @@ fn render() -> String {
 fn verify(path: &Path, rendered: &str) {
     let expected = fs::read_to_string(path).expect("read candidate manifest");
     assert_eq!(expected, rendered, "candidate vector manifest drifted");
-    println!("verified_candidate_delete_policy_manifest={}", path.display());
+    println!(
+        "verified_candidate_delete_policy_manifest={}",
+        path.display()
+    );
 }
 
 fn main() {
