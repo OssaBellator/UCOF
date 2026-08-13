@@ -1,4 +1,5 @@
 use sha2::Digest as ShaDigest;
+use std::pin::Pin;
 
 const S3_VERSION_HEADER: reqwest::header::HeaderName =
     reqwest::header::HeaderName::from_static("x-amz-version-id");
@@ -882,7 +883,7 @@ mod s3_versioned_reqwest_tests {
             "us-east-1",
             credentials(),
             ImmutableOperationControl::unlimited(),
-            ConditionalRetryPolicy::new(4).expect("retry"),
+            ConditionalRetryPolicy::new(4_096).expect("retry"),
             ConditionalBackoffPolicy::new(1, 10, 100).expect("backoff"),
             S3EndpointPolicy::AllowHttpEmulator,
         )
@@ -916,7 +917,10 @@ mod s3_versioned_reqwest_tests {
         let lookup = lookup_at_async(&mut lookup_client, 2, ImmutableSourceLimits::default())
             .await
             .expect("lookup");
-        assert!(lookup.lookup.lookup.found.is_some());
+        assert!(matches!(
+            lookup.lookup.result,
+            ImmutableLookupResult::Found { .. }
+        ));
 
         let mut full_client = s3_client(&url);
         let full = validate_source_at_async(&mut full_client, ImmutableSourceLimits::default())
@@ -935,8 +939,6 @@ mod s3_versioned_reqwest_tests {
 
         let mut recovery_bytes = appended;
         recovery_bytes.extend_from_slice(b"interrupted");
-        // The server holds the original bytes, so recovery is exercised separately below with a
-        // second immutable provider object.
         let _ = shutdown.send(());
         server.await.expect("server");
 
