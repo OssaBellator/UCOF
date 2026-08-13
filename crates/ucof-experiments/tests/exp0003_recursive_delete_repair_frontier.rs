@@ -41,10 +41,9 @@ fn recursive_leaf_merge_propagates_to_internal_donor_cliff_borrow() {
         ExperimentalDeleteBorrowPolicy::LeftFirst,
         ExperimentalDeleteBorrowPolicy::FullerSiblingLeftTie,
     ] {
-        let path = inspect_persistent_delete_repair_path_experimental(
-            &genesis, object_id, limits, policy,
-        )
-        .expect("recursive repair path");
+        let path =
+            inspect_persistent_delete_repair_path_experimental(&genesis, object_id, limits, policy)
+                .expect("recursive repair path");
         assert_eq!(path.root_level, 2);
         assert_eq!(path.levels.len(), 2);
         assert!(!path.root_child_removed);
@@ -55,7 +54,10 @@ fn recursive_leaf_merge_propagates_to_internal_donor_cliff_borrow() {
         assert!(!leaf.is_root);
         assert!(!leaf.triggered_by_child_removal);
         assert_eq!(leaf.target_occupancy_before, LEAF_MIN_OCCUPANCY);
-        assert_eq!(leaf.target_occupancy_after_local_change, LEAF_MIN_OCCUPANCY - 1);
+        assert_eq!(
+            leaf.target_occupancy_after_local_change,
+            LEAF_MIN_OCCUPANCY - 1
+        );
         assert_eq!(leaf.left_occupancy, Some(LEAF_MIN_OCCUPANCY));
         assert_eq!(leaf.right_occupancy, None);
         assert!(leaf.would_underflow);
@@ -89,10 +91,8 @@ fn recursive_leaf_merge_propagates_to_internal_donor_cliff_borrow() {
         assert!(!internal.strictly_fuller_eligible_alternative);
         assert!(!internal.would_merge);
 
-        let result = append_persistent_delete_experimental(
-            &genesis, object_id, limits, policy,
-        )
-        .expect("recursive persistent delete");
+        let result = append_persistent_delete_experimental(&genesis, object_id, limits, policy)
+            .expect("recursive persistent delete");
         assert_eq!(result.report.root_level, 2);
         assert_eq!(result.report.object_count, count - 1);
         assert_eq!(result.report.page_count, original.page_count - 1);
@@ -105,7 +105,10 @@ fn recursive_leaf_merge_propagates_to_internal_donor_cliff_borrow() {
         outputs.push(result.bytes);
     }
 
-    assert_eq!(outputs[0], outputs[1], "only one internal donor is eligible");
+    assert_eq!(
+        outputs[0], outputs[1],
+        "only one internal donor is eligible"
+    );
 }
 
 #[test]
