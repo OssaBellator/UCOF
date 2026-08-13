@@ -29,6 +29,8 @@ jobs:
         run: cargo run --locked -p ucof-experiments --example exp0003_delete_policy_trace
       - name: Reproduce deletion policy trace matrix
         run: cargo run --locked -p ucof-experiments --example exp0003_delete_policy_trace_matrix
+      - name: Verify policy reward decomposition
+        run: python3 tools/verify_exp0003_policy_reward_decomposition.py
       - name: Verify candidate deletion policy vectors
         run: cargo run --locked -p ucof-experiments --example exp0003_delete_policy_candidate_vectors -- --verify tests/vectors/exp-0003-candidate-delete-policy/manifest.txt
       - name: Verify deletion parent reward catalog
