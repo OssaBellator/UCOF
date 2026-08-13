@@ -50,6 +50,9 @@ impl CanonicalGroupSizesIter {
             let penultimate = capacity
                 .checked_sub(transfer)
                 .ok_or(CanonicalGroupIterError::Invalid)?;
+            if penultimate < minimum {
+                return Err(CanonicalGroupIterError::Invalid);
+            }
             (prefix_groups, Some(penultimate), Some(minimum))
         };
 
