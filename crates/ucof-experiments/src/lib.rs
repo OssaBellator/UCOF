@@ -9,6 +9,7 @@
 //! full exact-end validation and explicitly requested recovery.
 
 mod active_file_selected_streaming;
+pub mod bounded_spill_sort;
 mod compaction;
 mod directory;
 mod enumeration;
