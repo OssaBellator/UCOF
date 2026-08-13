@@ -81,10 +81,7 @@ fn limits() -> BoundedSpillSortLimits {
 
 #[test]
 fn prepared_descriptors_release_source_borrow_before_payload_streaming() {
-    let directory = std::env::temp_dir().join(format!(
-        "ucof-source-borrow-{}",
-        std::process::id()
-    ));
+    let directory = std::env::temp_dir().join(format!("ucof-source-borrow-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&directory);
     std::fs::create_dir(&directory).expect("create directory");
     let mut sources = vec![
@@ -122,8 +119,8 @@ fn prepared_descriptors_release_source_borrow_before_payload_streaming() {
             let mut offset = 0u64;
             let mut buffer = [0u8; 7];
             while offset < descriptor.logical_len {
-                let remaining = usize::try_from(descriptor.logical_len - offset)
-                    .map_err(|_| "remaining")?;
+                let remaining =
+                    usize::try_from(descriptor.logical_len - offset).map_err(|_| "remaining")?;
                 let take = remaining.min(buffer.len());
                 source.read_exact_at(offset, &mut buffer[..take])?;
                 actual.update(&buffer[..take]);
