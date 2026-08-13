@@ -1,0 +1,8 @@
+case,repair_class,source_root_level,result_root_level,root_level_delta,source_page_count,result_page_count,page_count_delta,touched_original,pages_reused,pages_written,bytes_appended,expected_affine_bytes,source_objects,result_objects
+root-leaf,root-leaf-rewrite,0,0,0,1,1,0,1,0,1,16608,16608,10,9
+depth1-no-underflow,path-copy-no-underflow,1,1,0,4,4,0,2,2,2,32992,32992,400,399
+depth1-borrow-left,leaf-borrow-parent-rewrite,1,1,0,3,3,0,3,0,3,49376,49376,187,186
+depth1-borrow-right,leaf-borrow-parent-rewrite,1,1,0,3,3,0,3,0,3,49376,49376,187,186
+depth1-merge-root-collapse,leaf-merge-root-collapse,1,0,-1,3,1,-2,3,0,1,16608,16608,186,185
+depth1-merge-keep-root,leaf-merge-parent-rewrite,1,1,0,4,3,-1,3,1,2,32992,32992,279,278
+depth2-recursive-internal-borrow,leaf-merge-internal-borrow-root-rewrite,2,2,0,260,259,-1,5,255,4,65760,65760,47361,47360
