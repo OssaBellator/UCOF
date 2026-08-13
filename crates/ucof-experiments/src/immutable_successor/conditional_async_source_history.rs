@@ -117,14 +117,6 @@ async fn async_history_footer_and_parent<S: AsyncStrongVersionReadAt + Send>(
     let snapshot = reader
         .read_vec(snapshot_offset, SNAPSHOT_LEN, "snapshot")
         .await?;
-    reader.stats.bytes_hashed = reader
-        .stats
-        .bytes_hashed
-        .checked_add(
-            u64::try_from(snapshot.len())
-                .map_err(|_| ImmutableSourceError::Limit("hashed bytes"))?,
-        )
-        .ok_or(ImmutableSourceError::Limit("hashed bytes"))?;
     if digest(&[SNAPSHOT_DOMAIN, &snapshot]) != footer.snapshot_digest {
         return Err(
             ImmutableSourceError::Format(ImmutableError::Invalid("snapshot digest")).into(),
