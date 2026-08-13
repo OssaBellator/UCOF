@@ -19,7 +19,9 @@ struct AsyncPrefixStrongVersionSource<'a, S> {
     prefix_length: u64,
 }
 
-impl<S: AsyncStrongVersionReadAt> AsyncStrongVersionReadAt for AsyncPrefixStrongVersionSource<'_, S> {
+impl<S: AsyncStrongVersionReadAt + Send> AsyncStrongVersionReadAt
+    for AsyncPrefixStrongVersionSource<'_, S>
+{
     fn metadata_async<'a>(
         &'a mut self,
     ) -> Pin<
@@ -81,7 +83,7 @@ impl<S: AsyncStrongVersionReadAt> AsyncStrongVersionReadAt for AsyncPrefixStrong
     }
 }
 
-async fn async_history_footer_and_parent<S: AsyncStrongVersionReadAt>(
+async fn async_history_footer_and_parent<S: AsyncStrongVersionReadAt + Send>(
     source: &mut S,
     version: &StrongVersionToken,
     source_length: u64,
@@ -141,7 +143,7 @@ async fn async_history_footer_and_parent<S: AsyncStrongVersionReadAt>(
 /// every underlying range remains conditioned on the original complete-object version and length.
 /// Entries are newest first, strict validation never invokes recovery, and source read limits are
 /// cumulative across the complete history operation.
-pub async fn validate_source_history_async<S: AsyncStrongVersionReadAt>(
+pub async fn validate_source_history_async<S: AsyncStrongVersionReadAt + Send>(
     source: &mut S,
     limits: ImmutableSourceLimits,
 ) -> Result<AsyncImmutableSourceHistoryReport, AsyncImmutableSourceError> {
