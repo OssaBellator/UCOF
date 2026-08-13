@@ -3,38 +3,56 @@ mod canonical_group_iter_candidate;
 
 use canonical_group_iter_candidate::{CanonicalGroupIterError, CanonicalGroupSizesIter};
 
-fn reference(total: usize, capacity: usize, minimum: usize) -> Vec<usize> {
-    let groups = total.div_ceil(capacity);
+fn reference(
+    total: usize,
+    capacity: usize,
+    minimum: usize,
+) -> Result<Vec<usize>, CanonicalGroupIterError> {
+    if total == 0 || capacity == 0 || minimum == 0 || minimum > capacity {
+        return Err(CanonicalGroupIterError::Invalid);
+    }
+    let groups = total
+        .checked_add(capacity - 1)
+        .ok_or(CanonicalGroupIterError::Overflow)?
+        / capacity;
+    let mut sizes = Vec::with_capacity(groups);
     if groups == 1 {
-        return vec![total];
+        sizes.push(total);
+        return Ok(sizes);
     }
     let full_groups = total / capacity;
     let remainder = total % capacity;
     if remainder == 0 {
-        return vec![capacity; full_groups];
-    }
-    if remainder >= minimum {
-        let mut sizes = vec![capacity; full_groups];
+        sizes.resize(full_groups, capacity);
+    } else if remainder >= minimum {
+        sizes.resize(full_groups, capacity);
         sizes.push(remainder);
-        return sizes;
+    } else {
+        sizes.resize(full_groups, capacity);
+        let transfer = minimum - remainder;
+        let last = sizes.last_mut().ok_or(CanonicalGroupIterError::Invalid)?;
+        *last = last
+            .checked_sub(transfer)
+            .ok_or(CanonicalGroupIterError::Invalid)?;
+        sizes.push(minimum);
     }
-    let mut sizes = vec![capacity; full_groups - 1];
-    let transfer = minimum - remainder;
-    sizes.push(capacity - transfer);
-    sizes.push(minimum);
-    sizes
+    if sizes.iter().any(|size| *size > capacity || *size < minimum) {
+        return Err(CanonicalGroupIterError::Invalid);
+    }
+    Ok(sizes)
 }
 
 fn assert_matches(total: usize, capacity: usize, minimum: usize) {
-    let actual: Vec<_> = CanonicalGroupSizesIter::new(total, capacity, minimum)
-        .expect("valid canonical partition")
-        .collect();
     let expected = reference(total, capacity, minimum);
+    let actual = CanonicalGroupSizesIter::new(total, capacity, minimum)
+        .map(|sizes| sizes.collect::<Vec<_>>());
     assert_eq!(actual, expected);
-    assert_eq!(actual.iter().sum::<usize>(), total);
-    assert!(actual.iter().all(|size| *size <= capacity));
-    if actual.len() > 1 {
-        assert!(actual.iter().all(|size| *size >= minimum));
+    if let Ok(actual) = actual {
+        assert_eq!(actual.iter().sum::<usize>(), total);
+        assert!(actual.iter().all(|size| *size <= capacity));
+        if actual.len() > 1 {
+            assert!(actual.iter().all(|size| *size >= minimum));
+        }
     }
 }
 
@@ -86,6 +104,10 @@ fn invalid_geometry_is_rejected_without_allocation() {
     );
     assert_eq!(
         CanonicalGroupSizesIter::new(1, 1, 2).expect_err("minimum above capacity"),
+        CanonicalGroupIterError::Invalid
+    );
+    assert_eq!(
+        CanonicalGroupSizesIter::new(3, 2, 2).expect_err("infeasible redistribution"),
         CanonicalGroupIterError::Invalid
     );
 }
