@@ -56,6 +56,7 @@ mod source_api {
 
         include!("immutable_successor/conditional_async_source_full.rs");
         include!("immutable_successor/conditional_async_source_history.rs");
+        include!("immutable_successor/conditional_async_source_recovery.rs");
     }
 
     #[cfg(feature = "http-reqwest")]

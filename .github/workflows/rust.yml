@@ -33,6 +33,8 @@ jobs:
         run: cargo test --locked -p ucof-experiments --features http-reqwest conditional_async_source_full
       - name: Test async HTTP linked history
         run: cargo test --locked -p ucof-experiments --features http-reqwest conditional_async_source_history
+      - name: Test async HTTP recovery
+        run: cargo test --locked -p ucof-experiments --features http-reqwest conditional_async_source_recovery
       - name: Reproduce deletion policy trace
         run: cargo run --locked -p ucof-experiments --example exp0003_delete_policy_trace
       - name: Reproduce deletion policy trace matrix
