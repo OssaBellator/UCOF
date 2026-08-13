@@ -79,6 +79,7 @@ jobs:
           python3 tools/experiment_exp0003_frontier_closure.py --quick > /dev/null
           python3 tools/experiment_exp0003_reward_successor_partition.py > /dev/null
           python3 tools/experiment_exp0003_local_aggregation_residual.py > /dev/null
+          python3 tools/experiment_exp0003_frontier_hazard.py --quick
 
   msrv:
     runs-on: ubuntu-latest
