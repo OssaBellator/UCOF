@@ -1,8 +1,9 @@
 use std::collections::BTreeMap;
 use ucof_experiments::immutable_successor::{
-    append_persistent_delete_experimental, append_persistent_insert, build_genesis, rewrite_all,
-    ExperimentalDeleteBorrowPolicy, ImmutableLimits, ImmutableObjectInput, LEAF_CAPACITY,
-    LEAF_MIN_OCCUPANCY,
+    append_persistent_delete_experimental, append_persistent_insert, build_genesis,
+    inspect_persistent_delete_leaf_frontier_experimental, rewrite_all,
+    ExperimentalDeleteBorrowPolicy, ExperimentalDeleteLeafFrontier, ImmutableLimits,
+    ImmutableObjectInput, LEAF_CAPACITY, LEAF_MIN_OCCUPANCY,
 };
 
 const CYCLES_PER_TRACE: usize = 48;
@@ -55,6 +56,52 @@ const TRACES: [TraceSpec; 5] = [
 ];
 
 #[derive(Default)]
+struct FrontierMetrics {
+    observations: usize,
+    underflows: usize,
+    borrows: usize,
+    merges: usize,
+    donor_cliffs: usize,
+    avoidable_donor_cliffs: usize,
+    minimum_leaf_count_sum: usize,
+    leaf_count_sum: usize,
+}
+
+impl FrontierMetrics {
+    fn record(&mut self, frontier: &ExperimentalDeleteLeafFrontier) {
+        self.observations += 1;
+        self.minimum_leaf_count_sum += frontier.minimum_leaf_count;
+        self.leaf_count_sum += frontier.leaf_count;
+        if frontier.would_underflow {
+            self.underflows += 1;
+            if frontier.selected_donor_occupancy.is_some() {
+                self.borrows += 1;
+            } else {
+                assert!(frontier.would_merge);
+                self.merges += 1;
+            }
+        } else {
+            assert!(frontier.selected_donor_occupancy.is_none());
+            assert!(!frontier.would_merge);
+        }
+        if frontier.donor_cliff {
+            self.donor_cliffs += 1;
+        }
+        if frontier.strictly_fuller_eligible_alternative {
+            assert!(frontier.donor_cliff);
+            self.avoidable_donor_cliffs += 1;
+        }
+    }
+
+    fn assert_complete(&self) {
+        assert_eq!(self.observations, CYCLES_PER_TRACE);
+        assert_eq!(self.underflows, self.borrows + self.merges);
+        assert!(self.donor_cliffs <= self.borrows);
+        assert!(self.avoidable_donor_cliffs <= self.donor_cliffs);
+    }
+}
+
+#[derive(Default)]
 struct Metrics {
     delete_pages_written: usize,
     insert_pages_written: usize,
@@ -63,6 +110,7 @@ struct Metrics {
     bytes_appended: usize,
     delete_write_histogram: BTreeMap<usize, usize>,
     insert_write_histogram: BTreeMap<usize, usize>,
+    frontier: FrontierMetrics,
 }
 
 impl Metrics {
@@ -74,7 +122,27 @@ impl Metrics {
         self.delete_pages_reused + self.insert_pages_reused
     }
 
-    fn record_delete(&mut self, pages_written: usize, pages_reused: usize, appended_bytes: usize) {
+    fn record_delete(
+        &mut self,
+        frontier: &ExperimentalDeleteLeafFrontier,
+        pages_written: usize,
+        pages_reused: usize,
+        appended_bytes: usize,
+    ) {
+        // These workloads remain at a depth-1 root. A non-root leaf borrow rewrites
+        // target + donor + root (three pages); no-underflow and leaf merge cases
+        // emit two pages. Keep this causal link executable rather than inferring it
+        // later from aggregate histograms.
+        assert_eq!(frontier.root_level, 1);
+        assert_eq!(
+            pages_written,
+            if frontier.selected_donor_occupancy.is_some() {
+                3
+            } else {
+                2
+            }
+        );
+        self.frontier.record(frontier);
         self.delete_pages_written += pages_written;
         self.delete_pages_reused += pages_reused;
         self.bytes_appended += appended_bytes;
@@ -119,6 +187,11 @@ impl Metrics {
             Self::histogram_weighted_pages(&self.insert_write_histogram),
             self.insert_pages_written
         );
+        assert_eq!(
+            self.frontier.borrows,
+            *self.delete_write_histogram.get(&3).unwrap_or(&0)
+        );
+        self.frontier.assert_complete();
     }
 }
 
@@ -203,6 +276,13 @@ fn run_trace(
     for cycle in 0..CYCLES_PER_TRACE {
         let object_id = next_object_id(spec, cycle, &mut generator);
 
+        let left_frontier = inspect_persistent_delete_leaf_frontier_experimental(
+            &left_state,
+            object_id,
+            limits,
+            ExperimentalDeleteBorrowPolicy::LeftFirst,
+        )
+        .expect("inspect left-first frontier");
         let left_before = left_state.len();
         let left_delete = append_persistent_delete_experimental(
             &left_state,
@@ -212,11 +292,19 @@ fn run_trace(
         )
         .expect("left-first delete");
         left_metrics.record_delete(
+            &left_frontier,
             left_delete.pages_written,
             left_delete.pages_reused,
             left_delete.bytes.len() - left_before,
         );
 
+        let fuller_frontier = inspect_persistent_delete_leaf_frontier_experimental(
+            &fuller_state,
+            object_id,
+            limits,
+            ExperimentalDeleteBorrowPolicy::FullerSiblingLeftTie,
+        )
+        .expect("inspect fuller-sibling frontier");
         let fuller_before = fuller_state.len();
         let fuller_delete = append_persistent_delete_experimental(
             &fuller_state,
@@ -226,6 +314,7 @@ fn run_trace(
         )
         .expect("fuller-sibling delete");
         fuller_metrics.record_delete(
+            &fuller_frontier,
             fuller_delete.pages_written,
             fuller_delete.pages_reused,
             fuller_delete.bytes.len() - fuller_before,
@@ -275,6 +364,7 @@ fn run_trace(
 
     left_metrics.assert_histograms();
     fuller_metrics.assert_histograms();
+    assert_eq!(fuller_metrics.frontier.avoidable_donor_cliffs, 0);
 
     let left_fresh = rewrite_all(&left_state, limits).expect("canonicalize left-first trace");
     let fuller_fresh = rewrite_all(&fuller_state, limits).expect("canonicalize fuller trace");
@@ -313,6 +403,20 @@ fn print_histogram(trace: &str, policy: &str, operation: &str, histogram: &BTree
     for (pages_written, count) in histogram {
         println!("histogram,{trace},{policy},{operation},{pages_written},{count}");
     }
+}
+
+fn print_frontier(trace: &str, policy: &str, frontier: &FrontierMetrics) {
+    println!(
+        "frontier,{trace},{policy},{},{},{},{},{},{},{},{}",
+        frontier.observations,
+        frontier.underflows,
+        frontier.borrows,
+        frontier.merges,
+        frontier.donor_cliffs,
+        frontier.avoidable_donor_cliffs,
+        frontier.minimum_leaf_count_sum,
+        frontier.leaf_count_sum,
+    );
 }
 
 fn main() {
@@ -360,6 +464,8 @@ fn main() {
             "insert",
             &result.fuller.insert_write_histogram,
         );
+        print_frontier(spec.name, "left-first", &result.left.frontier);
+        print_frontier(spec.name, "fuller-sibling", &result.fuller.frontier);
         println!(
             "# {name}: delete_divergent_cycles={delete},cycle_divergent_cycles={cycle},left_smaller={left_smaller},fuller_smaller={fuller_smaller},equal_size={equal}",
             name = spec.name,
