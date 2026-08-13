@@ -138,6 +138,16 @@ mod conditional_source_api {
     include!("immutable_successor/conditional_reqwest.rs");
     #[cfg(feature = "http-reqwest")]
     include!("immutable_successor/conditional_async_retry.rs");
+
+    #[cfg(feature = "http-reqwest")]
+    mod async_auth_api {
+        use super::*;
+
+        include!("immutable_successor/conditional_async_authentication.rs");
+    }
+
+    #[cfg(feature = "http-reqwest")]
+    pub use async_auth_api::*;
 }
 
 pub use conditional_source_api::*;
