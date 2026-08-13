@@ -67,9 +67,26 @@ mod bounded_source_streaming_candidate_tests {
         Stage(&'static str),
     }
 
+    impl std::fmt::Display for CandidateError {
+        fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                Self::Writer(error) => write!(formatter, "bounded source writer failed: {error}"),
+                Self::Spill(error) => write!(formatter, "bounded source spill failed: {error}"),
+                Self::StageIo(kind) => write!(formatter, "bounded source stage I/O failed: {kind:?}"),
+                Self::Stage(label) => write!(formatter, "bounded source stage failed: {label}"),
+            }
+        }
+    }
+
     impl From<ImmutableSourceStreamingWriteError> for CandidateError {
         fn from(error: ImmutableSourceStreamingWriteError) -> Self {
             Self::Writer(error)
+        }
+    }
+
+    impl From<ImmutableStreamingWriteError> for CandidateError {
+        fn from(error: ImmutableStreamingWriteError) -> Self {
+            Self::Writer(ImmutableSourceStreamingWriteError::from(error))
         }
     }
 
