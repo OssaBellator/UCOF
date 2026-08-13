@@ -31,6 +31,8 @@ jobs:
         run: cargo run --locked -p ucof-experiments --example exp0003_delete_policy_trace_matrix
       - name: Verify candidate deletion policy vectors
         run: cargo run --locked -p ucof-experiments --example exp0003_delete_policy_candidate_vectors -- --verify tests/vectors/exp-0003-candidate-delete-policy/manifest.txt
+      - name: Reproduce deletion parent reward catalog
+        run: cargo run --locked -p ucof-experiments --example exp0003_delete_parent_reward_catalog
       - name: Test Rust documentation
         run: cargo test --locked --workspace --doc
       - name: Test independent Python parser
