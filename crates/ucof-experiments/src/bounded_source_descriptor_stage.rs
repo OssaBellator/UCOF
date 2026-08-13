@@ -100,6 +100,10 @@ fn create_stage(directory: &Path) -> Result<(PathBuf, File), std::io::Error> {
     Ok((path, file))
 }
 
+fn retire_stage(path: &Path) {
+    let _ = fs::remove_file(path);
+}
+
 pub fn prepare_bounded_source_descriptors<I, InputError>(
     directory: &Path,
     descriptors: I,
@@ -128,32 +132,52 @@ where
     let mut writer = BufWriter::new(file);
     let sorted = bounded_spill_sort_fallible_to(directory, records, &mut writer, limits);
     if let Some(label) = invalid.get() {
-        let _ = fs::remove_file(&path);
+        drop(writer);
+        retire_stage(&path);
         return Err(BoundedSourceStageError::Invalid(label));
     }
     let report = match sorted {
         Ok(report) => report,
         Err(BoundedSpillInputError::Input(error)) => {
-            let _ = fs::remove_file(&path);
+            drop(writer);
+            retire_stage(&path);
             return Err(BoundedSourceStageError::Input(error));
         }
         Err(BoundedSpillInputError::Sort(error)) => {
-            let _ = fs::remove_file(&path);
+            drop(writer);
+            retire_stage(&path);
             return Err(BoundedSourceStageError::Sort(error));
         }
     };
     if let Err(error) = writer.flush() {
-        let _ = fs::remove_file(&path);
-        return Err(BoundedSourceStageError::Io(error.kind()));
+        let kind = error.kind();
+        drop(writer);
+        retire_stage(&path);
+        return Err(BoundedSourceStageError::Io(kind));
     }
     drop(writer);
-    let bytes = report.output_payload_bytes;
-    let expected = report
-        .output_records
-        .checked_mul(BOUNDED_SOURCE_DESCRIPTOR_BYTES as u64)
-        .ok_or(BoundedSourceStageError::Invalid("source descriptor stage bytes"))?;
-    if bytes != expected {
-        let _ = fs::remove_file(&path);
+
+    let descriptor_bytes =
+        u64::try_from(BOUNDED_SOURCE_DESCRIPTOR_BYTES).expect("descriptor size fits u64");
+    let expected = match report.output_records.checked_mul(descriptor_bytes) {
+        Some(expected) => expected,
+        None => {
+            retire_stage(&path);
+            return Err(BoundedSourceStageError::Invalid(
+                "source descriptor stage bytes",
+            ));
+        }
+    };
+    let on_disk = match fs::metadata(&path) {
+        Ok(metadata) => metadata.len(),
+        Err(error) => {
+            let kind = error.kind();
+            retire_stage(&path);
+            return Err(BoundedSourceStageError::Io(kind));
+        }
+    };
+    if report.output_payload_bytes != expected || on_disk != expected {
+        retire_stage(&path);
         return Err(BoundedSourceStageError::Invalid(
             "source descriptor stage bytes",
         ));
@@ -161,7 +185,7 @@ where
     Ok(PreparedBoundedSourceDescriptors {
         path,
         records: report.output_records,
-        bytes,
+        bytes: expected,
         report,
     })
 }
