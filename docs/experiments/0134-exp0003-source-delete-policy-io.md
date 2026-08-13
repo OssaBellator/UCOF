@@ -92,6 +92,53 @@ fuller_pages_written,3,0
 persistent_outputs_equal,0,0
 ```
 
+## Real trace opportunity frequency
+
+The existing five-workload Rust trace matrix now records a separate `source_info` row without changing the pinned reward histogram.
+
+A source-information opportunity is counted on an underflow when:
+
+```text
+left sibling exists and occupancy > M
+right sibling exists
+```
+
+At that point the current LeftFirst source planner can authenticate the lendable left page and stop, while a fuller-sibling comparison also needs authenticated right-sibling occupancy unless that information is already cached.
+
+CI reproduced:
+
+| Trace | LeftFirst trajectory opportunities | Fuller trajectory opportunities |
+|---|---:|---:|
+| whole-set LCG | 8 | 1 |
+| left-leaf hot | 0 | 0 |
+| middle-leaf hot | 1 | 1 |
+| right-leaf hot | 0 | 0 |
+| left/middle boundary hot | 12 | 1 |
+| **Total** | **21** | **3** |
+
+The LeftFirst trajectory therefore exposes the extra-information condition on:
+
+```text
+21 / 240 deletions = 8.75%
+```
+
+of these structured deletion traces.
+
+In this particular matrix, the 21 LeftFirst information opportunities coincide exactly with the 21 locally avoidable donor-cliff events already recorded by Experiment 0128. That equality is a property of these traces, not a general identity: another state can have a lendable left sibling and present right sibling without the left donor being exactly `M+1`.
+
+If every one of those 21 LeftFirst-trajectory opportunities were evaluated with the same uncached 257-byte-cap right-page probe, the **one-step exposure** would be:
+
+```text
+21 * 64 reads          = 1,344 bounded reads
+21 * 16,384 bytes      = 344,064 bytes read
+21 * 16,384 bytes      = 344,064 bytes hashed
+21 * 128 version checks = 2,688 strong-version checks
+```
+
+This is not an actual Fuller trajectory cost. The policies produce different persistent states after a donor-choice divergence, so later opportunities are endogenous to the selected policy. The table should be read as the information exposure present on each policy's own measured trajectory, not as an additive counterfactual bill obtained by multiplying LeftFirst events after switching policies.
+
+For context, the same five persistent traces measured a 38-page write difference, or 622,592 current-microformat page bytes, in favor of Fuller. The `344,064` read-byte exposure and `622,592` write-byte saving must **not** be subtracted as if bytes had one universal price: request latency, hashing, transfer pricing, caching, append/durability cost, and the policy-dependent trajectory all differ. They are useful as two separately measured physical quantities for a later transport-aware cost model.
+
 ## General bounded-read formula
 
 For a page of size `P` and a source request cap `B`, if the right sibling was not already cached and must be authenticated after LeftFirst could have stopped, the current read/check pattern costs:
@@ -165,6 +212,7 @@ This experiment does **not**:
 - change the default `LeftFirst` rule;
 - claim 64 network round trips;
 - claim the measured percentage applies to providers;
+- treat LeftFirst-trajectory opportunity counts as an actual Fuller counterfactual trajectory;
 - accept FCP-0003;
 - change page/entry geometry;
 - change authoritative vectors;
@@ -176,6 +224,7 @@ It closes the main practical information-cost gap in the deletion-policy evidenc
 
 ```console
 cargo run --locked -p ucof-experiments --example exp0003_source_delete_policy_io
+cargo run --locked -p ucof-experiments --example exp0003_delete_policy_trace_matrix
 ```
 
-The normal Rust CI job runs this executable alongside the existing policy trace, pinned candidate-vector, reward-decomposition, and deletion-parent-reward checks.
+The normal Rust CI job runs these executables alongside the pinned candidate-vector, reward-decomposition, and deletion-parent-reward checks.
