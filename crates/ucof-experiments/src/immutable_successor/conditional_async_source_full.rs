@@ -697,7 +697,6 @@ mod conditional_async_source_full_tests {
             key.eq_ignore_ascii_case(name).then_some(value.trim())
         })
     }
-
     fn parse_range(request: &str) -> Option<(usize, usize)> {
         let value = header_value(request, "range")?;
         let value = value.strip_prefix("bytes=")?;
@@ -740,10 +739,11 @@ mod conditional_async_source_full_tests {
                         .await
                         .expect("head response");
                 } else if first.starts_with("GET ") {
-                    let mut counts = observed.lock().expect("counts");
-                    counts.ranges += 1;
-                    let range_number = counts.ranges;
-                    drop(counts);
+                    let range_number = {
+                        let mut counts = observed.lock().expect("counts");
+                        counts.ranges += 1;
+                        counts.ranges
+                    };
                     if mutate_after_ranges.is_some_and(|limit| range_number > limit) {
                         socket
                             .write_all(
