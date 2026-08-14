@@ -19,10 +19,12 @@ mod bounded_end_to_end_candidate_tests {
     include!("bounded_end_to_end_candidate/stage.rs");
     include!("bounded_end_to_end_candidate/writer.rs");
 
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     mod encrypted_descriptor_crypto {
         include!("../private_nonce_lease_contract.rs");
         include!("bounded_end_to_end_candidate/encrypted_descriptor.rs");
     }
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     use encrypted_descriptor_crypto::{
         transcode_descriptor_stage, DescriptorEncryptionSession, DescriptorNonceAuthority,
         EncryptedDescriptorReader, EncryptedDescriptorStage, ENCRYPTED_DESCRIPTOR_STAGE_BYTES,
