@@ -23,7 +23,7 @@ jobs:
         run: |
           set -euo pipefail
           cp Cargo.lock Cargo.lock.before
-          cargo metadata --no-deps --format-version 1 >/dev/null
+          cargo check -p ucof-experiments --lib >/dev/null
           python3 - <<'PY'
           from pathlib import Path
           before = Path('Cargo.lock.before').read_text()
