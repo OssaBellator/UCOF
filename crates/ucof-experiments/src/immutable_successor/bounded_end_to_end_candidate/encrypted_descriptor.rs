@@ -218,13 +218,16 @@ pub(super) fn transcode_descriptor_stage(
         return Err("descriptor nonce lease capacity".into());
     }
 
-    let mut encrypted =
-        FixedStage::create(directory, "encrypted-source-descriptors", ENCRYPTED_DESCRIPTOR_STAGE_BYTES)?;
+    let mut encrypted = FixedStage::create(
+        directory,
+        "encrypted-source-descriptors",
+        ENCRYPTED_DESCRIPTOR_STAGE_BYTES,
+    )?;
     let mut encrypted_writer = encrypted.writer()?;
     let mut plaintext_reader = plaintext.reader()?;
     let key = descriptor_key(&session.key)?;
-    let mut first_counter = None;
-    let mut previous_counter = None;
+    let mut first_counter: Option<u64> = None;
+    let mut previous_counter: Option<u64> = None;
 
     for sequence_index in 0..plaintext.records {
         let mut descriptor = [0u8; DESCRIPTOR_STAGE_BYTES];
