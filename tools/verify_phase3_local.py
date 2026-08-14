@@ -186,6 +186,9 @@ def verify_wiring(runner: Runner) -> None:
             "AfterSourceSetPruneBeforeRetirementPrune",
             "AfterPreparedRetirementPruneBeforeTerminalPrune",
         ],
+        "compacted_source_bound_restart.rs": [
+            'return Err("compacted restart manifest/nonce context".into());',
+        ],
         "restart_metadata_compaction_graph_tests.rs": [
             "compacted_scan_rejects_authenticated_record_replayed_under_wrong_generation_name",
             "compaction_rejects_authenticated_retirement_from_foreign_journal_context",
@@ -197,6 +200,7 @@ def verify_wiring(runner: Runner) -> None:
         ],
         "compacted_restart_retry_tests.rs": [
             "compacted_restart_survives_pruned_burn_then_publishes_retires_and_reclaims",
+            "compacted_destination_exists_burn_can_be_pruned_and_retried",
         ],
         "compacted_private_lifecycle_quota_tests.rs": [
             "checkpointed_source_bound_restart_quota_preserves_pre_side_effect_rejection",
@@ -432,6 +436,8 @@ def parse_args() -> argparse.Namespace:
     args = parser.parse_args()
     if args.campaigns <= 0 or args.steps <= 0:
         parser.error("campaigns and steps must be positive")
+    if args.model_only and args.acceptance:
+        parser.error("--model-only cannot be combined with --acceptance")
     if args.skip_fuzz and not args.acceptance:
         parser.error("--skip-fuzz is only meaningful with --acceptance")
     return args
