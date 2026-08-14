@@ -17,5 +17,8 @@ sha2 = "0.10"
 reqwest = { version = "0.13.4", default-features = false, features = ["rustls"], optional = true }
 tokio = { version = "1.53.1", features = ["io-util", "macros", "net", "rt", "sync", "time"], optional = true }
 
+[target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dev-dependencies]
+aws-lc-rs = { version = "=1.18.0", default-features = false, features = ["aws-lc-sys"] }
+
 [lints]
 workspace = true
