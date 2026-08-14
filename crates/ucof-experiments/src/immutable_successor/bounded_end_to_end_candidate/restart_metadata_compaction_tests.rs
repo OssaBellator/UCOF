@@ -67,7 +67,14 @@ fn nonce_checkpoint_replaces_prefix_and_future_generation_remains_monotonic() {
     assert_eq!(session.journal_generation, 4);
     assert_eq!(session.lease.first, 15);
     assert_eq!(session.lease.last, 18);
-    assert_eq!(compacted.scan(None).expect("scan generation four").durable.next_unreserved, Some(19));
+    assert_eq!(
+        compacted
+            .scan(None)
+            .expect("scan generation four")
+            .durable
+            .next_unreserved,
+        Some(19)
+    );
 
     let second = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
         .expect("compact generation four");
@@ -97,7 +104,11 @@ fn compaction_cuts_never_delete_nonce_prefix_before_checkpoint_authority() {
     assert!(file_cut_directory.0.join(linux_nonce_journal_name(1)).exists());
     assert!(file_cut_directory.0.join(linux_nonce_journal_name(2)).exists());
     assert_eq!(
-        file_cut_journal.scan(None).expect("legacy scan after file cut").durable.generation,
+        file_cut_journal
+            .scan(None)
+            .expect("legacy scan after file cut")
+            .durable
+            .generation,
         2
     );
     assert_eq!(
@@ -154,7 +165,7 @@ fn compaction_cuts_never_delete_nonce_prefix_before_checkpoint_authority() {
 fn terminal_retirement_compaction_reclaims_pair_and_obsolete_source_binding() {
     const OBJECTS: u64 = 7;
     let source_set_id = [0x51; 32];
-    let mut fixture = encrypted_retirement_fixture("terminal-metadata-compaction", OBJECTS);
+    let fixture = encrypted_retirement_fixture("terminal-metadata-compaction", OBJECTS);
     let journal = open_journal(
         &fixture.journal_directory.0,
         &fixture.aes_key,
@@ -177,7 +188,7 @@ fn terminal_retirement_compaction_reclaims_pair_and_obsolete_source_binding() {
     prepare_encrypted_restart_retirement(
         &journal,
         &fixture.stage_directory.0,
-        &fixture.publication,
+        &fixture.durable,
         fixture.restart_limits,
     )
     .expect("prepare terminal compaction retirement");
@@ -236,10 +247,10 @@ fn terminal_retirement_compaction_reclaims_pair_and_obsolete_source_binding() {
 }
 
 #[test]
-fn outstanding_prepared_and_live_source_authority_survive_until_terminal() {
+fn outstanding_prepared_preserves_cleanup_nonce_lineage_until_terminal() {
     const OBJECTS: u64 = 7;
     let source_set_id = [0x52; 32];
-    let mut fixture = encrypted_retirement_fixture("prepared-metadata-compaction", OBJECTS);
+    let fixture = encrypted_retirement_fixture("prepared-metadata-compaction", OBJECTS);
     let journal = open_journal(
         &fixture.journal_directory.0,
         &fixture.aes_key,
@@ -262,7 +273,7 @@ fn outstanding_prepared_and_live_source_authority_survive_until_terminal() {
     prepare_encrypted_restart_retirement(
         &journal,
         &fixture.stage_directory.0,
-        &fixture.publication,
+        &fixture.durable,
         fixture.restart_limits,
     )
     .expect("prepare outstanding retirement");
@@ -272,8 +283,8 @@ fn outstanding_prepared_and_live_source_authority_survive_until_terminal() {
     assert_eq!(first.checkpoint_generation, 2);
     assert_eq!(first.preserved_prepared_retirements, 1);
     assert_eq!(first.preserved_source_set_records, 1);
-    assert_eq!(first.preserved_nonce_records, 1);
-    assert_eq!(first.pruned_nonce_records, 1);
+    assert_eq!(first.preserved_nonce_records, 2);
+    assert_eq!(first.pruned_nonce_records, 0);
     assert_eq!(first.pruned_retirement_records, 0);
     assert_eq!(first.pruned_source_set_records, 0);
     assert!(load_encrypted_retirement_record(
@@ -296,7 +307,7 @@ fn outstanding_prepared_and_live_source_authority_survive_until_terminal() {
         .0
         .join(linux_nonce_journal_name(1))
         .exists());
-    assert!(!fixture
+    assert!(fixture
         .journal_directory
         .0
         .join(linux_nonce_journal_name(2))
@@ -316,7 +327,7 @@ fn outstanding_prepared_and_live_source_authority_survive_until_terminal() {
     );
     let second = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
         .expect("compact terminalized prepared metadata");
-    assert_eq!(second.pruned_nonce_records, 1);
+    assert_eq!(second.pruned_nonce_records, 2);
     assert_eq!(second.pruned_retirement_records, 2);
     assert_eq!(second.pruned_source_set_records, 1);
     assert_eq!(second.preserved_prepared_retirements, 0);
