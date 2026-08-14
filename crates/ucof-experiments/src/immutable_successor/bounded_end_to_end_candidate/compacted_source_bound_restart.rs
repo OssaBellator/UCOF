@@ -70,8 +70,13 @@ fn prepare_compacted_source_bound_encrypted_tree_restart(
 
     let compacted = CompactedNonceJournal::new(journal);
     let mut authority = compacted.recover_authority(trusted_floor)?;
-    if authority.durable.generation != crashed_generation {
-        return Err("compacted restart journal generation advanced".into());
+    if authority.durable.generation < crashed_generation
+        || !linux_nonce_at_least(
+            crashed_nonce_record.next_unreserved,
+            authority.durable.next_unreserved,
+        )
+    {
+        return Err("compacted restart journal authority below crashed generation".into());
     }
     let mut fresh_session = compacted.commit_descriptor_session(
         &mut authority,
