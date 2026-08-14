@@ -4,8 +4,8 @@
 This intentionally does not parse or call the Rust implementation. It models
 only the safety invariants Experiment 0179 claims: monotonic nonce authority,
 checkpoint-before-prune ordering, live-stage verification authority,
-retirement reclamation, rollback boundaries, and exact private-metadata quota
-admission.
+retirement reclamation, rollback boundaries, exact private-metadata quota
+admission, and bounded directory-entry headroom for checkpoint replacement.
 """
 
 from __future__ import annotations
@@ -73,6 +73,8 @@ class State:
     source_sets: Dict[int, SourceSet] = field(default_factory=dict)
     prepared: Dict[Tuple[int, int], Retirement] = field(default_factory=dict)
     terminal: Dict[Tuple[int, int], Retirement] = field(default_factory=dict)
+    max_directory_entries: Optional[int] = None
+    unrelated_entries: int = 0
 
     def clone_signature(self) -> tuple:
         return (
@@ -83,6 +85,7 @@ class State:
             tuple(sorted(self.source_sets.items())),
             tuple(sorted(self.prepared.items())),
             tuple(sorted(self.terminal.items())),
+            self.unrelated_entries,
         )
 
     def persistent_bytes(self) -> int:
@@ -94,11 +97,34 @@ class State:
             + len(self.source_sets) * SOURCE_SET_BYTES
         )
 
+    def persistent_entries(self) -> int:
+        return (
+            len(self.nonce_records)
+            + len(self.checkpoints)
+            + len(self.manifests)
+            + len(self.source_sets)
+            + len(self.prepared)
+            + len(self.terminal)
+            + self.unrelated_entries
+        )
+
+    def validate_directory_bound(self) -> None:
+        if self.max_directory_entries is None:
+            return
+        if self.max_directory_entries <= 0:
+            raise ModelError("invalid directory entry limit")
+        entries = self.persistent_entries()
+        if entries > self.max_directory_entries + 1:
+            raise ModelError("directory entry limit")
+        if entries > self.max_directory_entries and not self.checkpoints:
+            raise ModelError("directory entry limit")
+
     @staticmethod
     def at_least(previous: int, current: int) -> bool:
         return current >= previous
 
     def scan(self, trusted_floor: Optional[Tuple[int, int]] = None) -> Tuple[int, int]:
+        self.validate_directory_bound()
         checkpoints = sorted(self.checkpoints.values(), key=lambda c: c.generation)
         for previous, current in zip(checkpoints, checkpoints[1:]):
             if current.generation <= previous.generation:
@@ -145,6 +171,11 @@ class State:
         if lease_size <= 0:
             raise ModelError("invalid lease size")
         generation, next_unreserved = self.scan()
+        if (
+            self.max_directory_entries is not None
+            and self.persistent_entries() >= self.max_directory_entries
+        ):
+            raise ModelError("checkpoint directory headroom")
         record = NonceRecord(
             generation=generation + 1,
             first=next_unreserved,
@@ -284,6 +315,7 @@ class State:
         if existing is not None and existing != checkpoint:
             raise ModelError("checkpoint conflict")
         self.checkpoints[generation] = checkpoint
+        self.validate_directory_bound()
 
         if cut == "after_file_sync":
             return {
@@ -555,6 +587,38 @@ def test_burn_compact_retry_terminal_lifecycle() -> None:
     assert state.terminal == {}
 
 
+def test_directory_checkpoint_headroom() -> None:
+    state = State(max_directory_entries=2)
+    state.commit(5)
+    state.commit(7)
+    assert state.persistent_entries() == 2
+    expect_error("checkpoint directory headroom", lambda: state.commit(3))
+    assert set(state.nonce_records) == {1, 2}
+
+    cut = state.compact(cut="after_file_sync")
+    assert cut["generation"] == 2
+    assert state.persistent_entries() == 3
+    assert state.scan() == (2, 12)
+    retry = state.compact()
+    assert retry["pruned_nonce"] == 2
+    assert state.persistent_entries() == 1
+
+    third = state.commit(3)
+    assert third.generation == 3
+    assert state.persistent_entries() == 2
+    expect_error("checkpoint directory headroom", lambda: state.commit(3))
+    state.compact()
+    assert state.persistent_entries() == 1
+    fourth = state.commit(3)
+    assert fourth.generation == 4
+
+    unrelated = State(max_directory_entries=2)
+    unrelated.commit(5)
+    unrelated.commit(7)
+    unrelated.unrelated_entries = 1
+    expect_error("directory entry limit", unrelated.scan)
+
+
 def test_trusted_floor_boundary() -> None:
     state = State()
     state.commit(5)
@@ -628,13 +692,14 @@ def run_all(campaigns: int, steps: int) -> dict:
     test_source_prune_cut_is_retryable()
     test_prepared_prune_cut_keeps_terminal_completion_authority()
     test_burn_compact_retry_terminal_lifecycle()
+    test_directory_checkpoint_headroom()
     test_trusted_floor_boundary()
     test_exact_quota()
     test_small_state_matrix()
     for seed in range(campaigns):
         test_repeated_compaction_campaign(seed, steps)
     return {
-        "fixed_cases": 10,
+        "fixed_cases": 11,
         "matrix_cases": 4 * 4 * 4,
         "campaigns": campaigns,
         "campaign_steps": steps,
