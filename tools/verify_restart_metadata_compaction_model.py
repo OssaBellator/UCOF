@@ -3,8 +3,9 @@
 
 This intentionally does not parse or call the Rust implementation. It models
 only the safety invariants Experiment 0179 claims: monotonic nonce authority,
-checkpoint-before-prune ordering, live-authority preservation, retirement
-reclamation, rollback boundaries, and exact private-metadata quota admission.
+checkpoint-before-prune ordering, live-stage verification authority,
+retirement reclamation, rollback boundaries, and exact private-metadata quota
+admission.
 """
 
 from __future__ import annotations
@@ -60,6 +61,7 @@ class Retirement:
     crashed: int
     fresh: int
     payload_identity: int
+    stage_identity: int
 
 
 @dataclass
@@ -176,7 +178,15 @@ class State:
         current_generation, _ = self.scan()
         if fresh != current_generation or fresh <= crashed:
             raise ModelError("prepared retirement not at current fresh generation")
-        self.prepared[(crashed, fresh)] = Retirement(crashed, fresh, payload_identity)
+        manifest = self.manifests.get(crashed)
+        if manifest is None:
+            raise ModelError("prepared retirement lacks live crashed manifest")
+        self.prepared[(crashed, fresh)] = Retirement(
+            crashed,
+            fresh,
+            payload_identity,
+            manifest.stage_identity,
+        )
 
     def terminalize(self, crashed: int, fresh: int) -> None:
         pair = (crashed, fresh)
@@ -196,7 +206,7 @@ class State:
                 raise ModelError("retirement ahead of nonce authority")
 
         for pair in set(self.prepared).intersection(self.terminal):
-            if self.prepared[pair].payload_identity != self.terminal[pair].payload_identity:
+            if self.prepared[pair] != self.terminal[pair]:
                 raise ModelError("prepared/terminal payload mismatch")
 
         terminal_crashed = {crashed for crashed, _ in self.terminal}
@@ -207,6 +217,8 @@ class State:
         for generation, manifest in self.manifests.items():
             if generation > current_generation:
                 raise ModelError("manifest ahead of nonce authority")
+            if generation not in self.nonce_records:
+                raise ModelError("live manifest lacks original nonce record")
             source = self.source_sets.get(generation)
             if source is not None:
                 if (
@@ -219,22 +231,31 @@ class State:
         for generation, source in self.source_sets.items():
             if generation > current_generation:
                 raise ModelError("source-set ahead of nonce authority")
-            if generation not in self.manifests:
-                if generation not in prepared_crashed and generation not in terminal_crashed:
-                    raise ModelError("source-set authority without live restart or cleanup")
             if source.source_identity == 0:
                 raise ModelError("zero source identity")
+            manifest = self.manifests.get(generation)
+            if manifest is not None:
+                continue
+            if generation not in prepared_crashed and generation not in terminal_crashed:
+                raise ModelError("source-set authority without live restart or cleanup")
+            retirement = next(
+                (
+                    record
+                    for pair, record in {**self.prepared, **self.terminal}.items()
+                    if pair[0] == generation
+                ),
+                None,
+            )
+            if retirement is None:
+                raise ModelError("source-set cleanup authority missing")
+            if source.stage_identity != retirement.stage_identity:
+                raise ModelError("source-set/retirement mismatch")
 
     def protected_generations(self) -> set[int]:
-        terminal_crashed = {crashed for crashed, _ in self.terminal}
-        protected = set(self.manifests)
-        for generation in self.source_sets:
-            if generation not in terminal_crashed:
-                protected.add(generation)
-        for crashed, fresh in set(self.prepared).difference(self.terminal):
-            protected.add(crashed)
-            protected.add(fresh)
-        return protected
+        # The ordinary generation record is retained only while a live stage
+        # manifest still needs it for exact encrypted-stage lease verification.
+        # A checkpoint is sufficient global nonce-history authority otherwise.
+        return set(self.manifests)
 
     def compaction_required_before_prune(self) -> int:
         generation, _ = self.scan()
@@ -404,32 +425,60 @@ def test_prepared_then_terminal_reclamation() -> None:
     state.commit(6)
     state.add_prepared(1, 2, 123)
     first = state.compact()
-    assert first["pruned_nonce"] == 0
-    assert set(state.nonce_records) == {1, 2}
+    assert first["pruned_nonce"] == 1
+    assert first["preserved_nonce"] == 1
+    assert set(state.nonce_records) == {1}
     assert (1, 2) in state.prepared
     assert 1 in state.source_sets
+    assert state.scan() == (2, 16)
 
     state.terminalize(1, 2)
     second = state.compact()
-    assert second["pruned_nonce"] == 2
+    assert second["pruned_nonce"] == 1
     assert second["pruned_retirement"] == 2
     assert second["pruned_source"] == 1
     assert state.scan() == (2, 16)
 
 
-def test_burned_generation_retry() -> None:
+def test_burn_compact_retry_terminal_lifecycle() -> None:
     state = State()
     first = state.commit(20)
     assert first.generation == 1
     state.add_live_restart(1, 11, 0x53)
     state.compact()
     assert set(state.nonce_records) == {1}
+
     burned = state.commit(13)
     assert burned.generation == 2
+    second_compaction = state.compact()
+    assert second_compaction["pruned_nonce"] == 1
+    assert second_compaction["preserved_nonce"] == 1
+    assert set(state.nonce_records) == {1}
+    assert state.scan() == (2, burned.next_unreserved)
+
     retried = state.retry_live_restart(1, 13)
     assert retried.generation == 3
     assert retried.first == burned.next_unreserved
-    assert state.scan()[0] == 3
+    state.add_prepared(1, 3, 0x9001)
+
+    prepared_compaction = state.compact()
+    assert prepared_compaction["pruned_nonce"] == 1
+    assert prepared_compaction["preserved_nonce"] == 1
+    assert set(state.nonce_records) == {1}
+    assert state.scan() == (3, retried.next_unreserved)
+
+    state.terminalize(1, 3)
+    final = state.compact()
+    assert final["pruned_nonce"] == 1
+    assert final["pruned_retirement"] == 2
+    assert final["pruned_source"] == 1
+    assert final["pruned_checkpoints"] == 0
+    assert state.scan() == (3, retried.next_unreserved)
+    assert state.nonce_records == {}
+    assert list(state.checkpoints) == [3]
+    assert state.source_sets == {}
+    assert state.prepared == {}
+    assert state.terminal == {}
 
 
 def test_trusted_floor_boundary() -> None:
@@ -502,7 +551,7 @@ def run_all(campaigns: int, steps: int) -> dict:
     test_checkpoint_chain_rollback()
     test_graph_fail_closed()
     test_prepared_then_terminal_reclamation()
-    test_burned_generation_retry()
+    test_burn_compact_retry_terminal_lifecycle()
     test_trusted_floor_boundary()
     test_exact_quota()
     test_small_state_matrix()
