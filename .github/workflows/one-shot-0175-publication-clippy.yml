@@ -1,0 +1,198 @@
+name: One-shot 0175 publication Clippy fix
+
+on:
+  push:
+    branches:
+      - phase-3/encrypted-restart-stage-retirement
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message != 'Fix encrypted restart publication Clippy findings'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/encrypted-restart-stage-retirement
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Patch publication representation
+        shell: python
+        run: |
+          from pathlib import Path
+
+          impl = Path('crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate/encrypted_restart_publication.rs')
+          text = impl.read_text()
+          text = text.replace(
+              '    PublishedAndDurable(DurableEncryptedRestartPublication),',
+              '    PublishedAndDurable(Box<DurableEncryptedRestartPublication>),',
+          )
+          text = text.replace(
+              '''            Ok(EncryptedRestartPublicationOutcome::PublishedAndDurable(
+                          DurableEncryptedRestartPublication {
+              ''',
+              '''            Ok(EncryptedRestartPublicationOutcome::PublishedAndDurable(Box::new(
+                          DurableEncryptedRestartPublication {
+              ''',
+          )
+          text = text.replace(
+              '''                    cleanup_pending,
+                      },
+                  ))
+              ''',
+              '''                    cleanup_pending,
+                      },
+                  )))
+              ''',
+          )
+          impl.write_text(text)
+
+          tests = Path('crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate/encrypted_restart_publication_tests.rs')
+          text = tests.read_text()
+          start = text.index('fn restart_publication_fixture(')
+          first_test = text.index('#[test]\nfn only_parent_synced_restart_publication_returns_durable_cleanup_capability()', start)
+          fixture = r'''struct RestartPublicationFixture {
+              journal_directory: super::TestDirectory,
+              stage_directory: super::TestDirectory,
+              work_directory: super::TestDirectory,
+              aes_key: [u8; 32],
+              nonce_prefix: [u8; 4],
+              restart_limits: LinuxEncryptedStageRestartLimits,
+              sources: Vec<super::TinySource>,
+              baseline: Vec<u8>,
+              baseline_report: super::ImmutableSourceStreamingWriteReport,
+          }
+
+          fn restart_publication_fixture(label: &str, object_count: u64) -> RestartPublicationFixture {
+              let (journal_directory, stage_directory, aes_key, nonce_prefix, restart_limits, persisted) =
+                  prepared_encrypted_restart_stage(
+                      label,
+                      object_count,
+                      EncryptedStageManifestCommitCut::Complete,
+                  );
+              persisted.expect("persist restart publication stage");
+              let work_directory = super::TestDirectory::new(&format!("{label}-work"));
+              let sources: Vec<_> = (1..=object_count)
+                  .rev()
+                  .map(super::TinySource::new)
+                  .collect();
+              let mut baseline_sources = sources.clone();
+              let mut baseline = Vec::new();
+              let baseline_report = super::write_genesis_sources_to(
+                  &mut baseline,
+                  &mut baseline_sources,
+                  super::options(),
+                  super::ImmutableLimits::default(),
+              )
+              .expect("restart publication baseline");
+              RestartPublicationFixture {
+                  journal_directory,
+                  stage_directory,
+                  work_directory,
+                  aes_key,
+                  nonce_prefix,
+                  restart_limits,
+                  sources,
+                  baseline,
+                  baseline_report,
+              }
+          }
+
+          '''
+          text = text[:start] + fixture + text[first_test:]
+
+          patterns = [
+              ('restart_publication_fixture("restart-publication-durable", OBJECTS);', 'restart_publication_fixture("restart-publication-durable", OBJECTS);'),
+          ]
+          old_unpack_blocks = [
+          '''    let (
+                  journal_directory,
+                  stage_directory,
+                  work_directory,
+                  aes_key,
+                  nonce_prefix,
+                  restart_limits,
+                  mut sources,
+                  baseline,
+                  baseline_report,
+              ) = restart_publication_fixture("restart-publication-durable", OBJECTS);
+          ''',
+          '''    let (
+                  journal_directory,
+                  stage_directory,
+                  work_directory,
+                  aes_key,
+                  nonce_prefix,
+                  restart_limits,
+                  mut sources,
+                  _,
+                  _,
+              ) = restart_publication_fixture("restart-publication-exists", OBJECTS);
+          ''',
+          '''    let (
+                  journal_directory,
+                  stage_directory,
+                  work_directory,
+                  aes_key,
+                  nonce_prefix,
+                  restart_limits,
+                  mut sources,
+                  baseline,
+                  _,
+              ) = restart_publication_fixture("restart-publication-parent-sync", OBJECTS);
+          ''',
+          ]
+          new_unpack_blocks = [
+          '''    let RestartPublicationFixture {
+                  journal_directory,
+                  stage_directory,
+                  work_directory,
+                  aes_key,
+                  nonce_prefix,
+                  restart_limits,
+                  mut sources,
+                  baseline,
+                  baseline_report,
+              } = restart_publication_fixture("restart-publication-durable", OBJECTS);
+          ''',
+          '''    let RestartPublicationFixture {
+                  journal_directory,
+                  stage_directory,
+                  work_directory,
+                  aes_key,
+                  nonce_prefix,
+                  restart_limits,
+                  mut sources,
+                  ..
+              } = restart_publication_fixture("restart-publication-exists", OBJECTS);
+          ''',
+          '''    let RestartPublicationFixture {
+                  journal_directory,
+                  stage_directory,
+                  work_directory,
+                  aes_key,
+                  nonce_prefix,
+                  restart_limits,
+                  mut sources,
+                  baseline,
+                  ..
+              } = restart_publication_fixture("restart-publication-parent-sync", OBJECTS);
+          ''',
+          ]
+          for old, new in zip(old_unpack_blocks, new_unpack_blocks):
+              if old not in text:
+                  raise SystemExit('fixture unpack pattern missing')
+              text = text.replace(old, new, 1)
+          tests.write_text(text)
+      - name: Format
+        run: cargo fmt --all
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate/encrypted_restart_publication.rs crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate/encrypted_restart_publication_tests.rs
+          git commit -m 'Fix encrypted restart publication Clippy findings'
+          git push origin HEAD:phase-3/encrypted-restart-stage-retirement
