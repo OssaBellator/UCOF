@@ -106,3 +106,5 @@ pub use snapshots::{
 
 #[cfg(test)]
 mod journal_nonce_lease_integration;
+#[cfg(test)]
+mod stale_cleanup_execution_authorization;
