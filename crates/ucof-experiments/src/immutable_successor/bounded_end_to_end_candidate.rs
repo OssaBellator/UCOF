@@ -23,7 +23,9 @@ mod bounded_end_to_end_candidate_tests {
     mod encrypted_descriptor_crypto {
         include!("bounded_end_to_end_candidate/encrypted_descriptor.rs");
         include!("bounded_end_to_end_candidate/encrypted_descriptor_spill.rs");
+        include!("bounded_end_to_end_candidate/linux_durable_nonce_journal.rs");
         include!("bounded_end_to_end_candidate/encrypted_descriptor_spill_tests.rs");
+        include!("bounded_end_to_end_candidate/linux_durable_nonce_journal_tests.rs");
         include!("../private_nonce_lease_contract.rs");
     }
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
