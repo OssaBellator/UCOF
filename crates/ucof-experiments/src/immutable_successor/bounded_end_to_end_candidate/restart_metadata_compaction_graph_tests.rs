@@ -175,3 +175,152 @@ fn source_set_must_match_live_manifest_identity_and_operation() {
     assert!(error.contains("compaction source-set/live-manifest mismatch"));
     assert!(!journal_directory.0.join(nonce_compaction_name(1)).exists());
 }
+
+#[test]
+fn live_manifest_must_match_original_nonce_operation_context() {
+    const OBJECTS: u64 = 7;
+    let source_set_id = [0xa3; 32];
+    let (journal_directory, _stage_directory, aes_key, nonce_prefix, _restart_limits, _) =
+        prepared_source_bound_restart_stage(
+            "manifest-nonce-operation-mismatch",
+            OBJECTS,
+            source_set_id,
+        );
+    let journal = open_journal(&journal_directory.0, &aes_key, nonce_prefix);
+    let original = load_nonce_generation_record(&journal, 1).expect("load original nonce record");
+    let name = OsString::from(linux_nonce_journal_name(1));
+    std::fs::remove_file(journal_directory.0.join(&name))
+        .expect("remove original nonce record");
+    let forged = LinuxNonceJournalRecord {
+        operation_id: [0xe3; 16],
+        ..original
+    };
+    let sealed = journal.seal_record(forged).expect("seal forged nonce record");
+    let path = linux_nonce_procfd_child(&journal.directory, &name)
+        .expect("forged nonce procfd path");
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(LINUX_O_NOFOLLOW | LINUX_O_CLOEXEC)
+        .open(path)
+        .expect("create forged nonce record");
+    file.write_all(&sealed).expect("write forged nonce record");
+    file.flush().expect("flush forged nonce record");
+    file.sync_all().expect("sync forged nonce record");
+    journal.directory.sync_all().expect("sync forged nonce directory entry");
+
+    let error = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect_err("live manifest/nonce operation mismatch must fail closed");
+    assert!(error.contains("compaction live manifest/nonce mismatch"));
+    assert!(!journal_directory.0.join(nonce_compaction_name(1)).exists());
+}
+
+#[test]
+fn source_set_cleanup_identity_must_match_retirement_lineage() {
+    const OBJECTS: u64 = 7;
+    let source_set_id = [0xa4; 32];
+    let fixture = encrypted_retirement_fixture("source-set-retirement-mismatch", OBJECTS);
+    let journal = open_journal(
+        &fixture.journal_directory.0,
+        &fixture.aes_key,
+        fixture.nonce_prefix,
+    );
+    let role = EncryptedRestartStageRole::SortedDescriptorSpill;
+    let manifest = load_encrypted_stage_manifest(&journal, 1, role)
+        .expect("load cleanup manifest")
+        .expect("cleanup manifest");
+    persist_restart_source_set_authority(
+        &journal,
+        manifest,
+        source_set_id,
+        usize::try_from(OBJECTS).expect("object count"),
+    )
+    .expect("persist cleanup source-set authority");
+    prepare_encrypted_restart_retirement(
+        &journal,
+        &fixture.stage_directory.0,
+        &fixture.durable,
+        fixture.restart_limits,
+    )
+    .expect("prepare cleanup retirement");
+    std::fs::remove_file(
+        fixture
+            .journal_directory
+            .0
+            .join(encrypted_stage_manifest_name(1, role)),
+    )
+    .expect("remove live manifest after Prepared authority");
+
+    let original = load_restart_source_set_authority(&journal, 1, role)
+        .expect("load cleanup source-set")
+        .expect("cleanup source-set");
+    let name = restart_source_set_authority_name(1, role);
+    std::fs::remove_file(fixture.journal_directory.0.join(&name))
+        .expect("remove original cleanup source-set");
+    let mut forged_identity = original.stage_identity;
+    forged_identity[1] ^= 0x20;
+    let forged = RestartSourceSetAuthority {
+        stage_identity: forged_identity,
+        ..original
+    };
+    let sealed = seal_restart_source_set_authority(&journal, forged)
+        .expect("seal forged cleanup source-set");
+    let path = linux_nonce_procfd_child(&journal.directory, &name)
+        .expect("cleanup source-set procfd path");
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(LINUX_O_NOFOLLOW | LINUX_O_CLOEXEC)
+        .open(path)
+        .expect("create forged cleanup source-set");
+    file.write_all(&sealed).expect("write forged cleanup source-set");
+    file.flush().expect("flush forged cleanup source-set");
+    file.sync_all().expect("sync forged cleanup source-set");
+    journal.directory.sync_all().expect("sync cleanup source-set directory entry");
+
+    let error = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect_err("source-set/retirement mismatch must fail closed");
+    assert!(error.contains("compaction source-set/retirement mismatch"));
+    assert!(!fixture.journal_directory.0.join(nonce_compaction_name(2)).exists());
+}
+
+#[test]
+fn retirement_generation_ahead_of_global_nonce_authority_fails_before_checkpoint() {
+    let fixture = encrypted_retirement_fixture("retirement-generation-ahead", 7);
+    let journal = open_journal(
+        &fixture.journal_directory.0,
+        &fixture.aes_key,
+        fixture.nonce_prefix,
+    );
+    let prepared = prepare_encrypted_restart_retirement(
+        &journal,
+        &fixture.stage_directory.0,
+        &fixture.durable,
+        fixture.restart_limits,
+    )
+    .expect("prepare generation-two retirement");
+    std::fs::remove_file(
+        fixture
+            .journal_directory
+            .0
+            .join(encrypted_retirement_name(
+                1,
+                2,
+                EncryptedRetirementState::Prepared,
+            )),
+    )
+    .expect("remove generation-two prepared authority");
+    let forged = EncryptedRestartRetirementRecord {
+        fresh_generation: 3,
+        ..prepared
+    };
+    persist_encrypted_retirement_record(&journal, forged)
+        .expect("persist future retirement authority");
+
+    let error = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect_err("future retirement generation must fail closed");
+    assert!(error.contains("compaction retirement generation ahead of nonce authority"));
+    assert!(!fixture.journal_directory.0.join(nonce_compaction_name(2)).exists());
+}
