@@ -42,11 +42,14 @@ Recovery:
 
 1. scans only the descriptor-pinned private journal directory under the existing directory-entry bound;
 2. authenticates and context-checks every checkpoint and surviving ordinary nonce record;
-3. rejects an authenticated checkpoint chain whose nonce floor moves backward;
-4. selects the highest valid checkpoint as the global recovery base;
-5. checks any surviving historical record at/below the checkpoint does not exceed the checkpoint nonce floor and requires exact agreement when the same generation exists in both forms;
-6. requires every post-checkpoint ordinary generation to be contiguous and to begin at the exact previous nonce floor;
-7. applies any caller-provided trusted generation/counter floor.
+3. requires an authenticated ordinary record's embedded generation to equal the generation encoded by its canonical filename;
+4. rejects an authenticated checkpoint chain whose generation order or nonce floor moves backward;
+5. selects the highest valid checkpoint as the global recovery base;
+6. checks any surviving historical record at/below the checkpoint does not exceed the checkpoint nonce floor and requires exact agreement when the same generation exists in both forms;
+7. requires every post-checkpoint ordinary generation to be contiguous and to begin at the exact previous nonce floor;
+8. applies any caller-provided trusted generation/counter floor.
+
+The filename/embedded-generation check matters even with a valid HMAC: replaying an authenticated generation-1 record under the generation-2 filename is rejected rather than being silently interpreted through pathname state.
 
 The existing `max_journal_bytes` bound continues to constrain ordinary 128-byte nonce records. Checkpoint bytes are separately bounded by the directory-entry cap and are included in authenticated-byte diagnostics/private-storage accounting, so a file-synced checkpoint can coexist with a legacy journal already at its byte ceiling during a crash/retry window.
 
@@ -72,7 +75,8 @@ It fails closed on authenticated contradictions, including:
 - source-set authority that belongs to neither a live manifest nor an active/terminal cleanup lineage;
 - source-set operation/stage identity/object count disagreement with its live manifest;
 - source-set stage identity disagreement with its retirement lineage after the manifest is gone;
-- a live stage manifest that does not match the preserved original nonce record context;
+- a live stage manifest that does not match the preserved original nonce record generation/key/prefix/operation context;
+- authenticated retirement or source-set metadata from a foreign journal key/prefix context;
 - lifecycle metadata that claims generations ahead of current global nonce authority.
 
 Cleanup work is derived from actual bounded directory inventory. It never loops from generation `1..N`; authenticated generation numbers are state, not acceptable work bounds.
@@ -107,9 +111,21 @@ The old stage is authenticated with generation 1, but new allocation starts stri
 
 The compacted path is carried through canonical output staging and durable publication, not just in-memory continuation. `prepare_compacted_encrypted_restart_retirement` then uses checkpoint-aware current nonce authority while retaining the accepted Prepared/Terminal cleanup format and executor.
 
+Restart preparation performs a second context check on the exact historical nonce record returned by the post-classification reopen before it commits a fresh lease. That ensures a metadata replacement between initial classification and the value actually used for transcoding is rejected before allocation rather than needlessly burning a fresh lease.
+
 ## Retirement and reclamation
 
 Prepared retirement authority is preserved until matching Terminal authority exists. Once a pair is terminally retired, the matching Prepared/Terminal records, obsolete source-set record, and ordinary nonce records no longer required by a live stage become reclaimable.
+
+Destructive reclamation is ordered by dependency after the current checkpoint is already durable and directory-synced:
+
+1. eligible ordinary nonce history;
+2. source-set authority for Terminal-retired crashed generations;
+3. matching Prepared retirement records;
+4. matching Terminal retirement records;
+5. older superseded checkpoints.
+
+The order is deliberate. Terminal retirement remains the last local completion authority for a reclaimed pair. A crash after source-set pruning still leaves both retirement records; a crash after Prepared pruning leaves Terminal. A retry can therefore finish compaction without being stranded in an orphan source-set or Prepared-only completed-lineage state. Dedicated Rust cuts exercise both prefixes.
 
 Before each selected unlink, the compactor reopens the canonical file through the pinned directory, re-authenticates it, and compares the current record with the authenticated inventory snapshot. Only then does it unlink that pathname.
 
@@ -132,10 +148,14 @@ The wired Rust regression set now covers:
 - checkpoint file sync before directory sync;
 - retry from that cut through a fresh pinned-directory sync before pruning;
 - checkpoint directory sync before pruning;
+- terminal source-set pruning before retirement pruning, with retry from that cut;
+- Prepared retirement pruning before Terminal retirement pruning, with Terminal retained as retry authority;
 - pruning before final directory sync;
 - checkpoint coexistence with an ordinary journal exactly at the legacy journal-byte ceiling;
 - repeated checkpoint replacement and future nonce monotonicity;
 - authenticated checkpoint counter rollback;
+- authenticated nonce-record replay under the wrong generation filename;
+- authenticated foreign journal context for retirement/source-set records;
 - orphan and mismatched source-set authority;
 - source-set/retirement identity lineage checks;
 - live-manifest/original-nonce context checks;
@@ -154,15 +174,17 @@ The wired Rust regression set now covers:
 
 `tools/verify_restart_metadata_compaction_model.py` is a standard-library-only state model that does not call or parse the Rust implementation. It independently models nonce generations, checkpoints, crash cuts, graph validity, live-stage nonce-record retention, preservation/reclamation, trusted floors, quota admission, and retry across burned/pruned generations.
 
-The stronger local development run on 2026-08-15 exercised:
+The current model content was executed locally on 2026-08-15 with:
 
 ```text
+10 fixed crash/rollback/graph/quota/full-lifecycle cases
+64 small-state matrix cases
 1024 randomized campaigns × 256 transitions = 262144 transitions
 ```
 
-plus 64 small-state matrix cases and the fixed crash/rollback/graph/quota/full-lifecycle cases. Result: **PASS**.
+Result: **PASS**.
 
-The fixed full-lifecycle model explicitly covers generation 1 live stage authority, generation 2 burn + compaction, generation 3 retry/publication authority, compaction of the fresh generation after Prepared, Terminal transition, and final reclamation to a single generation-3 checkpoint.
+The fixed cases include both dependency-order cuts: source-set removed while Prepared+Terminal remain, and Prepared removed while Terminal remains. Both retry to a fully reclaimed terminal lineage. The full-lifecycle model also covers generation 1 live stage authority, generation 2 burn + compaction, generation 3 retry/publication authority, compaction of the fresh generation after Prepared, Terminal transition, and final reclamation to a single generation-3 checkpoint.
 
 The local verification runner itself was syntax-checked and exercised in `--model-only` mode against a synthetic correctly-wired checkout. Its dirty-worktree acceptance guard was also exercised and rejected before Cargo invocation as intended.
 
@@ -178,7 +200,9 @@ python3 tools/verify_phase3_local.py --acceptance
 
 Use `--offline` when the required Cargo dependencies/toolchains are already available locally and network access should be forbidden.
 
-A complete `--acceptance` run requires a clean resolvable Git HEAD before expensive work begins. It performs the Phase 3 wiring guard and independent 0179 model, Cargo metadata/fmt/Clippy/tests, workspace tests/docs, HTTP/S3 adapter tests, policy/vector checks, Rust 1.85 checks, i686 and powerpc64 checks, and a 256-run smoke pass over every locally installed fuzz target. The script never installs missing tools; acceptance fails if the required MSRV/targets/nightly/cargo-fuzz environment is unavailable.
+A complete `--acceptance` run requires a clean resolvable Git HEAD before expensive work begins. It performs the Phase 3 wiring guard, a static destructive-order check, and the independent 0179 model before Cargo metadata/fmt/Clippy/tests, workspace tests/docs, HTTP/S3 adapter tests, policy/vector checks, Rust 1.85 checks, i686 and powerpc64 checks, and a 256-run smoke pass over every locally installed fuzz target. The script never installs missing tools; acceptance fails if the required MSRV/targets/nightly/cargo-fuzz environment is unavailable.
+
+The destructive-order check requires `nonce -> terminal source-set -> Prepared retirement -> Terminal retirement -> old checkpoint` in the compaction executor. Its result is recorded separately in the JSON report rather than being implicit in a generic wiring pass.
 
 Every run writes `target/phase3-local-verification.json`, including exact Git SHA/branch, tool versions, dirty-worktree state, commands, elapsed times, skips, and final result.
 
@@ -188,7 +212,7 @@ A successful report can then be normalized into repository evidence with:
 python3 tools/record_phase3_local_acceptance.py
 ```
 
-The recorder refuses stale-SHA, dirty, skipped, partial, model-only, missing-fuzz, or failed reports and writes a SHA-bound record under `docs/verification/phase3-local-acceptance-<sha>.json`.
+The recorder refuses stale-SHA, dirty, skipped, partial, model-only, missing-fuzz, or failed reports and now requires the explicit 0179 destructive-order result before writing a SHA-bound record under `docs/verification/phase3-local-acceptance-<sha>.json`.
 
 Experiment 0179 must remain **pending** until a report from the exact candidate head has:
 
