@@ -573,7 +573,7 @@ fn scan_encrypted_stage_inventory(
     }
     linux_nonce_verify_procfd_directory(stage_directory)
         .map_err(|error| LinuxEncryptedStageRestartError::Journal(error.to_string()))?;
-    let mut entries = std::fs::read_dir(linux_nonce_procfd_directory(stage_directory))
+    let entries = std::fs::read_dir(linux_nonce_procfd_directory(stage_directory))
         .map_err(|_| LinuxEncryptedStageRestartError::Io("stage directory scan"))?;
     let mut classified: Vec<(bool, Option<[u8; 32]>, u64)> = Vec::new();
     let mut names: Vec<(OsString, Option<[u8; 32]>)> = Vec::new();
@@ -581,7 +581,7 @@ fn scan_encrypted_stage_inventory(
     let mut identity_bytes = 0u64;
     let mut forced_truncated = false;
 
-    while let Some(entry) = entries.next() {
+    for entry in entries {
         if classified.len() >= limits.max_directory_entries {
             forced_truncated = true;
             break;

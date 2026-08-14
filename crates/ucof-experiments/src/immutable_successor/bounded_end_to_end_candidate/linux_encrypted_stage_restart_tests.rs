@@ -50,7 +50,6 @@ fn prepared_encrypted_restart_stage(
         cut,
     );
     drop(preflight);
-    drop(session);
     drop(journal);
     (
         journal_directory,
