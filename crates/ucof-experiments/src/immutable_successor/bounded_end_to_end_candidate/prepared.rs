@@ -210,6 +210,35 @@ where
     W: Write,
     S: ImmutableStreamingPayloadSource,
 {
+    write_prepared_encrypted_bounded_candidate_with_stage_hook(
+        writer,
+        sources,
+        directory,
+        options,
+        limits,
+        preflight,
+        session,
+        |_| Ok(()),
+    )
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[allow(clippy::too_many_arguments)]
+fn write_prepared_encrypted_bounded_candidate_with_stage_hook<W, S, F>(
+    writer: &mut W,
+    sources: &mut [S],
+    directory: &Path,
+    options: ImmutableSourceStreamingWriteOptions,
+    limits: ImmutableLimits,
+    preflight: BoundedPreflight,
+    session: &mut DescriptorEncryptionSession,
+    stage_hook: F,
+) -> CandidateResult<EndToEndEvidence>
+where
+    W: Write,
+    S: ImmutableStreamingPayloadSource,
+    F: FnOnce(&mut EncryptedDescriptorStage) -> CandidateResult<()>,
+{
     let BoundedPreflight {
         descriptor_stage,
         descriptor_spill,
@@ -220,10 +249,11 @@ where
         version_checks,
         object_count,
     } = preflight;
-    let encrypted_stage = transcode_descriptor_stage(directory, descriptor_stage, session)?;
+    let mut encrypted_stage = transcode_descriptor_stage(directory, descriptor_stage, session)?;
     if encrypted_stage.records() != object_count {
         return Err("encrypted descriptor object count".into());
     }
+    stage_hook(&mut encrypted_stage)?;
     encrypted_stage.verify_all(session)?;
     let descriptor_stage_bytes = encrypted_stage.bytes()?;
     let descriptor_ciphertext_sha256 = Some(encrypted_stage.ciphertext_sha256()?);
