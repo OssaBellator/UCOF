@@ -33,12 +33,12 @@ struct InventoryLimits {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum InventoryObservation {
-    ExpectedExactIdentity,
-    ExpectedDifferentIdentity,
-    ExpectedMissingNoMatchingIdentityCompleteScan,
-    ExpectedMissingMatchingIdentityElsewhere,
-    ExpectedMissingScanTruncated,
-    ExpectedNameMetadataUnreadable,
+    ExactIdentity,
+    DifferentIdentity,
+    MissingNoMatchingIdentityCompleteScan,
+    MissingMatchingIdentityElsewhere,
+    MissingScanTruncated,
+    NameMetadataUnreadable,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -72,7 +72,6 @@ where
     let mut scanned_metadata_bytes = 0u64;
     let mut truncated = false;
     let mut unreadable_entries = 0usize;
-    let mut expected_name_seen = false;
     let mut expected_name_unreadable = false;
     let mut matching_identity_elsewhere = false;
 
@@ -103,10 +102,9 @@ where
         match entry.metadata {
             EntryMetadata::Known { identity, .. } => {
                 if entry.is_expected_name {
-                    expected_name_seen = true;
                     if identity == expected_identity {
                         return Ok(InventoryReport {
-                            observation: InventoryObservation::ExpectedExactIdentity,
+                            observation: InventoryObservation::ExactIdentity,
                             scanned_entries,
                             scanned_metadata_bytes,
                             truncated: false,
@@ -114,7 +112,7 @@ where
                         });
                     }
                     return Ok(InventoryReport {
-                        observation: InventoryObservation::ExpectedDifferentIdentity,
+                        observation: InventoryObservation::DifferentIdentity,
                         scanned_entries,
                         scanned_metadata_bytes,
                         truncated: false,
@@ -130,7 +128,6 @@ where
                     .checked_add(1)
                     .ok_or(InventoryError::AccountingOverflow)?;
                 if entry.is_expected_name {
-                    expected_name_seen = true;
                     expected_name_unreadable = true;
                 }
             }
@@ -138,15 +135,13 @@ where
     }
 
     let observation = if expected_name_unreadable {
-        InventoryObservation::ExpectedNameMetadataUnreadable
-    } else if expected_name_seen {
-        InventoryObservation::ExpectedMissingScanTruncated
+        InventoryObservation::NameMetadataUnreadable
     } else if matching_identity_elsewhere {
-        InventoryObservation::ExpectedMissingMatchingIdentityElsewhere
+        InventoryObservation::MissingMatchingIdentityElsewhere
     } else if truncated || unreadable_entries != 0 {
-        InventoryObservation::ExpectedMissingScanTruncated
+        InventoryObservation::MissingScanTruncated
     } else {
-        InventoryObservation::ExpectedMissingNoMatchingIdentityCompleteScan
+        InventoryObservation::MissingNoMatchingIdentityCompleteScan
     };
 
     Ok(InventoryReport {
@@ -190,10 +185,7 @@ mod tests {
         assert_eq!(report.scanned_entries, 32);
         assert_eq!(report.scanned_metadata_bytes, 2048);
         assert!(report.truncated);
-        assert_eq!(
-            report.observation,
-            InventoryObservation::ExpectedMissingScanTruncated
-        );
+        assert_eq!(report.observation, InventoryObservation::MissingScanTruncated);
     }
 
     #[test]
@@ -204,7 +196,7 @@ mod tests {
         assert_eq!(report.unreadable_entries, 0);
         assert_eq!(
             report.observation,
-            InventoryObservation::ExpectedMissingNoMatchingIdentityCompleteScan
+            InventoryObservation::MissingNoMatchingIdentityCompleteScan
         );
     }
 
@@ -218,7 +210,7 @@ mod tests {
         let report = scan_restart_inventory(entries, identity(1), limits()).expect("inventory");
         assert_eq!(
             report.observation,
-            InventoryObservation::ExpectedMissingMatchingIdentityElsewhere
+            InventoryObservation::MissingMatchingIdentityElsewhere
         );
     }
 
@@ -228,10 +220,7 @@ mod tests {
             .chain((0u64..1_000_000).map(|_| known(false, 2, 64)));
         let report = scan_restart_inventory(entries, identity(1), limits()).expect("inventory");
         assert_eq!(report.scanned_entries, 1);
-        assert_eq!(
-            report.observation,
-            InventoryObservation::ExpectedExactIdentity
-        );
+        assert_eq!(report.observation, InventoryObservation::ExactIdentity);
     }
 
     #[test]
@@ -239,10 +228,7 @@ mod tests {
         let entries = [known(true, 9, 64), known(false, 1, 64)];
         let report = scan_restart_inventory(entries, identity(1), limits()).expect("inventory");
         assert_eq!(report.scanned_entries, 1);
-        assert_eq!(
-            report.observation,
-            InventoryObservation::ExpectedDifferentIdentity
-        );
+        assert_eq!(report.observation, InventoryObservation::DifferentIdentity);
     }
 
     #[test]
@@ -254,10 +240,7 @@ mod tests {
         assert_eq!(report.scanned_entries, 1);
         assert_eq!(report.scanned_metadata_bytes, 64);
         assert!(report.truncated);
-        assert_eq!(
-            report.observation,
-            InventoryObservation::ExpectedMissingScanTruncated
-        );
+        assert_eq!(report.observation, InventoryObservation::MissingScanTruncated);
     }
 
     #[test]
@@ -271,10 +254,7 @@ mod tests {
         ];
         let report = scan_restart_inventory(entries, identity(1), limits()).expect("inventory");
         assert_eq!(report.unreadable_entries, 1);
-        assert_eq!(
-            report.observation,
-            InventoryObservation::ExpectedMissingScanTruncated
-        );
+        assert_eq!(report.observation, InventoryObservation::MissingScanTruncated);
     }
 
     #[test]
@@ -286,7 +266,7 @@ mod tests {
         let report = scan_restart_inventory(entries, identity(1), limits()).expect("inventory");
         assert_eq!(
             report.observation,
-            InventoryObservation::ExpectedNameMetadataUnreadable
+            InventoryObservation::NameMetadataUnreadable
         );
     }
 
@@ -303,7 +283,7 @@ mod tests {
         assert!(report.truncated);
         assert_eq!(
             report.observation,
-            InventoryObservation::ExpectedMissingMatchingIdentityElsewhere
+            InventoryObservation::MissingMatchingIdentityElsewhere
         );
     }
 
@@ -324,9 +304,6 @@ mod tests {
             scan_restart_inventory(entries, identity(1), huge).expect("overflow truncates");
         assert_eq!(report.scanned_entries, 1);
         assert!(report.truncated);
-        assert_eq!(
-            report.observation,
-            InventoryObservation::ExpectedMissingScanTruncated
-        );
+        assert_eq!(report.observation, InventoryObservation::MissingScanTruncated);
     }
 }
