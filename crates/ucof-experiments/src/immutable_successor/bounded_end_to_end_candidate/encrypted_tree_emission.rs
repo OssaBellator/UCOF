@@ -225,8 +225,7 @@ fn write_prepared_from_descriptor_reader_with_encrypted_tree<W, S, R>(
     writer: &mut W,
     sources: &mut [S],
     directory: &Path,
-    options: super::ImmutableSourceStreamingWriteOptions,
-    limits: super::ImmutableLimits,
+    settings: EncryptedSpillPreparedSettings,
     emission: super::PreparedEmission,
     mut descriptor_reader: R,
     tree_session: &mut DescriptorEncryptionSession,
@@ -241,7 +240,7 @@ where
         return Err("encrypted tree nonce lease capacity".into());
     }
 
-    let mut sink = super::StreamingSink::new(writer, options.output.max_write_request_bytes)
+    let mut sink = super::StreamingSink::new(writer, settings.options.output.max_write_request_bytes)
         .map_err(|error| error.to_string())?;
     let mut header = [0u8; super::FILE_HEADER_LEN];
     header[..8].copy_from_slice(super::FILE_MAGIC);
@@ -304,7 +303,7 @@ where
         directory,
         locator_stage,
         tree_session,
-        limits,
+        settings.limits,
     )?;
     if tree.page_count != emission.expected_pages || tree.root.level != emission.expected_root_level {
         return Err("streaming tree shape".into());
