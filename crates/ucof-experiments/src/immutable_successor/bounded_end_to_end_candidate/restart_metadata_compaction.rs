@@ -251,6 +251,15 @@ impl<'a> CompactedNonceJournal<'a> {
             }
             let record = load_nonce_generation_record(self.journal, generation)
                 .map_err(|error| error.to_string())?;
+            if record.generation != generation {
+                return Err("compacted nonce filename generation".into());
+            }
+            if record.key_id != self.journal.key_id {
+                return Err("compacted nonce foreign key".into());
+            }
+            if record.nonce_prefix != self.journal.nonce_prefix {
+                return Err("compacted nonce foreign prefix".into());
+            }
             journal_bytes_read = journal_bytes_read
                 .checked_add(u64::try_from(LINUX_NONCE_JOURNAL_BYTES).expect("journal width"))
                 .ok_or_else(|| "compacted nonce journal bytes".to_owned())?;
@@ -267,7 +276,9 @@ impl<'a> CompactedNonceJournal<'a> {
         for pair in checkpoints.windows(2) {
             let previous = pair[0];
             let next = pair[1];
-            if !linux_nonce_at_least(previous.next_unreserved, next.next_unreserved) {
+            if next.generation <= previous.generation
+                || !linux_nonce_at_least(previous.next_unreserved, next.next_unreserved)
+            {
                 return Err("nonce compaction checkpoint rollback".into());
             }
         }
@@ -347,7 +358,8 @@ impl<'a> CompactedNonceJournal<'a> {
         if linux_nonce_key_id(&aes_key) != self.journal.key_id {
             return Err("compacted nonce foreign key".into());
         }
-        if self.scan(None)?.durable != authority.durable {
+        let observed = self.scan(None)?.durable;
+        if observed != authority.durable {
             return Err("compacted nonce stale authority".into());
         }
         let pending = reserve_nonce_lease(
@@ -499,6 +511,9 @@ fn scan_compaction_metadata(
                 return Err("compaction retirement disappeared".into());
             };
             let record = open_encrypted_retirement_record(journal, &sealed)?;
+            if record.key_id != journal.key_id || record.nonce_prefix != journal.nonce_prefix {
+                return Err("compaction retirement context".into());
+            }
             if encrypted_retirement_name(
                 record.crashed_generation,
                 record.fresh_generation,
@@ -531,6 +546,9 @@ fn scan_compaction_metadata(
                 return Err("compaction source-set disappeared".into());
             };
             let record = open_restart_source_set_authority(journal, &sealed)?;
+            if record.key_id != journal.key_id || record.nonce_prefix != journal.nonce_prefix {
+                return Err("compaction source-set context".into());
+            }
             if restart_source_set_authority_name(record.generation, record.role) != name {
                 return Err("compaction source-set canonical name".into());
             }
@@ -601,7 +619,8 @@ fn scan_compaction_metadata(
     for manifest in inventory.live_manifests.values().copied() {
         let nonce_record = load_nonce_generation_record(journal, manifest.generation)
             .map_err(|error| error.to_string())?;
-        if nonce_record.key_id != manifest.key_id
+        if nonce_record.generation != manifest.generation
+            || nonce_record.key_id != manifest.key_id
             || nonce_record.nonce_prefix != manifest.nonce_prefix
             || nonce_record.operation_id != manifest.operation_id
         {
