@@ -285,3 +285,122 @@ fn compacted_restart_survives_pruned_burn_then_publishes_retires_and_reclaims() 
     .is_none());
     assert_eq!(directory_entry_count(&journal_directory.0), 1);
 }
+
+#[test]
+fn compacted_destination_exists_burn_can_be_pruned_and_retried() {
+    const OBJECTS: u64 = 11;
+    let source_set_id = [0xa1; 32];
+    let (journal_directory, stage_directory, aes_key, nonce_prefix, restart_limits, _) =
+        prepared_source_bound_restart_stage(
+            "compacted-destination-exists-retry",
+            OBJECTS,
+            source_set_id,
+        );
+    let journal = open_journal(&journal_directory.0, &aes_key, nonce_prefix);
+    compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect("checkpoint live source before destination-exists attempt");
+    let compacted = CompactedNonceJournal::new(&journal);
+    let work_directory = super::TestDirectory::new("compacted-destination-exists-retry-work");
+    let original: Vec<_> = (1..=OBJECTS).rev().map(super::TinySource::new).collect();
+    let mut baseline_sources = original.clone();
+    let mut baseline = Vec::new();
+    super::write_genesis_sources_to(
+        &mut baseline,
+        &mut baseline_sources,
+        super::options(),
+        super::ImmutableLimits::default(),
+    )
+    .expect("destination-exists retry baseline");
+
+    let mut first_sources = original.clone();
+    let mut first_backend = RestartPublicationTestBackend::new(
+        super::PersistentPublicationLinkOutcome::DestinationExists,
+    );
+    first_backend.destination = Some(b"existing destination".to_vec());
+    let first = stage_and_publish_compacted_source_bound_encrypted_tree_restart(
+        &journal,
+        &stage_directory.0,
+        &work_directory.0,
+        &mut first_backend,
+        &mut first_sources,
+        source_set_id,
+        EncryptedRestartContinuationSettings {
+            aes_key,
+            crashed_generation: 1,
+            trusted_floor: None,
+            restart_limits,
+            options: super::options(),
+            limits: super::ImmutableLimits::default(),
+            fresh_operation_id: [0xa2; 16],
+        },
+    )
+    .expect("destination-exists compacted restart attempt");
+    assert!(matches!(
+        first,
+        EncryptedTreeRestartPublicationOutcome::NotPublishedDestinationExists
+    ));
+    assert_eq!(
+        first_backend.destination.as_deref(),
+        Some(b"existing destination".as_slice())
+    );
+    assert!(first_backend.private.is_empty());
+    assert!(first_backend.aborted);
+    assert_eq!(
+        compacted
+            .scan(None)
+            .expect("authority after destination-exists burn")
+            .durable
+            .generation,
+        2
+    );
+    work_directory.assert_empty();
+
+    let burned_compaction = compact_restart_metadata(
+        &journal,
+        None,
+        RestartMetadataCompactionCut::Complete,
+    )
+    .expect("checkpoint and prune destination-exists burned generation");
+    assert_eq!(burned_compaction.checkpoint_generation, 2);
+    assert_eq!(burned_compaction.pruned_nonce_records, 1);
+    assert_eq!(burned_compaction.preserved_nonce_records, 1);
+    assert!(!journal_directory.0.join(linux_nonce_journal_name(2)).exists());
+    assert!(journal_directory.0.join(linux_nonce_journal_name(1)).exists());
+
+    let mut retry_sources = original;
+    let mut retry_backend =
+        RestartPublicationTestBackend::new(super::PersistentPublicationLinkOutcome::Linked);
+    let retry = stage_and_publish_compacted_source_bound_encrypted_tree_restart(
+        &journal,
+        &stage_directory.0,
+        &work_directory.0,
+        &mut retry_backend,
+        &mut retry_sources,
+        source_set_id,
+        EncryptedRestartContinuationSettings {
+            aes_key,
+            crashed_generation: 1,
+            trusted_floor: None,
+            restart_limits,
+            options: super::options(),
+            limits: super::ImmutableLimits::default(),
+            fresh_operation_id: [0xa3; 16],
+        },
+    )
+    .expect("retry compacted publication after destination-exists burn");
+    let EncryptedTreeRestartPublicationOutcome::PublishedAndDurable(durable) = retry else {
+        panic!("retry after destination-exists burn must publish durably");
+    };
+    assert_eq!(durable.durable.continuation.crashed_generation, 1);
+    assert_eq!(durable.durable.continuation.fresh_generation, 3);
+    assert_eq!(retry_backend.destination.as_deref(), Some(baseline.as_slice()));
+    assert_eq!(
+        compacted
+            .scan(None)
+            .expect("authority after destination-exists retry")
+            .durable
+            .generation,
+        3
+    );
+    work_directory.assert_empty();
+}
