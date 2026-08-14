@@ -250,10 +250,7 @@ mod tests {
             CleanupJournalError::NotDurablyCommitted
         );
         assert_eq!(
-            restart_disposition(
-                durable,
-                RestartNameObservation::ExpectedExactIdentity,
-            ),
+            restart_disposition(durable, RestartNameObservation::ExpectedExactIdentity,),
             RestartDisposition::ResumePrivate
         );
     }
@@ -314,7 +311,10 @@ mod tests {
             ),
             RestartDisposition::SyncDirectoryThenFinalize
         );
-        assert_eq!(execution.journal.phase, CleanupPhase::CleanupPrepared(artifact()));
+        assert_eq!(
+            execution.journal.phase,
+            CleanupPhase::CleanupPrepared(artifact())
+        );
     }
 
     #[test]
@@ -353,10 +353,7 @@ mod tests {
             commit_terminal_cleanup(execution.journal, terminal, true).expect("terminal commit");
         assert_eq!(committed.generation, 2);
         assert_eq!(
-            restart_disposition(
-                committed,
-                RestartNameObservation::ExpectedDifferentIdentity,
-            ),
+            restart_disposition(committed, RestartNameObservation::ExpectedDifferentIdentity,),
             RestartDisposition::CleanupTerminal
         );
     }
@@ -430,8 +427,7 @@ mod tests {
             ..artifact()
         };
         assert_eq!(
-            mark_unlink_complete(&mut execution, foreign_artifact)
-                .expect_err("artifact mismatch"),
+            mark_unlink_complete(&mut execution, foreign_artifact).expect_err("artifact mismatch"),
             CleanupJournalError::ArtifactMismatch
         );
         assert!(!execution.unlink_complete);
