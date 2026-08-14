@@ -93,7 +93,7 @@ fn options() -> ImmutableSourceStreamingWriteOptions {
 
 #[test]
 fn end_to_end_bounded_candidate_matches_three_level_canonical_writer() {
-    const OBJECTS: u64 = 47_176;
+    const OBJECTS: u64 = 70_671;
     let limits = ImmutableLimits::default();
     let original: Vec<_> = (1..=OBJECTS).rev().map(TinySource::new).collect();
 
@@ -107,7 +107,7 @@ fn end_to_end_bounded_candidate_matches_three_level_canonical_writer() {
     )
     .expect("baseline writer");
     assert_eq!(baseline_report.output.report.root_level, 2);
-    assert_eq!(baseline_report.output.report.page_count, 259);
+    assert_eq!(baseline_report.output.report.page_count, 386);
 
     let directory = TestDirectory::new("three-level");
     let mut sources = original;
