@@ -107,14 +107,31 @@ fn encrypted_descriptor_writer_preserves_canonical_bytes_and_reports() {
 #[test]
 fn encrypted_descriptor_quota_prices_transcode_and_emission_overlaps() {
     const OBJECTS: usize = 4;
-    let mut spill = spill_limits(8, 2);
-    spill.max_live_spill_bytes = 256;
-    let plan = encrypted_private_storage_plan(OBJECTS, spill).expect("encrypted plan");
-    assert_eq!(plan.base.descriptor_bytes, 256);
-    assert_eq!(plan.encrypted_descriptor_bytes, 368);
-    assert_eq!(plan.plaintext_plus_encrypted_descriptor_bytes, 624);
-    assert_eq!(plan.encrypted_descriptor_plus_locator_bytes, 656);
-    assert_eq!(plan.required_bytes, 656);
+
+    let mut arithmetic_spill = spill_limits(8, 2);
+    arithmetic_spill.max_live_spill_bytes = 256;
+    let arithmetic_plan =
+        encrypted_private_storage_plan(OBJECTS, arithmetic_spill).expect("encrypted plan");
+    assert_eq!(arithmetic_plan.base.descriptor_bytes, 256);
+    assert_eq!(arithmetic_plan.encrypted_descriptor_bytes, 368);
+    assert_eq!(
+        arithmetic_plan.plaintext_plus_encrypted_descriptor_bytes,
+        624
+    );
+    assert_eq!(
+        arithmetic_plan.encrypted_descriptor_plus_locator_bytes,
+        656
+    );
+    assert_eq!(arithmetic_plan.required_bytes, 656);
+
+    let writer_spill = spill_limits(8, 2);
+    let writer_plan =
+        encrypted_private_storage_plan(OBJECTS, writer_spill).expect("writer encrypted plan");
+    assert!(writer_plan.required_bytes >= arithmetic_plan.required_bytes);
+    assert_eq!(
+        writer_plan.encrypted_descriptor_bytes,
+        arithmetic_plan.encrypted_descriptor_bytes
+    );
 
     let original: Vec<_> = (1..=u64::try_from(OBJECTS).unwrap())
         .rev()
@@ -133,20 +150,20 @@ fn encrypted_descriptor_quota_prices_transcode_and_emission_overlaps() {
             &mut exact_output,
             &mut exact_sources,
             &directory.0,
-            spill,
+            writer_spill,
             EncryptedPrivateWriterSettings {
                 options: options(),
                 limits: ImmutableLimits::default(),
-                max_private_storage_bytes: plan.required_bytes,
+                max_private_storage_bytes: writer_plan.required_bytes,
             },
             &mut exact_session,
         )
         .expect("exact private quota");
-    assert_eq!(observed, plan);
+    assert_eq!(observed, writer_plan);
     assert!(!exact_output.is_empty());
     assert_eq!(
         evidence.descriptor_stage_bytes,
-        plan.encrypted_descriptor_bytes
+        writer_plan.encrypted_descriptor_bytes
     );
     assert_eq!(exact_session.remaining(), 0);
     directory.assert_empty();
@@ -162,11 +179,11 @@ fn encrypted_descriptor_quota_prices_transcode_and_emission_overlaps() {
         &mut short_output,
         &mut short_sources,
         &directory.0,
-        spill,
+        writer_spill,
         EncryptedPrivateWriterSettings {
             options: options(),
             limits: ImmutableLimits::default(),
-            max_private_storage_bytes: plan.required_bytes - 1,
+            max_private_storage_bytes: writer_plan.required_bytes - 1,
         },
         &mut short_session,
     )
