@@ -30,6 +30,8 @@ fn scan_compacted_persistent_inventory(
     let mut source_set_records = 0usize;
     let mut total_bytes = 0u64;
     let mut directory_entries = 0usize;
+    let mut saw_authenticated_checkpoint = false;
+    let directory_scan_ceiling = compacted_directory_scan_ceiling(journal)?;
 
     for entry in std::fs::read_dir(linux_nonce_procfd_directory(&journal.directory))
         .map_err(|error| error.to_string())?
@@ -38,7 +40,7 @@ fn scan_compacted_persistent_inventory(
         directory_entries = directory_entries
             .checked_add(1)
             .ok_or_else(|| "compacted inventory directory entries".to_owned())?;
-        if directory_entries > journal.limits.max_directory_entries {
+        if directory_entries > directory_scan_ceiling {
             return Err("compacted inventory directory entry limit".into());
         }
         let name = entry.file_name();
@@ -77,6 +79,7 @@ fn scan_compacted_persistent_inventory(
             if checkpoint.generation != generation {
                 return Err("compacted inventory checkpoint generation".into());
             }
+            saw_authenticated_checkpoint = true;
             checkpoint_records = checkpoint_records
                 .checked_add(1)
                 .ok_or_else(|| "compacted inventory checkpoint count".to_owned())?;
@@ -160,6 +163,12 @@ fn scan_compacted_persistent_inventory(
                 .ok_or_else(|| "compacted inventory byte overflow".to_owned())?;
         }
     }
+    validate_compacted_directory_entry_count(
+        journal,
+        directory_entries,
+        saw_authenticated_checkpoint,
+        "compacted inventory",
+    )?;
 
     Ok(CompactedPersistentInventory {
         nonce_records,
