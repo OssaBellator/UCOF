@@ -308,8 +308,8 @@ where
             continue;
         }
 
-        let action = action_for_authority(journal.authority)
-            .ok_or(PipelineError::ResolvePublication)?;
+        let action =
+            action_for_authority(journal.authority).ok_or(PipelineError::ResolvePublication)?;
         let authorization = authenticator.seal_authorization(AuthorizationClaims {
             operation_id: journal.operation_id,
             generation: journal.generation,
@@ -397,12 +397,7 @@ mod tests {
         }
     }
 
-    fn candidate(
-        candidate_id: u64,
-        authority: Authority,
-        age_ticks: u64,
-        bytes: u64,
-    ) -> Candidate {
+    fn candidate(candidate_id: u64, authority: Authority, age_ticks: u64, bytes: u64) -> Candidate {
         let authenticator = auth();
         Candidate {
             candidate_id,
@@ -422,14 +417,8 @@ mod tests {
 
     #[test]
     fn million_candidate_stream_stays_bounded_and_emits_only_authorized_tokens() {
-        let candidates = (0u64..1_000_000).map(|candidate_id| {
-            candidate(
-                candidate_id,
-                Authority::ResumeOrDiscardPrivate,
-                200,
-                1,
-            )
-        });
+        let candidates = (0u64..1_000_000)
+            .map(|candidate_id| candidate(candidate_id, Authority::ResumeOrDiscardPrivate, 200, 1));
         let plan = plan_authenticated_cleanup(candidates, limits(), &auth()).expect("plan");
         assert_eq!(plan.scanned_entries, 32);
         assert_eq!(plan.authorized_entries, 8);
@@ -454,10 +443,12 @@ mod tests {
             .actions
             .iter()
             .map(|planned| match planned {
-                PlannedAction::Authorized(token) => auth()
-                    .open_authorization(*token)
-                    .expect("authorization")
-                    .action,
+                PlannedAction::Authorized(token) => {
+                    auth()
+                        .open_authorization(*token)
+                        .expect("authorization")
+                        .action
+                }
                 PlannedAction::QuarantineForReview { .. } => panic!("unexpected quarantine"),
             })
             .collect();
@@ -492,12 +483,7 @@ mod tests {
     fn unauthenticated_journal_can_only_be_bounded_quarantine() {
         let mut candidates = Vec::new();
         for candidate_id in 0u64..6 {
-            let mut item = candidate(
-                candidate_id,
-                Authority::ResumeOrDiscardPrivate,
-                200,
-                10,
-            );
+            let mut item = candidate(candidate_id, Authority::ResumeOrDiscardPrivate, 200, 10);
             item.journal.state.generation += 1;
             candidates.push(item);
         }
@@ -505,10 +491,10 @@ mod tests {
         assert_eq!(plan.quarantine_entries, 4);
         assert_eq!(plan.retained_budget, 2);
         assert_eq!(plan.authorized_entries, 0);
-        assert!(plan.actions.iter().all(|action| matches!(
-            action,
-            PlannedAction::QuarantineForReview { .. }
-        )));
+        assert!(plan
+            .actions
+            .iter()
+            .all(|action| matches!(action, PlannedAction::QuarantineForReview { .. })));
     }
 
     #[test]
@@ -552,13 +538,9 @@ mod tests {
             PlannedAction::QuarantineForReview { .. } => panic!("unexpected quarantine"),
         };
         let mut current_artifact = item.artifact;
-        let action = execute_authorized_cleanup(
-            item.journal,
-            token,
-            &mut current_artifact,
-            &auth(),
-        )
-        .expect("execute");
+        let action =
+            execute_authorized_cleanup(item.journal, token, &mut current_artifact, &auth())
+                .expect("execute");
         assert_eq!(action, ActionKind::DiscardPrivate);
         assert!(!current_artifact.present);
     }
