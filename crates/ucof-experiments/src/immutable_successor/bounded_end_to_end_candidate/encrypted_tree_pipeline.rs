@@ -1,3 +1,10 @@
+#[derive(Clone, Copy)]
+struct ConsolidatedEncryptedTreePipelineSettings {
+    options: super::ImmutableSourceStreamingWriteOptions,
+    limits: super::ImmutableLimits,
+    spill_limits: super::BoundedSpillSortLimits,
+}
+
 fn write_prepared_encrypted_spill_with_consolidated_encrypted_tree<W, S>(
     writer: &mut W,
     sources: &mut [S],
@@ -46,8 +53,7 @@ where
         writer,
         sources,
         directory,
-        settings.options,
-        settings.limits,
+        settings,
         emission,
         descriptor_reader,
         tree_session,
@@ -60,9 +66,7 @@ fn write_genesis_sources_end_to_end_encrypted_tree_on_restart_spine<W, S>(
     writer: &mut W,
     sources: &mut [S],
     directory: &Path,
-    options: super::ImmutableSourceStreamingWriteOptions,
-    limits: super::ImmutableLimits,
-    spill_limits: super::BoundedSpillSortLimits,
+    settings: ConsolidatedEncryptedTreePipelineSettings,
     descriptor_session: &mut DescriptorEncryptionSession,
     tree_session: &mut DescriptorEncryptionSession,
 ) -> super::CandidateResult<ConsolidatedEncryptedTreeEmissionEvidence>
@@ -77,16 +81,19 @@ where
     let preflight = prepare_encrypted_spill_preflight(
         directory,
         sources,
-        options,
-        limits,
-        spill_limits,
+        settings.options,
+        settings.limits,
+        settings.spill_limits,
         descriptor_session,
     )?;
     write_prepared_encrypted_spill_with_consolidated_encrypted_tree(
         writer,
         sources,
         directory,
-        EncryptedSpillPreparedSettings { options, limits },
+        EncryptedSpillPreparedSettings {
+            options: settings.options,
+            limits: settings.limits,
+        },
         preflight,
         descriptor_session,
         tree_session,
