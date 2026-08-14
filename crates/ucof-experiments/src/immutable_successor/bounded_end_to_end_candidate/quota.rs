@@ -119,3 +119,86 @@ where
     )?;
     Ok((plan, evidence))
 }
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct EncryptedPrivateStoragePlan {
+    base: PrivateStoragePlan,
+    encrypted_descriptor_bytes: u64,
+    plaintext_plus_encrypted_descriptor_bytes: u64,
+    encrypted_descriptor_plus_locator_bytes: u64,
+    required_bytes: u64,
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn encrypted_private_storage_plan(
+    object_count: usize,
+    spill_limits: BoundedSpillSortLimits,
+) -> CandidateResult<EncryptedPrivateStoragePlan> {
+    let base = private_storage_plan(object_count, spill_limits)?;
+    let encrypted_descriptor_bytes =
+        checked_stage_bytes(object_count, ENCRYPTED_DESCRIPTOR_STAGE_BYTES)?;
+    let plaintext_plus_encrypted_descriptor_bytes = base
+        .descriptor_bytes
+        .checked_add(encrypted_descriptor_bytes)
+        .ok_or_else(|| "private descriptor encryption overlap overflow".to_owned())?;
+    let encrypted_descriptor_plus_locator_bytes = encrypted_descriptor_bytes
+        .checked_add(base.locator_bytes)
+        .ok_or_else(|| "private encrypted descriptor locator overlap overflow".to_owned())?;
+    let required_bytes = base
+        .required_bytes
+        .max(plaintext_plus_encrypted_descriptor_bytes)
+        .max(encrypted_descriptor_plus_locator_bytes);
+    Ok(EncryptedPrivateStoragePlan {
+        base,
+        encrypted_descriptor_bytes,
+        plaintext_plus_encrypted_descriptor_bytes,
+        encrypted_descriptor_plus_locator_bytes,
+        required_bytes,
+    })
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn enforce_encrypted_private_storage_limit(
+    object_count: usize,
+    spill_limits: BoundedSpillSortLimits,
+    max_private_storage_bytes: u64,
+) -> CandidateResult<EncryptedPrivateStoragePlan> {
+    let plan = encrypted_private_storage_plan(object_count, spill_limits)?;
+    if plan.required_bytes > max_private_storage_bytes {
+        return Err("private storage limit".into());
+    }
+    Ok(plan)
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+fn write_genesis_sources_with_encrypted_descriptor_private_quota_candidate<W, S>(
+    writer: &mut W,
+    sources: &mut [S],
+    directory: &Path,
+    options: ImmutableSourceStreamingWriteOptions,
+    limits: ImmutableLimits,
+    spill_limits: BoundedSpillSortLimits,
+    max_private_storage_bytes: u64,
+    session: &mut DescriptorEncryptionSession,
+) -> CandidateResult<(EncryptedPrivateStoragePlan, EndToEndEvidence)>
+where
+    W: Write,
+    S: ImmutableStreamingPayloadSource,
+{
+    let plan = enforce_encrypted_private_storage_limit(
+        sources.len(),
+        spill_limits,
+        max_private_storage_bytes,
+    )?;
+    let evidence = write_genesis_sources_end_to_end_encrypted_descriptor_candidate(
+        writer,
+        sources,
+        directory,
+        options,
+        limits,
+        spill_limits,
+        session,
+    )?;
+    Ok((plan, evidence))
+}
