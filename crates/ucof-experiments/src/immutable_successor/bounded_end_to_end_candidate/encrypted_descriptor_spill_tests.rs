@@ -130,10 +130,12 @@ fn encrypted_spill_quota_prices_sort_transcode_and_emission_overlaps() {
         &mut exact_output,
         &mut exact_sources,
         &directory.0,
-        super::options(),
-        super::ImmutableLimits::default(),
         spill,
-        plan.required_bytes,
+        EncryptedSpillPrivateWriterSettings {
+            options: super::options(),
+            limits: super::ImmutableLimits::default(),
+            max_private_storage_bytes: plan.required_bytes,
+        },
         &mut exact_session,
     )
     .expect("exact encrypted spill private quota");

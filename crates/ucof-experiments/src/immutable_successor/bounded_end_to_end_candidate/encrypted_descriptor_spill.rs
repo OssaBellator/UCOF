@@ -589,14 +589,19 @@ where
     )
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct EncryptedSpillPrivateWriterSettings {
+    pub(super) options: super::ImmutableSourceStreamingWriteOptions,
+    pub(super) limits: super::ImmutableLimits,
+    pub(super) max_private_storage_bytes: u64,
+}
+
 pub(super) fn write_genesis_sources_with_encrypted_spill_private_quota_candidate<W, S>(
     writer: &mut W,
     sources: &mut [S],
     directory: &Path,
-    options: super::ImmutableSourceStreamingWriteOptions,
-    limits: super::ImmutableLimits,
     spill_limits: super::BoundedSpillSortLimits,
-    max_private_storage_bytes: u64,
+    settings: EncryptedSpillPrivateWriterSettings,
     session: &mut DescriptorEncryptionSession,
 ) -> super::CandidateResult<(EncryptedSpillPrivateStoragePlan, EncryptedSpillEndToEndEvidence)>
 where
@@ -604,15 +609,15 @@ where
     S: super::ImmutableStreamingPayloadSource,
 {
     let plan = encrypted_spill_private_storage_plan(sources.len(), spill_limits)?;
-    if plan.required_bytes > max_private_storage_bytes {
+    if plan.required_bytes > settings.max_private_storage_bytes {
         return Err("private storage limit".into());
     }
     let evidence = write_genesis_sources_end_to_end_encrypted_spill_candidate(
         writer,
         sources,
         directory,
-        options,
-        limits,
+        settings.options,
+        settings.limits,
         spill_limits,
         session,
     )?;
