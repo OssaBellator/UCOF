@@ -16,6 +16,8 @@ include!("immutable_successor/source_streaming_genesis.rs");
 include!("immutable_successor/bounded_source_streaming_candidate.rs");
 #[cfg(test)]
 include!("immutable_successor/bounded_page_ref_stage_candidate.rs");
+#[cfg(test)]
+include!("immutable_successor/bounded_end_to_end_candidate.rs");
 include!("immutable_successor/active_file_streaming.rs");
 include!("immutable_successor/batch.rs");
 include!("immutable_successor/persistent_batch.rs");
