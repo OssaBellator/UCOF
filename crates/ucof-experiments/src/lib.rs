@@ -39,10 +39,6 @@ mod semantic_history_multi_plan;
 mod semantic_history_streaming_compaction;
 mod semantic_streaming_compaction;
 mod snapshots;
-#[cfg(test)]
-mod stale_private_cleanup_plan_v2 {
-    include!("stale_private_cleanup_plan_v2.rs");
-}
 
 pub use active_file_selected_streaming::{
     rewrite_selected_active_file_to, ImmutableSelectedActiveStreamingReport,
@@ -105,3 +101,8 @@ pub use snapshots::{
     RootSelectionLimits, RootSelectionMode, RootSelectionReport, SnapshotCandidate,
     SnapshotIdentity,
 };
+
+#[cfg(test)]
+mod stale_private_cleanup_plan_v2 {
+    include!("stale_private_cleanup_plan_v2.rs");
+}
