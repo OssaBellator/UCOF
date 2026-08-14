@@ -32,7 +32,7 @@ struct InventoryLimits {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum InventoryObservation {
+pub(crate) enum InventoryObservation {
     ExactIdentity,
     DifferentIdentity,
     MissingNoMatchingIdentityCompleteScan,
@@ -51,7 +51,7 @@ struct InventoryReport {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum InventoryError {
+pub(crate) enum InventoryError {
     InvalidLimits,
     AccountingOverflow,
 }
@@ -151,6 +151,43 @@ where
         truncated,
         unreadable_entries,
     })
+}
+
+pub(crate) fn classify_external_restart_inventory<I>(
+    entries: I,
+    expected_identity: [u8; 32],
+    max_entries: usize,
+    max_metadata_bytes: u64,
+) -> Result<(InventoryObservation, usize, u64, bool, usize), InventoryError>
+where
+    I: IntoIterator<Item = (bool, Option<[u8; 32]>, u64)>,
+{
+    let report = scan_restart_inventory(
+        entries.into_iter().map(
+            |(is_expected_name, identity, charged_bytes)| InventoryEntry {
+                is_expected_name,
+                metadata: match identity {
+                    Some(identity) => EntryMetadata::Known {
+                        identity: EntryIdentity(identity),
+                        charged_bytes,
+                    },
+                    None => EntryMetadata::Unreadable { charged_bytes },
+                },
+            },
+        ),
+        EntryIdentity(expected_identity),
+        InventoryLimits {
+            max_entries,
+            max_metadata_bytes,
+        },
+    )?;
+    Ok((
+        report.observation,
+        report.scanned_entries,
+        report.scanned_metadata_bytes,
+        report.truncated,
+        report.unreadable_entries,
+    ))
 }
 
 #[cfg(test)]
