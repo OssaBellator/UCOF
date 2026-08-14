@@ -245,13 +245,9 @@ mod tests {
         let authenticator = auth();
         let sealed_journal = authenticator.seal_journal(journal(authority));
         let mut current_artifact = artifact();
-        let authorization = plan_authorization(
-            sealed_journal,
-            current_artifact,
-            action,
-            &authenticator,
-        )
-        .expect("authorization");
+        let authorization =
+            plan_authorization(sealed_journal, current_artifact, action, &authenticator)
+                .expect("authorization");
         let executed = execute_authorized_cleanup(
             sealed_journal,
             authorization,
