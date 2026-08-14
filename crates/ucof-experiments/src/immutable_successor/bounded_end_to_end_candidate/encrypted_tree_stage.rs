@@ -1,5 +1,4 @@
-use sha2::{Digest, Sha256};
-use std::io::{BufReader, BufWriter};
+use super::{LOCATOR_STAGE_BYTES, PAGE_REF_STAGE_BYTES};
 
 const TREE_STAGE_AAD_DOMAIN: &[u8] = b"UCOF-EXP-0172-TREE-STAGE\0";
 pub(super) const ENCRYPTED_LOCATOR_STAGE_BYTES: usize =
@@ -8,12 +7,12 @@ pub(super) const ENCRYPTED_PAGE_REF_STAGE_BYTES: usize =
     ENCRYPTED_DESCRIPTOR_NONCE_BYTES + PAGE_REF_STAGE_BYTES + ENCRYPTED_DESCRIPTOR_TAG_BYTES;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum EncryptedTreeStageKind {
+pub(super) enum EncryptedTreeStageKind {
     Locator = 1,
     PageRef = 2,
 }
 
-struct EncryptedRecordStage {
+pub(super) struct EncryptedRecordStage {
     stage: FixedStage,
     plaintext_bytes: usize,
     kind: EncryptedTreeStageKind,
@@ -25,7 +24,7 @@ struct EncryptedRecordStage {
 }
 
 impl EncryptedRecordStage {
-    fn create(
+    pub(super) fn create(
         directory: &Path,
         label: &'static str,
         plaintext_bytes: usize,
@@ -46,15 +45,15 @@ impl EncryptedRecordStage {
         })
     }
 
-    fn records(&self) -> usize {
+    pub(super) fn records(&self) -> usize {
         self.stage.records
     }
 
-    fn bytes(&self) -> CandidateResult<u64> {
+    pub(super) fn bytes(&self) -> CandidateResult<u64> {
         self.stage.validate_bytes()
     }
 
-    fn writer<'a>(
+    pub(super) fn writer<'a>(
         &'a mut self,
         session: &'a mut DescriptorEncryptionSession,
     ) -> CandidateResult<EncryptedRecordStageWriter<'a>> {
@@ -67,7 +66,7 @@ impl EncryptedRecordStage {
         })
     }
 
-    fn reader(
+    pub(super) fn reader(
         &self,
         session: &DescriptorEncryptionSession,
     ) -> CandidateResult<EncryptedRecordStageReader> {
@@ -91,7 +90,10 @@ impl EncryptedRecordStage {
         })
     }
 
-    fn verify_all(&self, session: &DescriptorEncryptionSession) -> CandidateResult<()> {
+    pub(super) fn verify_all(
+        &self,
+        session: &DescriptorEncryptionSession,
+    ) -> CandidateResult<()> {
         let mut reader = self.reader(session)?;
         for _ in 0..self.records() {
             reader.read_record()?;
@@ -99,7 +101,7 @@ impl EncryptedRecordStage {
         reader.finish()
     }
 
-    fn ciphertext_sha256(&self) -> CandidateResult<[u8; 32]> {
+    pub(super) fn ciphertext_sha256(&self) -> CandidateResult<[u8; 32]> {
         let mut reader = self.stage.reader()?;
         let mut hasher = Sha256::new();
         let mut buffer = [0u8; 4096];
@@ -114,7 +116,7 @@ impl EncryptedRecordStage {
     }
 
     #[cfg(test)]
-    fn flip_byte_for_test(&mut self, offset: u64) -> CandidateResult<()> {
+    pub(super) fn flip_byte_for_test(&mut self, offset: u64) -> CandidateResult<()> {
         use std::io::{Seek, SeekFrom};
 
         let file = self
@@ -150,14 +152,14 @@ impl EncryptedRecordStage {
     }
 }
 
-struct EncryptedRecordStageWriter<'a> {
+pub(super) struct EncryptedRecordStageWriter<'a> {
     stage: &'a mut EncryptedRecordStage,
     writer: BufWriter<File>,
     session: &'a mut DescriptorEncryptionSession,
 }
 
 impl EncryptedRecordStageWriter<'_> {
-    fn write_record(&mut self, plaintext: &[u8]) -> CandidateResult<()> {
+    pub(super) fn write_record(&mut self, plaintext: &[u8]) -> CandidateResult<()> {
         if plaintext.len() != self.stage.plaintext_bytes {
             return Err("encrypted tree stage plaintext width".into());
         }
@@ -193,7 +195,7 @@ impl EncryptedRecordStageWriter<'_> {
         Ok(())
     }
 
-    fn finish(mut self) -> CandidateResult<()> {
+    pub(super) fn finish(mut self) -> CandidateResult<()> {
         self.writer.flush().map_err(|error| error.to_string())?;
         drop(self.writer);
         self.stage.stage.validate_bytes()?;
@@ -201,7 +203,7 @@ impl EncryptedRecordStageWriter<'_> {
     }
 }
 
-struct EncryptedRecordStageReader {
+pub(super) struct EncryptedRecordStageReader {
     reader: BufReader<File>,
     key: LessSafeKey,
     plaintext_bytes: usize,
@@ -217,7 +219,7 @@ struct EncryptedRecordStageReader {
 }
 
 impl EncryptedRecordStageReader {
-    fn read_record(&mut self) -> CandidateResult<Vec<u8>> {
+    pub(super) fn read_record(&mut self) -> CandidateResult<Vec<u8>> {
         if self.next_sequence >= self.records {
             return Err("encrypted tree stage exhausted".into());
         }
@@ -259,7 +261,7 @@ impl EncryptedRecordStageReader {
         Ok(plaintext.to_vec())
     }
 
-    fn finish(&mut self) -> CandidateResult<()> {
+    pub(super) fn finish(&mut self) -> CandidateResult<()> {
         if self.next_sequence != self.records {
             return Err("encrypted tree stage incomplete".into());
         }
