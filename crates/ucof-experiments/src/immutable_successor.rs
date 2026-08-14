@@ -195,6 +195,8 @@ mod persistent_unix_api {
     use super::*;
 
     include!("immutable_successor/persistent_unix_staging.rs");
+    #[cfg(target_os = "linux")]
+    include!("immutable_successor/persistent_linux_descriptor_staging.rs");
     include!("immutable_successor/persistent_unix_directory_pinning.rs");
 }
 
