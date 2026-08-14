@@ -22,22 +22,32 @@ mod bounded_end_to_end_candidate_tests {
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     mod encrypted_descriptor_crypto {
         include!("bounded_end_to_end_candidate/encrypted_descriptor.rs");
+        include!("bounded_end_to_end_candidate/encrypted_sorter.rs");
         include!("../private_nonce_lease_contract.rs");
     }
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     use encrypted_descriptor_crypto::{
-        transcode_descriptor_stage, DescriptorEncryptionSession, DescriptorNonceAuthority,
+        encrypt_descriptor_for_sorter, encrypted_sorter_limits,
+        sort_encrypted_descriptors_to_retained_stage, transcode_descriptor_stage,
+        DescriptorCryptoContext, DescriptorEncryptionSession, DescriptorNonceAuthority,
         EncryptedDescriptorReader, EncryptedDescriptorStage, ENCRYPTED_DESCRIPTOR_STAGE_BYTES,
+        ENCRYPTED_SORTER_FRAME_BYTES, ENCRYPTED_SORTER_PAYLOAD_BYTES,
     };
 
     include!("bounded_end_to_end_candidate/prepared.rs");
     include!("bounded_end_to_end_candidate/quota.rs");
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    include!("bounded_end_to_end_candidate/encrypted_sorter_writer.rs");
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    include!("bounded_end_to_end_candidate/encrypted_sorter_quota.rs");
     include!("bounded_end_to_end_candidate/published_quota.rs");
     include!("bounded_end_to_end_candidate/staged_publication.rs");
     include!("bounded_end_to_end_candidate/tests.rs");
     include!("bounded_end_to_end_candidate/quota_tests.rs");
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     include!("bounded_end_to_end_candidate/encrypted_descriptor_tests.rs");
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    include!("bounded_end_to_end_candidate/encrypted_sorter_tests.rs");
     include!("bounded_end_to_end_candidate/post_preflight_failure_tests.rs");
     include!("bounded_end_to_end_candidate/prepared_tests.rs");
     include!("bounded_end_to_end_candidate/staged_publication_tests.rs");
