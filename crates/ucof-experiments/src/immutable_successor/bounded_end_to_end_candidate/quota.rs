@@ -90,3 +90,32 @@ fn enforce_private_storage_limit(
     }
     Ok(plan)
 }
+
+fn write_genesis_sources_with_private_quota_candidate<W, S>(
+    writer: &mut W,
+    sources: &mut [S],
+    directory: &Path,
+    options: ImmutableSourceStreamingWriteOptions,
+    limits: ImmutableLimits,
+    spill_limits: BoundedSpillSortLimits,
+    max_private_storage_bytes: u64,
+) -> CandidateResult<(PrivateStoragePlan, EndToEndEvidence)>
+where
+    W: Write,
+    S: ImmutableStreamingPayloadSource,
+{
+    let plan = enforce_private_storage_limit(
+        sources.len(),
+        spill_limits,
+        max_private_storage_bytes,
+    )?;
+    let evidence = write_genesis_sources_end_to_end_bounded_candidate(
+        writer,
+        sources,
+        directory,
+        options,
+        limits,
+        spill_limits,
+    )?;
+    Ok((plan, evidence))
+}
