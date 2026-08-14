@@ -23,6 +23,7 @@ mod bounded_end_to_end_candidate_tests {
     mod encrypted_descriptor_crypto {
         include!("bounded_end_to_end_candidate/encrypted_descriptor.rs");
         include!("bounded_end_to_end_candidate/encrypted_sorter.rs");
+        include!("bounded_end_to_end_candidate/encrypted_tree_stage.rs");
         include!("../private_nonce_lease_contract.rs");
     }
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
@@ -30,8 +31,10 @@ mod bounded_end_to_end_candidate_tests {
         encrypt_descriptor_for_sorter, encrypted_sorter_limits,
         sort_encrypted_descriptors_to_retained_stage, transcode_descriptor_stage,
         DescriptorCryptoContext, DescriptorEncryptionSession, DescriptorNonceAuthority,
-        EncryptedDescriptorReader, EncryptedDescriptorStage, ENCRYPTED_DESCRIPTOR_STAGE_BYTES,
-        ENCRYPTED_SORTER_FRAME_BYTES, ENCRYPTED_SORTER_PAYLOAD_BYTES,
+        EncryptedDescriptorReader, EncryptedDescriptorStage, EncryptedRecordStage,
+        EncryptedTreeStageKind, ENCRYPTED_DESCRIPTOR_STAGE_BYTES, ENCRYPTED_LOCATOR_STAGE_BYTES,
+        ENCRYPTED_PAGE_REF_STAGE_BYTES, ENCRYPTED_SORTER_FRAME_BYTES,
+        ENCRYPTED_SORTER_PAYLOAD_BYTES,
     };
 
     include!("bounded_end_to_end_candidate/prepared.rs");
@@ -40,6 +43,10 @@ mod bounded_end_to_end_candidate_tests {
     include!("bounded_end_to_end_candidate/encrypted_sorter_writer.rs");
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     include!("bounded_end_to_end_candidate/encrypted_sorter_quota.rs");
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    include!("bounded_end_to_end_candidate/encrypted_tree_writer.rs");
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    include!("bounded_end_to_end_candidate/encrypted_tree_quota.rs");
     include!("bounded_end_to_end_candidate/published_quota.rs");
     include!("bounded_end_to_end_candidate/staged_publication.rs");
     include!("bounded_end_to_end_candidate/tests.rs");
@@ -48,6 +55,8 @@ mod bounded_end_to_end_candidate_tests {
     include!("bounded_end_to_end_candidate/encrypted_descriptor_tests.rs");
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
     include!("bounded_end_to_end_candidate/encrypted_sorter_tests.rs");
+    #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+    include!("bounded_end_to_end_candidate/encrypted_tree_tests.rs");
     include!("bounded_end_to_end_candidate/post_preflight_failure_tests.rs");
     include!("bounded_end_to_end_candidate/prepared_tests.rs");
     include!("bounded_end_to_end_candidate/staged_publication_tests.rs");
