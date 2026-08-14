@@ -7,6 +7,7 @@ struct EncryptedTreeBuildEvidence {
     stage_ciphertext_sha256: [u8; 32],
 }
 
+#[derive(Debug)]
 struct EncryptedTreeEndToEndEvidence {
     base: EndToEndEvidence,
     tree_stage_ciphertext_sha256: [u8; 32],
