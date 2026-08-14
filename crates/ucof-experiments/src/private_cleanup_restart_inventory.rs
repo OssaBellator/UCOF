@@ -210,7 +210,11 @@ mod tests {
 
     #[test]
     fn matching_identity_elsewhere_proves_private_state_survives_under_another_name() {
-        let entries = [known(false, 2, 64), known(false, 1, 64), known(false, 3, 64)];
+        let entries = [
+            known(false, 2, 64),
+            known(false, 1, 64),
+            known(false, 3, 64),
+        ];
         let report = scan_restart_inventory(entries, identity(1), limits()).expect("inventory");
         assert_eq!(
             report.observation,
@@ -224,7 +228,10 @@ mod tests {
             .chain((0u64..1_000_000).map(|_| known(false, 2, 64)));
         let report = scan_restart_inventory(entries, identity(1), limits()).expect("inventory");
         assert_eq!(report.scanned_entries, 1);
-        assert_eq!(report.observation, InventoryObservation::ExpectedExactIdentity);
+        assert_eq!(
+            report.observation,
+            InventoryObservation::ExpectedExactIdentity
+        );
     }
 
     #[test]
@@ -310,13 +317,11 @@ mod tests {
             InventoryError::InvalidLimits
         );
 
-        let entries = [
-            known(false, 2, u64::MAX),
-            known(false, 3, 1),
-        ];
+        let entries = [known(false, 2, u64::MAX), known(false, 3, 1)];
         let mut huge = limits();
         huge.max_metadata_bytes = u64::MAX;
-        let report = scan_restart_inventory(entries, identity(1), huge).expect("overflow truncates");
+        let report =
+            scan_restart_inventory(entries, identity(1), huge).expect("overflow truncates");
         assert_eq!(report.scanned_entries, 1);
         assert!(report.truncated);
         assert_eq!(
