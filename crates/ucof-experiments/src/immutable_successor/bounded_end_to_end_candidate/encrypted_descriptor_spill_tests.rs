@@ -156,10 +156,12 @@ fn encrypted_spill_quota_prices_sort_transcode_and_emission_overlaps() {
         &mut short_output,
         &mut short_sources,
         &directory.0,
-        super::options(),
-        super::ImmutableLimits::default(),
         spill,
-        plan.required_bytes - 1,
+        EncryptedSpillPrivateWriterSettings {
+            options: super::options(),
+            limits: super::ImmutableLimits::default(),
+            max_private_storage_bytes: plan.required_bytes - 1,
+        },
         &mut short_session,
     )
     .expect_err("one byte short must fail");
