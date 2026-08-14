@@ -338,6 +338,18 @@ class State:
             if pair in terminal_pairs:
                 del self.prepared[pair]
                 retirement_pruned += 1
+
+        if cut == "after_prepared_prune":
+            return {
+                "generation": generation,
+                "required": required,
+                "pruned_nonce": len(nonce_prune),
+                "preserved_nonce": len(protected.intersection(self.nonce_records)),
+                "pruned_retirement": retirement_pruned,
+                "pruned_source": source_pruned,
+                "pruned_checkpoints": 0,
+            }
+
         for pair in list(self.terminal):
             del self.terminal[pair]
             retirement_pruned += 1
@@ -477,6 +489,31 @@ def test_source_prune_cut_is_retryable() -> None:
     assert state.scan() == (2, 16)
 
 
+def test_prepared_prune_cut_keeps_terminal_completion_authority() -> None:
+    state = State()
+    state.commit(10)
+    state.add_live_restart(1, 5, 99)
+    state.commit(6)
+    state.add_prepared(1, 2, 123)
+    state.terminalize(1, 2)
+
+    cut = state.compact(cut="after_prepared_prune")
+    assert cut["pruned_nonce"] == 2
+    assert cut["pruned_source"] == 1
+    assert cut["pruned_retirement"] == 1
+    assert state.source_sets == {}
+    assert state.prepared == {}
+    assert (1, 2) in state.terminal
+    assert state.scan() == (2, 16)
+
+    retry = state.compact()
+    assert retry["pruned_nonce"] == 0
+    assert retry["pruned_source"] == 0
+    assert retry["pruned_retirement"] == 1
+    assert state.terminal == {}
+    assert state.scan() == (2, 16)
+
+
 def test_burn_compact_retry_terminal_lifecycle() -> None:
     state = State()
     first = state.commit(20)
@@ -589,6 +626,7 @@ def run_all(campaigns: int, steps: int) -> dict:
     test_graph_fail_closed()
     test_prepared_then_terminal_reclamation()
     test_source_prune_cut_is_retryable()
+    test_prepared_prune_cut_keeps_terminal_completion_authority()
     test_burn_compact_retry_terminal_lifecycle()
     test_trusted_floor_boundary()
     test_exact_quota()
@@ -596,7 +634,7 @@ def run_all(campaigns: int, steps: int) -> dict:
     for seed in range(campaigns):
         test_repeated_compaction_campaign(seed, steps)
     return {
-        "fixed_cases": 9,
+        "fixed_cases": 10,
         "matrix_cases": 4 * 4 * 4,
         "campaigns": campaigns,
         "campaign_steps": steps,
