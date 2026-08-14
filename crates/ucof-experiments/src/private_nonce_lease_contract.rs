@@ -1,9 +1,9 @@
-//! Test-only crash-safety contract for private-stage nonce leases.
-//!
-//! The model requires a lease high-water mark to be durably committed before
-//! any nonce in the lease can be issued. Durability itself is an external
-//! boundary in this experiment; no filesystem journal implementation is
-//! claimed here.
+// Test-only crash-safety contract for private-stage nonce leases.
+//
+// The model requires a lease high-water mark to be durably committed before
+// any nonce in the lease can be issued. Durability itself is an external
+// boundary in this experiment; no filesystem journal implementation is
+// claimed here.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct DurableNonceState {
