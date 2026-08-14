@@ -47,9 +47,11 @@ fn encrypted_sorter_runs_preserve_canonical_output_and_report() {
         &mut output_a,
         &mut sources_a,
         &directory.0,
-        options(),
-        limits,
-        spill_limits,
+        EncryptedSorterPipelineSettings {
+            options: options(),
+            limits,
+            spill_limits,
+        },
         &mut spill_a,
         &mut retained_a,
     )
@@ -70,9 +72,11 @@ fn encrypted_sorter_runs_preserve_canonical_output_and_report() {
         &mut output_b,
         &mut sources_b,
         &directory.0,
-        options(),
-        limits,
-        spill_limits,
+        EncryptedSorterPipelineSettings {
+            options: options(),
+            limits,
+            spill_limits,
+        },
         &mut spill_b,
         &mut retained_b,
     )
@@ -219,9 +223,11 @@ fn encrypted_sorter_short_lease_fails_before_private_files() {
         &mut output,
         &mut sources,
         &directory.0,
-        options(),
-        ImmutableLimits::default(),
-        spill_limits(4, 2),
+        EncryptedSorterPipelineSettings {
+            options: options(),
+            limits: ImmutableLimits::default(),
+            spill_limits: spill_limits(4, 2),
+        },
         &mut spill_session,
         &mut retained_session,
     )
@@ -256,9 +262,11 @@ fn encrypted_sorter_keeps_duplicate_detection_in_existing_merge_logic() {
         &mut output,
         &mut sources,
         &directory.0,
-        options(),
-        ImmutableLimits::default(),
-        spill_limits(2, 2),
+        EncryptedSorterPipelineSettings {
+            options: options(),
+            limits: ImmutableLimits::default(),
+            spill_limits: spill_limits(2, 2),
+        },
         &mut spill_session,
         &mut retained_session,
     )
