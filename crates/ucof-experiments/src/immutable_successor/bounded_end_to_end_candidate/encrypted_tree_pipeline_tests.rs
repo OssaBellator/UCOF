@@ -37,6 +37,11 @@ fn consolidated_encrypted_tree_pipeline_preserves_canonical_bytes_and_report() {
     const OBJECTS: u64 = 401;
     let limits = super::ImmutableLimits::default();
     let spill = super::spill_limits(17, 3);
+    let settings = ConsolidatedEncryptedTreePipelineSettings {
+        options: super::options(),
+        limits,
+        spill_limits: spill,
+    };
     let original: Vec<_> = (1..=OBJECTS).rev().map(super::TinySource::new).collect();
 
     let mut baseline_sources = original.clone();
@@ -64,9 +69,7 @@ fn consolidated_encrypted_tree_pipeline_preserves_canonical_bytes_and_report() {
         &mut output_a,
         &mut sources_a,
         &directory.0,
-        super::options(),
-        limits,
-        spill,
+        settings,
         &mut descriptor_a,
         &mut tree_a,
     )
@@ -87,9 +90,7 @@ fn consolidated_encrypted_tree_pipeline_preserves_canonical_bytes_and_report() {
         &mut output_b,
         &mut sources_b,
         &directory.0,
-        super::options(),
-        limits,
-        spill,
+        settings,
         &mut descriptor_b,
         &mut tree_b,
     )
@@ -156,9 +157,11 @@ fn consolidated_encrypted_tree_short_lease_fails_before_sorter_or_output() {
         &mut output,
         &mut sources,
         &directory.0,
-        super::options(),
-        super::ImmutableLimits::default(),
-        super::spill_limits(7, 2),
+        ConsolidatedEncryptedTreePipelineSettings {
+            options: super::options(),
+            limits: super::ImmutableLimits::default(),
+            spill_limits: super::spill_limits(7, 2),
+        },
         &mut descriptor,
         &mut tree,
     )
