@@ -40,6 +40,10 @@ mod bounded_end_to_end_candidate_tests {
         include!("bounded_end_to_end_candidate/source_bound_restart_continuation.rs");
         include!("bounded_end_to_end_candidate/source_bound_lifecycle_quota.rs");
         include!("bounded_end_to_end_candidate/source_bound_restart_enforcement.rs");
+        include!("bounded_end_to_end_candidate/restart_metadata_compaction.rs");
+        include!("bounded_end_to_end_candidate/compacted_restart_classification.rs");
+        include!("bounded_end_to_end_candidate/compacted_source_bound_restart.rs");
+        include!("bounded_end_to_end_candidate/compacted_private_lifecycle_quota.rs");
         include!("bounded_end_to_end_candidate/encrypted_descriptor_spill_tests.rs");
         include!("bounded_end_to_end_candidate/linux_durable_nonce_journal_tests.rs");
         include!("bounded_end_to_end_candidate/linux_encrypted_stage_restart_tests.rs");
@@ -55,6 +59,12 @@ mod bounded_end_to_end_candidate_tests {
         include!("bounded_end_to_end_candidate/encrypted_tree_restart_publication_tests.rs");
         include!("bounded_end_to_end_candidate/restart_source_set_authority_tests.rs");
         include!("bounded_end_to_end_candidate/source_bound_lifecycle_quota_tests.rs");
+        include!("bounded_end_to_end_candidate/restart_metadata_compaction_tests.rs");
+        include!("bounded_end_to_end_candidate/restart_metadata_compaction_retry_tests.rs");
+        include!("bounded_end_to_end_candidate/restart_metadata_compaction_graph_tests.rs");
+        include!("bounded_end_to_end_candidate/restart_metadata_compaction_property_tests.rs");
+        include!("bounded_end_to_end_candidate/compacted_restart_retry_tests.rs");
+        include!("bounded_end_to_end_candidate/compacted_private_lifecycle_quota_tests.rs");
         include!("../private_nonce_lease_contract.rs");
     }
     #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
