@@ -295,7 +295,9 @@ fn encrypted_stage_file_identity(
         .map_err(|_| LinuxEncryptedStageRestartError::Io("stage identity metadata"))?;
     if !metadata.file_type().is_file()
         || metadata.nlink() != 1
-        || metadata.uid() != linux_nonce_effective_uid()?
+        || metadata.uid()
+        != linux_nonce_effective_uid()
+            .map_err(|error| LinuxEncryptedStageRestartError::Journal(error.to_string()))?
         || metadata.permissions().mode() & 0o077 != 0
     {
         return Err(LinuxEncryptedStageRestartError::Invalid("stage file invariants"));
@@ -504,7 +506,9 @@ fn persist_sorted_encrypted_spill_restart_stage(
         .map_err(|_| LinuxEncryptedStageRestartError::Io("stage metadata"))?;
     if !metadata.file_type().is_file()
         || metadata.nlink() != 1
-        || metadata.uid() != linux_nonce_effective_uid()?
+        || metadata.uid()
+        != linux_nonce_effective_uid()
+            .map_err(|error| LinuxEncryptedStageRestartError::Journal(error.to_string()))?
         || metadata.permissions().mode() & 0o077 != 0
         || metadata.len() != copied
     {
