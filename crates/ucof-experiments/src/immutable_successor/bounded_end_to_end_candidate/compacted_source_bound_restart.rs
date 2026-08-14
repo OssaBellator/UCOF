@@ -60,6 +60,13 @@ fn prepare_compacted_source_bound_encrypted_tree_restart(
         crashed_generation,
         &disposition,
     )?;
+    if crashed_nonce_record.generation != manifest.generation
+        || crashed_nonce_record.key_id != manifest.key_id
+        || crashed_nonce_record.nonce_prefix != manifest.nonce_prefix
+        || crashed_nonce_record.operation_id != manifest.operation_id
+    {
+        return Err("compacted restart manifest/nonce context".into());
+    }
     verify_manifest_bound_stage_identity(
         &persisted_stage,
         manifest,
