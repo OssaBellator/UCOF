@@ -110,7 +110,6 @@ impl<S: ImmutableStreamingPayloadSource> Iterator for DescriptorRecords<'_, S> {
     }
 }
 
-#[derive(Debug)]
 struct BoundedPreflight {
     descriptor_stage: FixedStage,
     descriptor_spill: BoundedSpillSortReport,
@@ -239,7 +238,7 @@ where
     let expected_pages = preflight.expected_pages;
     let expected_root_level = preflight.expected_root_level;
     let object_count = preflight.object_count;
-    let mut descriptor_stage = preflight.descriptor_stage;
+    let descriptor_stage = preflight.descriptor_stage;
 
     let mut sink = StreamingSink::new(writer, options.output.max_write_request_bytes)
         .map_err(|error| error.to_string())?;
