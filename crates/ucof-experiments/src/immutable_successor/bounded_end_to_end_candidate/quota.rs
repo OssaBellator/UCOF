@@ -172,14 +172,20 @@ fn enforce_encrypted_private_storage_limit(
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[derive(Clone, Copy)]
+struct EncryptedPrivateWriterSettings {
+    options: ImmutableSourceStreamingWriteOptions,
+    limits: ImmutableLimits,
+    max_private_storage_bytes: u64,
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn write_genesis_sources_with_encrypted_descriptor_private_quota_candidate<W, S>(
     writer: &mut W,
     sources: &mut [S],
     directory: &Path,
-    options: ImmutableSourceStreamingWriteOptions,
-    limits: ImmutableLimits,
     spill_limits: BoundedSpillSortLimits,
-    max_private_storage_bytes: u64,
+    settings: EncryptedPrivateWriterSettings,
     session: &mut DescriptorEncryptionSession,
 ) -> CandidateResult<(EncryptedPrivateStoragePlan, EndToEndEvidence)>
 where
@@ -189,14 +195,14 @@ where
     let plan = enforce_encrypted_private_storage_limit(
         sources.len(),
         spill_limits,
-        max_private_storage_bytes,
+        settings.max_private_storage_bytes,
     )?;
     let evidence = write_genesis_sources_end_to_end_encrypted_descriptor_candidate(
         writer,
         sources,
         directory,
-        options,
-        limits,
+        settings.options,
+        settings.limits,
         spill_limits,
         session,
     )?;
