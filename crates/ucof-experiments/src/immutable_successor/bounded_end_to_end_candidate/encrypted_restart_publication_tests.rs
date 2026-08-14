@@ -112,20 +112,19 @@ impl super::PersistentStagingBackend for RestartPublicationTestBackend {
     }
 }
 
-fn restart_publication_fixture(
-    label: &str,
-    object_count: u64,
-) -> (
-    super::TestDirectory,
-    super::TestDirectory,
-    super::TestDirectory,
-    [u8; 32],
-    [u8; 4],
-    LinuxEncryptedStageRestartLimits,
-    Vec<super::TinySource>,
-    Vec<u8>,
-    super::ImmutableSourceStreamingWriteReport,
-) {
+struct RestartPublicationFixture {
+    journal_directory: super::TestDirectory,
+    stage_directory: super::TestDirectory,
+    work_directory: super::TestDirectory,
+    aes_key: [u8; 32],
+    nonce_prefix: [u8; 4],
+    restart_limits: LinuxEncryptedStageRestartLimits,
+    sources: Vec<super::TinySource>,
+    baseline: Vec<u8>,
+    baseline_report: super::ImmutableSourceStreamingWriteReport,
+}
+
+fn restart_publication_fixture(label: &str, object_count: u64) -> RestartPublicationFixture {
     let (journal_directory, stage_directory, aes_key, nonce_prefix, restart_limits, persisted) =
         prepared_encrypted_restart_stage(
             label,
@@ -147,7 +146,7 @@ fn restart_publication_fixture(
         super::ImmutableLimits::default(),
     )
     .expect("restart publication baseline");
-    (
+    RestartPublicationFixture {
         journal_directory,
         stage_directory,
         work_directory,
@@ -157,13 +156,13 @@ fn restart_publication_fixture(
         sources,
         baseline,
         baseline_report,
-    )
+    }
 }
 
 #[test]
 fn only_parent_synced_restart_publication_returns_durable_cleanup_capability() {
     const OBJECTS: u64 = 11;
-    let (
+    let RestartPublicationFixture {
         journal_directory,
         stage_directory,
         work_directory,
@@ -173,7 +172,7 @@ fn only_parent_synced_restart_publication_returns_durable_cleanup_capability() {
         mut sources,
         baseline,
         baseline_report,
-    ) = restart_publication_fixture("restart-publication-durable", OBJECTS);
+    } = restart_publication_fixture("restart-publication-durable", OBJECTS);
     let journal = open_journal(&journal_directory.0, &aes_key, nonce_prefix);
     let mut backend = RestartPublicationTestBackend::new(super::PersistentPublicationLinkOutcome::Linked);
     let outcome = stage_and_publish_verified_encrypted_restart(
@@ -212,7 +211,7 @@ fn only_parent_synced_restart_publication_returns_durable_cleanup_capability() {
 #[test]
 fn destination_exists_never_returns_durable_restart_publication() {
     const OBJECTS: u64 = 7;
-    let (
+    let RestartPublicationFixture {
         journal_directory,
         stage_directory,
         work_directory,
@@ -220,9 +219,8 @@ fn destination_exists_never_returns_durable_restart_publication() {
         nonce_prefix,
         restart_limits,
         mut sources,
-        _,
-        _,
-    ) = restart_publication_fixture("restart-publication-exists", OBJECTS);
+        ..
+    } = restart_publication_fixture("restart-publication-exists", OBJECTS);
     let journal = open_journal(&journal_directory.0, &aes_key, nonce_prefix);
     let mut backend = RestartPublicationTestBackend::new(
         super::PersistentPublicationLinkOutcome::DestinationExists,
@@ -261,7 +259,7 @@ fn destination_exists_never_returns_durable_restart_publication() {
 #[test]
 fn failed_parent_sync_is_indeterminate_and_cannot_be_cleanup_authority() {
     const OBJECTS: u64 = 5;
-    let (
+    let RestartPublicationFixture {
         journal_directory,
         stage_directory,
         work_directory,
@@ -270,8 +268,8 @@ fn failed_parent_sync_is_indeterminate_and_cannot_be_cleanup_authority() {
         restart_limits,
         mut sources,
         baseline,
-        _,
-    ) = restart_publication_fixture("restart-publication-parent-sync", OBJECTS);
+        ..
+    } = restart_publication_fixture("restart-publication-parent-sync", OBJECTS);
     let journal = open_journal(&journal_directory.0, &aes_key, nonce_prefix);
     let mut backend = RestartPublicationTestBackend::new(super::PersistentPublicationLinkOutcome::Linked);
     backend.fail_sync_parent = true;

@@ -9,7 +9,7 @@ struct DurableEncryptedRestartPublication {
 #[derive(Debug)]
 enum EncryptedRestartPublicationOutcome {
     NotPublishedDestinationExists,
-    PublishedAndDurable(DurableEncryptedRestartPublication),
+    PublishedAndDurable(Box<DurableEncryptedRestartPublication>),
     PublicationIndeterminate {
         stage: super::PersistentPublicationStage,
     },
@@ -121,7 +121,7 @@ where
                 });
             }
             let cleanup_pending = backend.retire_private().is_err();
-            Ok(EncryptedRestartPublicationOutcome::PublishedAndDurable(
+            Ok(EncryptedRestartPublicationOutcome::PublishedAndDurable(Box::new(
                 DurableEncryptedRestartPublication {
                     continuation,
                     output_length: expected_length,
