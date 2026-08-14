@@ -4,7 +4,7 @@ use crate::bounded_spill_sort::{
 use std::io::{BufWriter, Error as IoError, ErrorKind as IoErrorKind, Result as IoResult};
 
 const ENCRYPTED_SORTER_KEY_BYTES: usize = 8;
-const ENCRYPTED_SORTER_PAYLOAD_BYTES: usize = ENCRYPTED_SORTER_KEY_BYTES
+pub(super) const ENCRYPTED_SORTER_PAYLOAD_BYTES: usize = ENCRYPTED_SORTER_KEY_BYTES
     + ENCRYPTED_DESCRIPTOR_NONCE_BYTES
     + DESCRIPTOR_STAGE_BYTES
     + ENCRYPTED_DESCRIPTOR_TAG_BYTES;
@@ -12,7 +12,7 @@ pub(super) const ENCRYPTED_SORTER_FRAME_BYTES: usize = 8 + ENCRYPTED_SORTER_PAYL
 const SORTER_AAD_DOMAIN: &[u8] = b"UCOF-EXP-0171-SPILL\0";
 
 #[derive(Clone, Copy)]
-struct DescriptorCryptoContext {
+pub(super) struct DescriptorCryptoContext {
     key: [u8; 32],
     nonce_prefix: [u8; 4],
     operation_id: [u8; 16],
@@ -20,7 +20,7 @@ struct DescriptorCryptoContext {
 }
 
 impl DescriptorCryptoContext {
-    fn from_session(session: &DescriptorEncryptionSession) -> Self {
+    pub(super) fn from_session(session: &DescriptorEncryptionSession) -> Self {
         Self {
             key: session.key,
             nonce_prefix: session.nonce_prefix,
@@ -248,14 +248,13 @@ pub(super) fn sort_encrypted_descriptors_to_retained_stage<I>(
     records: I,
     plaintext_limits: BoundedSpillSortLimits,
     expected_records: usize,
-    spill_session: &DescriptorEncryptionSession,
+    spill_context: DescriptorCryptoContext,
     retained_session: &mut DescriptorEncryptionSession,
 ) -> CandidateResult<(EncryptedDescriptorStage, BoundedSpillSortReport)>
 where
     I: IntoIterator<Item = BoundedSpillRecord>,
 {
     let limits = encrypted_sorter_limits(plaintext_limits)?;
-    let spill_context = DescriptorCryptoContext::from_session(spill_session);
     let mut output = EncryptedSorterOutput::create(directory, spill_context, retained_session)?;
     let report = bounded_spill_sort_to(directory, records, &mut output, limits)
         .map_err(|error| error.to_string())?;
