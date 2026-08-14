@@ -222,39 +222,3 @@ fn verify_restart_source_set_authority(
     }
     Ok(record)
 }
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum SourceBoundRestartPersistCut {
-    AfterStageManifestBeforeSourceSet,
-    Complete,
-}
-
-fn persist_sorted_encrypted_spill_restart_stage_with_source_set(
-    journal: &LinuxDurableNonceJournal,
-    stage_directory_path: &Path,
-    preflight: &EncryptedSpillPreflight,
-    session: &DescriptorEncryptionSession,
-    limits: LinuxEncryptedStageRestartLimits,
-    source_set_id: [u8; 32],
-    cut: SourceBoundRestartPersistCut,
-) -> super::CandidateResult<(LinuxEncryptedStageManifest, Option<RestartSourceSetAuthority>)> {
-    let manifest = persist_sorted_encrypted_spill_restart_stage(
-        journal,
-        stage_directory_path,
-        preflight,
-        session,
-        limits,
-        EncryptedStageManifestCommitCut::Complete,
-    )
-    .map_err(|error| error.to_string())?;
-    if cut == SourceBoundRestartPersistCut::AfterStageManifestBeforeSourceSet {
-        return Ok((manifest, None));
-    }
-    let source_authority = persist_restart_source_set_authority(
-        journal,
-        manifest,
-        source_set_id,
-        preflight.object_count,
-    )?;
-    Ok((manifest, Some(source_authority)))
-}
