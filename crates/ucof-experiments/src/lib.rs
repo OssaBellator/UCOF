@@ -29,7 +29,7 @@ mod mixed_reference_plan;
 mod mixed_tree_plan;
 mod mixed_update_plan;
 #[cfg(test)]
-mod private_stage_crypto_contract;
+mod private_stage_crypto_contract_v2;
 mod publication;
 mod recovery;
 mod repair;
