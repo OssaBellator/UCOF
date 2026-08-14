@@ -124,6 +124,18 @@ def require_file(path: Path) -> None:
         raise VerificationFailure(f"required file is missing: {path.relative_to(ROOT)}")
 
 
+def verify_acceptance_candidate(runner: Runner) -> None:
+    sha = _capture_optional(["git", "rev-parse", "HEAD"])
+    if not sha:
+        raise VerificationFailure("acceptance requires a resolvable Git HEAD")
+    dirty = _capture_optional(["git", "status", "--porcelain"])
+    if dirty is None:
+        raise VerificationFailure("acceptance requires Git worktree status")
+    if dirty:
+        raise VerificationFailure("acceptance requires a clean worktree")
+    runner.record_static("Pinned clean acceptance candidate", sha)
+
+
 def verify_wiring(runner: Runner) -> None:
     parent = ROOT / "crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate.rs"
     require_file(parent)
@@ -137,6 +149,7 @@ def verify_wiring(runner: Runner) -> None:
         "restart_metadata_compaction_retry_tests.rs",
         "restart_metadata_compaction_graph_tests.rs",
         "restart_metadata_compaction_property_tests.rs",
+        "restart_metadata_compaction_accounting_tests.rs",
         "compacted_restart_retry_tests.rs",
         "compacted_private_lifecycle_quota_tests.rs",
     ]
@@ -375,6 +388,8 @@ def main() -> int:
     runner = Runner(report_path, args.offline)
     skips: list[str] = []
     try:
+        if args.acceptance:
+            verify_acceptance_candidate(runner)
         verify_wiring(runner)
         run_model(runner, args.campaigns, args.steps)
         if not args.model_only:
