@@ -272,7 +272,7 @@ fn transcode_sorted_encrypted_spill_stage(
     let key = descriptor_key(&session.key)?;
     let mut previous_object_id = None;
     let mut first_counter = None;
-    let mut previous_retained_counter = None;
+    let mut previous_retained_counter: Option<u64> = None;
 
     for sequence_index in 0..spill_stage.records {
         let mut frame = [0u8; ENCRYPTED_DESCRIPTOR_SPILL_PAYLOAD_BYTES];
