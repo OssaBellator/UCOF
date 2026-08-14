@@ -373,7 +373,10 @@ mod tests {
         let execution =
             activate_cleanup_prepared(durable, pending, true).expect("activate prepared");
         assert_eq!(
-            restart_disposition(execution.journal, RestartNameObservation::MissingScanTruncated,),
+            restart_disposition(
+                execution.journal,
+                RestartNameObservation::MissingScanTruncated,
+            ),
             RestartDisposition::RetainIndeterminate
         );
         assert_eq!(
