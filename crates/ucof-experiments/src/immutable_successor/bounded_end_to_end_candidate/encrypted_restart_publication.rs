@@ -128,7 +128,7 @@ where
                     output_sha256: staged_sha256,
                     cleanup_pending,
                 },
-            ))
+            )))
         }
     }
 }
