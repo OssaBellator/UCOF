@@ -48,8 +48,8 @@ impl NonceCompactionCheckpoint {
         bytes[16..32].copy_from_slice(&self.key_id);
         bytes[32..36].copy_from_slice(&self.nonce_prefix);
         bytes[40..48].copy_from_slice(&self.generation.to_le_bytes());
-        if let Some(next) = self.next_unreserved {
-            bytes[48..56].copy_from_slice(&next.to_le_bytes());
+        if let Some(next_unreserved) = self.next_unreserved {
+            bytes[48..56].copy_from_slice(&next_unreserved.to_le_bytes());
         }
         Ok(bytes)
     }
@@ -75,11 +75,10 @@ impl NonceCompactionCheckpoint {
         );
         let next_unreserved = if bytes[9] == 1 {
             Some(encoded_next)
-        } else {
-            if encoded_next != 0 {
-                return Err("nonce compaction exhausted counter encoding".into());
-            }
+        } else if encoded_next == 0 {
             None
+        } else {
+            return Err("nonce compaction exhausted counter encoding".into());
         };
         let checkpoint = Self {
             key_id: bytes[16..32].try_into().expect("nonce compaction key id"),
@@ -154,11 +153,11 @@ fn read_compaction_exact<const N: usize>(
     journal: &LinuxDurableNonceJournal,
     name: &OsStr,
     label: &'static str,
-) -> super::CandidateResult<[u8; N]> {
+) -> super::CandidateResult<Option<[u8; N]>> {
     let Some(mut file) = linux_nonce_open_relative_readonly(&journal.directory, name)
         .map_err(|error| error.to_string())?
     else {
-        return Err(format!("{label} disappeared"));
+        return Ok(None);
     };
     let metadata = file.metadata().map_err(|error| error.to_string())?;
     if !metadata.file_type().is_file()
@@ -172,7 +171,7 @@ fn read_compaction_exact<const N: usize>(
     if file.read(&mut trailing).map_err(|error| error.to_string())? != 0 {
         return Err(format!("{label} exact end"));
     }
-    Ok(bytes)
+    Ok(Some(bytes))
 }
 
 fn load_nonce_compaction_checkpoint(
@@ -180,16 +179,14 @@ fn load_nonce_compaction_checkpoint(
     generation: u64,
 ) -> super::CandidateResult<Option<NonceCompactionCheckpoint>> {
     let name = nonce_compaction_name(generation);
-    let Some(_) = linux_nonce_open_relative_readonly(&journal.directory, &name)
-        .map_err(|error| error.to_string())?
-    else {
-        return Ok(None);
-    };
-    let sealed = read_compaction_exact::<NONCE_COMPACTION_BYTES>(
+    let Some(sealed) = read_compaction_exact::<NONCE_COMPACTION_BYTES>(
         journal,
         &name,
         "nonce compaction checkpoint",
-    )?;
+    )?
+    else {
+        return Ok(None);
+    };
     let checkpoint = open_nonce_compaction_checkpoint(journal, &sealed)?;
     if checkpoint.generation != generation {
         return Err("nonce compaction filename generation".into());
@@ -252,39 +249,17 @@ impl<'a> CompactedNonceJournal<'a> {
             if records.len() >= self.journal.limits.max_generations {
                 return Err("compacted nonce generation limit".into());
             }
-            let file = linux_nonce_open_relative_readonly(&self.journal.directory, &name)
-                .map_err(|error| error.to_string())?
-                .ok_or_else(|| "compacted nonce journal disappeared".to_owned())?;
-            let metadata = file.metadata().map_err(|error| error.to_string())?;
-            if !metadata.file_type().is_file()
-                || metadata.len()
-                    != u64::try_from(LINUX_NONCE_JOURNAL_BYTES).expect("journal width")
-            {
-                return Err("compacted nonce journal file shape".into());
-            }
+            let record = load_nonce_generation_record(self.journal, generation)
+                .map_err(|error| error.to_string())?;
             journal_bytes_read = journal_bytes_read
-                .checked_add(metadata.len())
+                .checked_add(u64::try_from(LINUX_NONCE_JOURNAL_BYTES).expect("journal width"))
                 .ok_or_else(|| "compacted nonce journal bytes".to_owned())?;
             if journal_bytes_read > self.journal.limits.max_journal_bytes {
                 return Err("compacted nonce byte limit".into());
             }
             bytes_read = bytes_read
-                .checked_add(metadata.len())
+                .checked_add(u64::try_from(LINUX_NONCE_JOURNAL_BYTES).expect("journal width"))
                 .ok_or_else(|| "compacted nonce bytes".to_owned())?;
-            let sealed = linux_nonce_read_exact_file(file).map_err(|error| error.to_string())?;
-            let record = self
-                .journal
-                .open_record(&sealed)
-                .map_err(|error| error.to_string())?;
-            if record.generation != generation {
-                return Err("compacted nonce filename generation".into());
-            }
-            if record.key_id != self.journal.key_id {
-                return Err("compacted nonce foreign key".into());
-            }
-            if record.nonce_prefix != self.journal.nonce_prefix {
-                return Err("compacted nonce foreign prefix".into());
-            }
             records.push(record);
         }
 
@@ -292,9 +267,7 @@ impl<'a> CompactedNonceJournal<'a> {
         for pair in checkpoints.windows(2) {
             let previous = pair[0];
             let next = pair[1];
-            if next.generation <= previous.generation
-                || !linux_nonce_at_least(previous.next_unreserved, next.next_unreserved)
-            {
+            if !linux_nonce_at_least(previous.next_unreserved, next.next_unreserved) {
                 return Err("nonce compaction checkpoint rollback".into());
             }
         }
@@ -358,9 +331,8 @@ impl<'a> CompactedNonceJournal<'a> {
         &self,
         trusted_floor: Option<TrustedNonceFloor>,
     ) -> super::CandidateResult<DescriptorNonceAuthority> {
-        let recovery = self.scan(trusted_floor)?;
         Ok(DescriptorNonceAuthority {
-            durable: recovery.durable,
+            durable: self.scan(trusted_floor)?.durable,
         })
     }
 
@@ -375,8 +347,7 @@ impl<'a> CompactedNonceJournal<'a> {
         if linux_nonce_key_id(&aes_key) != self.journal.key_id {
             return Err("compacted nonce foreign key".into());
         }
-        let observed = self.scan(None)?.durable;
-        if observed != authority.durable {
+        if self.scan(None)?.durable != authority.durable {
             return Err("compacted nonce stale authority".into());
         }
         let pending = reserve_nonce_lease(
@@ -510,9 +481,6 @@ fn scan_compaction_metadata(
             let manifest = load_encrypted_stage_manifest(journal, generation, role)
                 .map_err(|error| error.to_string())?
                 .ok_or_else(|| "compaction stage manifest disappeared".to_owned())?;
-            if manifest.generation != generation || manifest.role != role {
-                return Err("compaction stage manifest identity".into());
-            }
             if inventory.live_manifests.insert(generation, manifest).is_some() {
                 return Err("compaction duplicate live manifest generation".into());
             }
@@ -522,15 +490,15 @@ fn scan_compaction_metadata(
         if name_bytes.starts_with(ENCRYPTED_RETIREMENT_PREFIX.as_bytes())
             && name_bytes.ends_with(ENCRYPTED_RETIREMENT_SUFFIX.as_bytes())
         {
-            let sealed = read_compaction_exact::<ENCRYPTED_RETIREMENT_BYTES>(
+            let Some(sealed) = read_compaction_exact::<ENCRYPTED_RETIREMENT_BYTES>(
                 journal,
                 &name,
                 "compaction retirement",
-            )?;
+            )?
+            else {
+                return Err("compaction retirement disappeared".into());
+            };
             let record = open_encrypted_retirement_record(journal, &sealed)?;
-            if record.key_id != journal.key_id || record.nonce_prefix != journal.nonce_prefix {
-                return Err("compaction retirement context".into());
-            }
             if encrypted_retirement_name(
                 record.crashed_generation,
                 record.fresh_generation,
@@ -554,15 +522,15 @@ fn scan_compaction_metadata(
         if name_bytes.starts_with(RESTART_SOURCE_SET_PREFIX.as_bytes())
             && name_bytes.ends_with(RESTART_SOURCE_SET_SUFFIX.as_bytes())
         {
-            let sealed = read_compaction_exact::<RESTART_SOURCE_SET_BYTES>(
+            let Some(sealed) = read_compaction_exact::<RESTART_SOURCE_SET_BYTES>(
                 journal,
                 &name,
                 "compaction source-set",
-            )?;
+            )?
+            else {
+                return Err("compaction source-set disappeared".into());
+            };
             let record = open_restart_source_set_authority(journal, &sealed)?;
-            if record.key_id != journal.key_id || record.nonce_prefix != journal.nonce_prefix {
-                return Err("compaction source-set context".into());
-            }
             if restart_source_set_authority_name(record.generation, record.role) != name {
                 return Err("compaction source-set canonical name".into());
             }
@@ -630,19 +598,16 @@ fn scan_compaction_metadata(
         .iter()
         .map(|(crashed, _)| *crashed)
         .collect();
-
     for manifest in inventory.live_manifests.values().copied() {
         let nonce_record = load_nonce_generation_record(journal, manifest.generation)
             .map_err(|error| error.to_string())?;
-        if nonce_record.generation != manifest.generation
-            || nonce_record.key_id != manifest.key_id
+        if nonce_record.key_id != manifest.key_id
             || nonce_record.nonce_prefix != manifest.nonce_prefix
             || nonce_record.operation_id != manifest.operation_id
         {
             return Err("compaction live manifest/nonce mismatch".into());
         }
     }
-
     for (_, source_set) in &inventory.source_sets {
         if let Some(manifest) = inventory.live_manifests.get(&source_set.generation) {
             if source_set.role != manifest.role
@@ -863,15 +828,19 @@ fn compact_restart_metadata(
             return Err("compaction retirement generation ahead of nonce authority".into());
         }
     }
-    for generation in metadata.live_manifests.keys().copied() {
-        if generation > recovery.durable.generation {
-            return Err("compaction live manifest ahead of nonce authority".into());
-        }
+    if metadata
+        .live_manifests
+        .keys()
+        .any(|generation| *generation > recovery.durable.generation)
+    {
+        return Err("compaction live manifest ahead of nonce authority".into());
     }
-    for (_, source_set) in &metadata.source_sets {
-        if source_set.generation > recovery.durable.generation {
-            return Err("compaction source-set ahead of nonce authority".into());
-        }
+    if metadata
+        .source_sets
+        .iter()
+        .any(|(_, source_set)| source_set.generation > recovery.durable.generation)
+    {
+        return Err("compaction source-set ahead of nonce authority".into());
     }
 
     let terminal_crashed: std::collections::BTreeSet<u64> = metadata
@@ -883,28 +852,8 @@ fn compact_restart_metadata(
         .prepared_pairs
         .difference(&metadata.terminal_pairs)
         .count();
-    let mut protected_nonce_generations: std::collections::BTreeSet<u64> =
+    let protected_nonce_generations: std::collections::BTreeSet<u64> =
         metadata.live_manifests.keys().copied().collect();
-    for (_, source_set) in &metadata.source_sets {
-        if !terminal_crashed.contains(&source_set.generation) {
-            protected_nonce_generations.insert(source_set.generation);
-        }
-    }
-    for (crashed, fresh) in metadata
-        .prepared_pairs
-        .difference(&metadata.terminal_pairs)
-        .copied()
-    {
-        protected_nonce_generations.insert(crashed);
-        protected_nonce_generations.insert(fresh);
-    }
-    for generation in protected_nonce_generations.iter().copied() {
-        let record = load_nonce_generation_record(journal, generation)
-            .map_err(|error| error.to_string())?;
-        if record.generation != generation {
-            return Err("compaction protected nonce generation mismatch".into());
-        }
-    }
 
     let checkpoint = NonceCompactionCheckpoint::from_durable(journal, recovery.durable)?;
     persist_nonce_compaction_checkpoint(journal, checkpoint, cut)?;
