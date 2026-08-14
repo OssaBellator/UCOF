@@ -307,19 +307,28 @@ fn prepare_encrypted_restart_retirement(
     Ok(record)
 }
 
-fn retirement_actionable_name(
+#[derive(Clone, Debug, PartialEq, Eq)]
+enum EncryptedRetirementTarget {
+    Present(OsString),
+    Absent,
+}
+
+fn retirement_actionable_target(
     report: &EncryptedStageInventoryReport,
     expected_name: &OsStr,
-) -> Option<Option<OsString>> {
+) -> Option<EncryptedRetirementTarget> {
     match report.observation {
         crate::private_cleanup_restart_inventory::InventoryObservation::ExactIdentity => {
-            Some(Some(expected_name.to_os_string()))
+            Some(EncryptedRetirementTarget::Present(expected_name.to_os_string()))
         }
         crate::private_cleanup_restart_inventory::InventoryObservation::MissingMatchingIdentityElsewhere => {
-            report.matched_name.clone().map(Some)
+            report
+                .matched_name
+                .clone()
+                .map(EncryptedRetirementTarget::Present)
         }
         crate::private_cleanup_restart_inventory::InventoryObservation::MissingNoMatchingIdentityCompleteScan => {
-            Some(None)
+            Some(EncryptedRetirementTarget::Absent)
         }
         crate::private_cleanup_restart_inventory::InventoryObservation::DifferentIdentity
         | crate::private_cleanup_restart_inventory::InventoryObservation::MissingScanTruncated
@@ -391,14 +400,14 @@ fn execute_encrypted_restart_retirement(
         limits,
     )
     .map_err(|error| error.to_string())?;
-    let Some(stage_action) = retirement_actionable_name(&stage_report, &stage_name) else {
+    let Some(stage_action) = retirement_actionable_target(&stage_report, &stage_name) else {
         return Ok(EncryptedRetirementOutcome::RetainIndeterminate);
     };
-    let Some(manifest_action) = retirement_actionable_name(&manifest_report, &manifest_name) else {
+    let Some(manifest_action) = retirement_actionable_target(&manifest_report, &manifest_name) else {
         return Ok(EncryptedRetirementOutcome::RetainIndeterminate);
     };
 
-    if let Some(name) = stage_action {
+    if let EncryptedRetirementTarget::Present(name) = stage_action {
         unlink_identity_bound_target(
             &stage_directory,
             &name,
@@ -409,7 +418,7 @@ fn execute_encrypted_restart_retirement(
     if cut == EncryptedRetirementCut::AfterStageUnlinkBeforeDirectorySync {
         return Ok(EncryptedRetirementOutcome::Cut(cut));
     }
-    if let Some(name) = manifest_action {
+    if let EncryptedRetirementTarget::Present(name) = manifest_action {
         unlink_identity_bound_target(
             &journal.directory,
             &name,
