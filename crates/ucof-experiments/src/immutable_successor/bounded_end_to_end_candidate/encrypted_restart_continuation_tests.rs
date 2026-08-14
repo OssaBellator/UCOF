@@ -34,13 +34,15 @@ fn exact_verified_restart_stage_continues_to_canonical_output_with_fresh_lease()
         &work_directory.0,
         &mut resumed,
         &mut resumed_sources,
+        EncryptedRestartContinuationSettings {
         aes_key,
-        1,
-        None,
+        crashed_generation: 1,
+        trusted_floor: None,
         restart_limits,
-        super::options(),
+        options: super::options(),
         limits,
-        [0x73; 16],
+        fresh_operation_id: [0x73; 16],
+    },
     )
     .expect("fresh-lease restart continuation");
 
@@ -114,13 +116,15 @@ fn renamed_verified_restart_stage_continues_to_same_canonical_output() {
         &work_directory.0,
         &mut resumed,
         &mut resumed_sources,
+        EncryptedRestartContinuationSettings {
         aes_key,
-        1,
-        None,
+        crashed_generation: 1,
+        trusted_floor: None,
         restart_limits,
-        super::options(),
+        options: super::options(),
         limits,
-        [0x74; 16],
+        fresh_operation_id: [0x74; 16],
+    },
     )
     .expect("renamed fresh-lease continuation");
     assert_eq!(resumed, baseline);
@@ -158,13 +162,15 @@ fn unmanifested_durable_stage_does_not_allocate_fresh_restart_lease() {
         &work_directory.0,
         &mut output,
         &mut sources,
+        EncryptedRestartContinuationSettings {
         aes_key,
-        1,
-        None,
+        crashed_generation: 1,
+        trusted_floor: None,
         restart_limits,
-        super::options(),
-        super::ImmutableLimits::default(),
-        [0x75; 16],
+        options: super::options(),
+        limits: super::ImmutableLimits::default(),
+        fresh_operation_id: [0x75; 16],
+    },
     )
     .expect_err("unmanifested stage must not continue");
     assert!(error.contains("no durable manifest"));
@@ -197,13 +203,15 @@ fn source_mismatch_after_fresh_lease_burns_new_range_without_old_nonce_reuse() {
         &work_directory.0,
         &mut output,
         &mut wrong_order_sources,
+        EncryptedRestartContinuationSettings {
         aes_key,
-        1,
-        None,
+        crashed_generation: 1,
+        trusted_floor: None,
         restart_limits,
-        super::options(),
-        super::ImmutableLimits::default(),
-        [0x76; 16],
+        options: super::options(),
+        limits: super::ImmutableLimits::default(),
+        fresh_operation_id: [0x76; 16],
+    },
     )
     .expect_err("source index mismatch must fail");
     assert!(error.contains("metadata changed"));

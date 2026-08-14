@@ -71,16 +71,23 @@ fn open_verified_restart_stage(
     Ok((manifest, nonce_record, file))
 }
 
+#[derive(Clone, Copy)]
+struct RestartTranscodeSettings {
+    options: super::ImmutableSourceStreamingWriteOptions,
+    limits: super::ImmutableLimits,
+}
+
 fn transcode_restart_spill_with_fresh_session(
     work_directory: &Path,
     persisted_stage: &File,
     manifest: LinuxEncryptedStageManifest,
     nonce_record: LinuxNonceJournalRecord,
     aes_key: &[u8; 32],
-    options: super::ImmutableSourceStreamingWriteOptions,
-    limits: super::ImmutableLimits,
+    settings: RestartTranscodeSettings,
     fresh_session: &mut DescriptorEncryptionSession,
 ) -> super::CandidateResult<(EncryptedDescriptorStage, RestartRecoveredPreflight)> {
+    let options = settings.options;
+    let limits = settings.limits;
     if manifest.role != EncryptedRestartStageRole::SortedDescriptorSpill
         || manifest.key_id != linux_nonce_key_id(aes_key)
         || nonce_record.key_id != manifest.key_id
@@ -320,12 +327,8 @@ fn transcode_restart_spill_with_fresh_session(
     ))
 }
 
-fn continue_verified_encrypted_spill_with_fresh_lease<W, S>(
-    journal: &LinuxDurableNonceJournal,
-    stage_directory_path: &Path,
-    work_directory: &Path,
-    writer: &mut W,
-    sources: &mut [S],
+#[derive(Clone, Copy)]
+struct EncryptedRestartContinuationSettings {
     aes_key: [u8; 32],
     crashed_generation: u64,
     trusted_floor: Option<TrustedNonceFloor>,
@@ -333,11 +336,29 @@ fn continue_verified_encrypted_spill_with_fresh_lease<W, S>(
     options: super::ImmutableSourceStreamingWriteOptions,
     limits: super::ImmutableLimits,
     fresh_operation_id: [u8; 16],
+}
+
+fn continue_verified_encrypted_spill_with_fresh_lease<W, S>(
+    journal: &LinuxDurableNonceJournal,
+    stage_directory_path: &Path,
+    work_directory: &Path,
+    writer: &mut W,
+    sources: &mut [S],
+    settings: EncryptedRestartContinuationSettings,
 ) -> super::CandidateResult<EncryptedRestartContinuationEvidence>
 where
     W: Write,
     S: super::ImmutableStreamingPayloadSource,
 {
+    let EncryptedRestartContinuationSettings {
+        aes_key,
+        crashed_generation,
+        trusted_floor,
+        restart_limits,
+        options,
+        limits,
+        fresh_operation_id,
+    } = settings;
     let (disposition, _) = classify_encrypted_spill_restart(
         journal,
         stage_directory_path,
@@ -407,8 +428,7 @@ where
         manifest,
         crashed_nonce_record,
         &aes_key,
-        options,
-        limits,
+        RestartTranscodeSettings { options, limits },
         &mut fresh_session,
     )?;
     if fresh_session.remaining() != 0 {
