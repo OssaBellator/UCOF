@@ -234,8 +234,10 @@ fn metadata_failure_after_completed_run_fails_before_output_and_cleans_stages() 
 fn output_limit_after_descriptor_sort_fails_before_output_and_cleans_stages() {
     let directory = TestDirectory::new("output-limit");
     let mut sources = [TinySource::new(2), TinySource::new(1)];
-    let mut limits = ImmutableLimits::default();
-    limits.max_output_bytes = FILE_HEADER_LEN;
+    let limits = ImmutableLimits {
+        max_output_bytes: FILE_HEADER_LEN,
+        ..ImmutableLimits::default()
+    };
     let mut output = Vec::new();
     let error = write_genesis_sources_end_to_end_bounded_candidate(
         &mut output,
