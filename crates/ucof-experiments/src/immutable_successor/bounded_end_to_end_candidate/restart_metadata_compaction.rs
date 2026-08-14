@@ -249,6 +249,12 @@ impl<'a> CompactedNonceJournal<'a> {
             if record.generation != generation {
                 return Err("compacted nonce filename generation".into());
             }
+            if record.key_id != self.journal.key_id {
+                return Err("compacted nonce foreign key".into());
+            }
+            if record.nonce_prefix != self.journal.nonce_prefix {
+                return Err("compacted nonce foreign prefix".into());
+            }
             records.push(record);
         }
 
@@ -263,12 +269,6 @@ impl<'a> CompactedNonceJournal<'a> {
         for record in records {
             if record.generation <= durable.generation {
                 continue;
-            }
-            if record.key_id != self.journal.key_id {
-                return Err("compacted nonce foreign key".into());
-            }
-            if record.nonce_prefix != self.journal.nonce_prefix {
-                return Err("compacted nonce foreign prefix".into());
             }
             if durable.generation.checked_add(1) != Some(record.generation)
                 || durable.next_unreserved != Some(record.lease_first)
@@ -515,6 +515,39 @@ fn remove_compaction_file(
     }
 }
 
+fn compaction_prune_names(
+    journal: &LinuxDurableNonceJournal,
+    checkpoint_generation: u64,
+) -> super::CandidateResult<(Vec<OsString>, Vec<OsString>)> {
+    let mut nonce_names = Vec::new();
+    let mut old_checkpoint_names = Vec::new();
+    let mut directory_entries = 0usize;
+    for entry in std::fs::read_dir(linux_nonce_procfd_directory(&journal.directory))
+        .map_err(|error| error.to_string())?
+    {
+        let entry = entry.map_err(|error| error.to_string())?;
+        directory_entries = directory_entries
+            .checked_add(1)
+            .ok_or_else(|| "compaction prune directory entries".to_owned())?;
+        if directory_entries > journal.limits.max_directory_entries {
+            return Err("compaction prune directory entry limit".into());
+        }
+        let name = entry.file_name();
+        if linux_nonce_parse_generation_name(&name)
+            .is_some_and(|generation| generation <= checkpoint_generation)
+        {
+            nonce_names.push(name);
+            continue;
+        }
+        if parse_nonce_compaction_name(&name)
+            .is_some_and(|generation| generation < checkpoint_generation)
+        {
+            old_checkpoint_names.push(name);
+        }
+    }
+    Ok((nonce_names, old_checkpoint_names))
+}
+
 fn compact_restart_metadata(
     journal: &LinuxDurableNonceJournal,
     trusted_floor: Option<TrustedNonceFloor>,
@@ -526,6 +559,10 @@ fn compact_restart_metadata(
         return Err("restart metadata compaction requires durable generation".into());
     }
     let metadata = scan_compaction_metadata(journal)?;
+    let preserved_prepared_retirements = metadata
+        .prepared_pairs
+        .difference(&metadata.terminal_pairs)
+        .count();
     let checkpoint = NonceCompactionCheckpoint::from_durable(journal, recovery.durable)?;
     persist_nonce_compaction_checkpoint(journal, checkpoint, cut)?;
     if cut == RestartMetadataCompactionCut::AfterCheckpointDirectorySyncBeforePrune {
@@ -535,10 +572,7 @@ fn compact_restart_metadata(
             pruned_retirement_records: 0,
             pruned_source_set_records: 0,
             pruned_old_checkpoints: 0,
-            preserved_prepared_retirements: metadata
-                .prepared_pairs
-                .difference(&metadata.terminal_pairs)
-                .count(),
+            preserved_prepared_retirements,
             preserved_source_set_records: metadata.source_sets.len(),
         });
     }
@@ -548,38 +582,34 @@ fn compact_restart_metadata(
         .iter()
         .map(|(crashed, _)| *crashed)
         .collect();
+    let (nonce_names, old_checkpoint_names) =
+        compaction_prune_names(journal, checkpoint.generation)?;
     let mut pruned_nonce_records = 0usize;
     let mut pruned_retirement_records = 0usize;
     let mut pruned_source_set_records = 0usize;
     let mut pruned_old_checkpoints = 0usize;
     let mut preserved_source_set_records = 0usize;
 
-    for generation in 1..=checkpoint.generation {
-        let name = OsString::from(linux_nonce_journal_name(generation));
-        if linux_nonce_open_relative_readonly(&journal.directory, &name)
-            .map_err(|error| error.to_string())?
-            .is_some()
-        {
-            remove_compaction_file(journal, &name)?;
-            pruned_nonce_records = pruned_nonce_records
-                .checked_add(1)
-                .ok_or_else(|| "pruned nonce record count".to_owned())?;
-        }
+    for name in nonce_names {
+        remove_compaction_file(journal, &name)?;
+        pruned_nonce_records = pruned_nonce_records
+            .checked_add(1)
+            .ok_or_else(|| "pruned nonce record count".to_owned())?;
     }
 
-    for (name, record) in metadata.retirement_files {
+    for (name, record) in &metadata.retirement_files {
         let pair = (record.crashed_generation, record.fresh_generation);
         if metadata.terminal_pairs.contains(&pair) {
-            remove_compaction_file(journal, &name)?;
+            remove_compaction_file(journal, name)?;
             pruned_retirement_records = pruned_retirement_records
                 .checked_add(1)
                 .ok_or_else(|| "pruned retirement record count".to_owned())?;
         }
     }
 
-    for (name, record) in metadata.source_sets {
+    for (name, record) in &metadata.source_sets {
         if terminal_crashed.contains(&record.generation) {
-            remove_compaction_file(journal, &name)?;
+            remove_compaction_file(journal, name)?;
             pruned_source_set_records = pruned_source_set_records
                 .checked_add(1)
                 .ok_or_else(|| "pruned source-set record count".to_owned())?;
@@ -590,20 +620,11 @@ fn compact_restart_metadata(
         }
     }
 
-    for entry in std::fs::read_dir(linux_nonce_procfd_directory(&journal.directory))
-        .map_err(|error| error.to_string())?
-    {
-        let entry = entry.map_err(|error| error.to_string())?;
-        let name = entry.file_name();
-        let Some(generation) = parse_nonce_compaction_name(&name) else {
-            continue;
-        };
-        if generation < checkpoint.generation {
-            remove_compaction_file(journal, &name)?;
-            pruned_old_checkpoints = pruned_old_checkpoints
-                .checked_add(1)
-                .ok_or_else(|| "pruned checkpoint count".to_owned())?;
-        }
+    for name in old_checkpoint_names {
+        remove_compaction_file(journal, &name)?;
+        pruned_old_checkpoints = pruned_old_checkpoints
+            .checked_add(1)
+            .ok_or_else(|| "pruned checkpoint count".to_owned())?;
     }
 
     if cut == RestartMetadataCompactionCut::AfterPruneBeforeDirectorySync {
@@ -613,10 +634,7 @@ fn compact_restart_metadata(
             pruned_retirement_records,
             pruned_source_set_records,
             pruned_old_checkpoints,
-            preserved_prepared_retirements: metadata
-                .prepared_pairs
-                .difference(&metadata.terminal_pairs)
-                .count(),
+            preserved_prepared_retirements,
             preserved_source_set_records,
         });
     }
@@ -628,10 +646,7 @@ fn compact_restart_metadata(
         pruned_retirement_records,
         pruned_source_set_records,
         pruned_old_checkpoints,
-        preserved_prepared_retirements: metadata
-            .prepared_pairs
-            .difference(&metadata.terminal_pairs)
-            .count(),
+        preserved_prepared_retirements,
         preserved_source_set_records,
     })
 }
