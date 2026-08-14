@@ -13,7 +13,7 @@ default = []
 http-reqwest = ["dep:reqwest", "dep:tokio"]
 
 [dependencies]
-aws-lc-rs = "=1.18.0"
+aws-lc-rs = { version = "=1.18.0", default-features = false }
 sha2 = "0.10"
 reqwest = { version = "0.13.4", default-features = false, features = ["rustls"], optional = true }
 tokio = { version = "1.53.1", features = ["io-util", "macros", "net", "rt", "sync", "time"], optional = true }
