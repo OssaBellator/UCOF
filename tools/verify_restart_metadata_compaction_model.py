@@ -315,6 +315,24 @@ class State:
             del self.nonce_records[record_generation]
 
         terminal_pairs = set(self.terminal)
+        terminal_crashed = {crashed for crashed, _ in terminal_pairs}
+        source_pruned = 0
+        for source_generation in list(self.source_sets):
+            if source_generation in terminal_crashed:
+                del self.source_sets[source_generation]
+                source_pruned += 1
+
+        if cut == "after_source_prune":
+            return {
+                "generation": generation,
+                "required": required,
+                "pruned_nonce": len(nonce_prune),
+                "preserved_nonce": len(protected.intersection(self.nonce_records)),
+                "pruned_retirement": 0,
+                "pruned_source": source_pruned,
+                "pruned_checkpoints": 0,
+            }
+
         retirement_pruned = 0
         for pair in list(self.prepared):
             if pair in terminal_pairs:
@@ -323,13 +341,6 @@ class State:
         for pair in list(self.terminal):
             del self.terminal[pair]
             retirement_pruned += 1
-
-        terminal_crashed = {crashed for crashed, _ in terminal_pairs}
-        source_pruned = 0
-        for source_generation in list(self.source_sets):
-            if source_generation in terminal_crashed:
-                del self.source_sets[source_generation]
-                source_pruned += 1
 
         old_checkpoints = [g for g in self.checkpoints if g < generation]
         for old in old_checkpoints:
@@ -437,6 +448,32 @@ def test_prepared_then_terminal_reclamation() -> None:
     assert second["pruned_nonce"] == 1
     assert second["pruned_retirement"] == 2
     assert second["pruned_source"] == 1
+    assert state.scan() == (2, 16)
+
+
+def test_source_prune_cut_is_retryable() -> None:
+    state = State()
+    state.commit(10)
+    state.add_live_restart(1, 5, 99)
+    state.commit(6)
+    state.add_prepared(1, 2, 123)
+    state.terminalize(1, 2)
+
+    cut = state.compact(cut="after_source_prune")
+    assert cut["pruned_nonce"] == 2
+    assert cut["pruned_source"] == 1
+    assert cut["pruned_retirement"] == 0
+    assert state.source_sets == {}
+    assert (1, 2) in state.prepared
+    assert (1, 2) in state.terminal
+    assert state.scan() == (2, 16)
+
+    retry = state.compact()
+    assert retry["pruned_nonce"] == 0
+    assert retry["pruned_source"] == 0
+    assert retry["pruned_retirement"] == 2
+    assert state.prepared == {}
+    assert state.terminal == {}
     assert state.scan() == (2, 16)
 
 
@@ -551,6 +588,7 @@ def run_all(campaigns: int, steps: int) -> dict:
     test_checkpoint_chain_rollback()
     test_graph_fail_closed()
     test_prepared_then_terminal_reclamation()
+    test_source_prune_cut_is_retryable()
     test_burn_compact_retry_terminal_lifecycle()
     test_trusted_floor_boundary()
     test_exact_quota()
@@ -558,7 +596,7 @@ def run_all(campaigns: int, steps: int) -> dict:
     for seed in range(campaigns):
         test_repeated_compaction_campaign(seed, steps)
     return {
-        "fixed_cases": 8,
+        "fixed_cases": 9,
         "matrix_cases": 4 * 4 * 4,
         "campaigns": campaigns,
         "campaign_steps": steps,
