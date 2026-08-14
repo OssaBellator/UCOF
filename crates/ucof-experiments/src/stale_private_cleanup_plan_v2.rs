@@ -1,8 +1,8 @@
-//! Test-only bounded planner for stale private writer state.
-//!
-//! The planner never mutates the filesystem. It emits bounded candidate
-//! actions, and indeterminate publication authority is always retained for
-//! explicit resolution rather than becoming an automatic cleanup action.
+// Test-only bounded planner for stale private writer state.
+//
+// The planner never mutates the filesystem. It emits bounded candidate
+// actions, and indeterminate publication authority is always retained for
+// explicit resolution rather than becoming an automatic cleanup action.
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Authority {
@@ -89,9 +89,7 @@ fn validate_limits(limits: Limits) -> Result<(), PlanError> {
 }
 
 fn add_count(value: &mut usize) -> Result<(), PlanError> {
-    *value = value
-        .checked_add(1)
-        .ok_or(PlanError::AccountingOverflow)?;
+    *value = value.checked_add(1).ok_or(PlanError::AccountingOverflow)?;
     Ok(())
 }
 
