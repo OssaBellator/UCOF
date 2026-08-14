@@ -219,13 +219,13 @@ fn encrypted_spill_ciphertext_tamper_fails_before_first_output_byte() {
                 .file
                 .as_mut()
                 .ok_or_else(|| "closed encrypted spill stage".to_owned())?;
-            file.seek(std::io::SeekFrom::Start(20))
+            std::io::Seek::seek(file, std::io::SeekFrom::Start(20))
                 .map_err(|error| error.to_string())?;
             let mut byte = [0u8; 1];
             file.read_exact(&mut byte)
                 .map_err(|error| error.to_string())?;
             byte[0] ^= 0x80;
-            file.seek(std::io::SeekFrom::Start(20))
+            std::io::Seek::seek(file, std::io::SeekFrom::Start(20))
                 .map_err(|error| error.to_string())?;
             file.write_all(&byte).map_err(|error| error.to_string())?;
             file.flush().map_err(|error| error.to_string())?;
@@ -261,12 +261,12 @@ fn encrypted_spill_record_reorder_fails_before_first_output_byte() {
                 .ok_or_else(|| "closed encrypted spill stage".to_owned())?;
             let mut first = [0u8; ENCRYPTED_DESCRIPTOR_SPILL_PAYLOAD_BYTES];
             let mut second = [0u8; ENCRYPTED_DESCRIPTOR_SPILL_PAYLOAD_BYTES];
-            file.seek(std::io::SeekFrom::Start(0))
+            std::io::Seek::seek(file, std::io::SeekFrom::Start(0))
                 .map_err(|error| error.to_string())?;
             file.read_exact(&mut first)
                 .and_then(|_| file.read_exact(&mut second))
                 .map_err(|error| error.to_string())?;
-            file.seek(std::io::SeekFrom::Start(0))
+            std::io::Seek::seek(file, std::io::SeekFrom::Start(0))
                 .map_err(|error| error.to_string())?;
             file.write_all(&second)
                 .and_then(|_| file.write_all(&first))
