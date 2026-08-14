@@ -8,7 +8,7 @@ fn private_directory(label: &str) -> super::TestDirectory {
     directory
 }
 
-fn journal(
+fn open_journal(
     directory: &Path,
     aes_key: &[u8; 32],
     prefix: [u8; 4],
@@ -36,7 +36,7 @@ fn durable_journal_authorizes_real_encrypted_spill_writer_and_restart_burns_leas
     let aes_key = [0xc1; 32];
     let prefix = [0x31; 4];
     let lease_size = OBJECTS.checked_mul(2).expect("nonce uses");
-    let journal = journal(&directory.0, &aes_key, prefix);
+    let journal = open_journal(&directory.0, &aes_key, prefix);
     let mut authority = journal.recover_authority(None).expect("initial authority");
     let mut session = journal
         .commit_descriptor_session(
@@ -81,7 +81,7 @@ fn durable_journal_authorizes_real_encrypted_spill_writer_and_restart_burns_leas
     assert_eq!(session.journal_generation, 1);
 
     drop(journal);
-    let restarted = journal(&directory.0, &aes_key, prefix);
+    let restarted = open_journal(&directory.0, &aes_key, prefix);
     let mut restarted_authority = restarted
         .recover_authority(None)
         .expect("restart authority");
@@ -133,7 +133,7 @@ fn pre_directory_sync_cuts_never_return_an_issuable_session() {
         ),
     ] {
         let directory = private_directory(label);
-        let journal = journal(&directory.0, &aes_key, prefix);
+        let journal = open_journal(&directory.0, &aes_key, prefix);
         let mut authority = journal.recover_authority(None).expect("initial authority");
         let error = match journal.commit_descriptor_session(
             &mut authority,
@@ -160,7 +160,7 @@ fn lost_pre_sync_candidate_can_be_reused_only_because_no_session_was_issued() {
     let directory = private_directory("journal-lost-pre-sync");
     let aes_key = [0xe1; 32];
     let prefix = [0x33; 4];
-    let journal = journal(&directory.0, &aes_key, prefix);
+    let journal = open_journal(&directory.0, &aes_key, prefix);
     let mut authority = journal.recover_authority(None).expect("initial authority");
     let error = match journal.commit_descriptor_session(
         &mut authority,
@@ -203,7 +203,7 @@ fn tamper_and_generation_gap_fail_closed() {
     let directory = private_directory("journal-tamper-gap");
     let aes_key = [0xf1; 32];
     let prefix = [0x34; 4];
-    let journal = journal(&directory.0, &aes_key, prefix);
+    let journal = open_journal(&directory.0, &aes_key, prefix);
     let mut authority = journal.recover_authority(None).expect("initial authority");
     let _first = journal
         .commit_descriptor_session(
@@ -257,7 +257,7 @@ fn external_floor_detects_tail_rollback_that_self_journal_cannot_prove() {
     let directory = private_directory("journal-tail-rollback");
     let aes_key = [0xa2; 32];
     let prefix = [0x35; 4];
-    let journal = journal(&directory.0, &aes_key, prefix);
+    let journal = open_journal(&directory.0, &aes_key, prefix);
     let mut authority = journal.recover_authority(None).expect("initial authority");
     let _first = journal
         .commit_descriptor_session(
@@ -302,7 +302,7 @@ fn key_prefix_and_stale_authority_are_fail_closed() {
     let directory = private_directory("journal-binding-stale");
     let aes_key = [0xb2; 32];
     let prefix = [0x36; 4];
-    let journal = journal(&directory.0, &aes_key, prefix);
+    let journal = open_journal(&directory.0, &aes_key, prefix);
     let mut first_authority = journal.recover_authority(None).expect("first authority");
     let mut stale_authority = journal.recover_authority(None).expect("stale authority");
     let _session = journal
@@ -338,7 +338,7 @@ fn key_prefix_and_stale_authority_are_fail_closed() {
     assert_eq!(key_error, LinuxNonceJournalError::ForeignKey);
 
     drop(journal);
-    let wrong_prefix = journal(&directory.0, &aes_key, [0x37; 4]);
+    let wrong_prefix = open_journal(&directory.0, &aes_key, [0x37; 4]);
     let prefix_error = match wrong_prefix.recover_authority(None) {
         Ok(_) => panic!("wrong prefix must not recover authority"),
         Err(error) => error,

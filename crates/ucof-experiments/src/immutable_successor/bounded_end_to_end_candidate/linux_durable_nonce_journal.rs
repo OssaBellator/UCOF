@@ -347,7 +347,7 @@ impl LinuxDurableNonceJournal {
 
         if let Some(floor) = trusted_floor {
             if durable.generation < floor.generation
-                || !nonce_at_least(floor.next_unreserved, durable.next_unreserved)
+                || !linux_nonce_at_least(floor.next_unreserved, durable.next_unreserved)
             {
                 return Err(LinuxNonceJournalError::Rollback);
             }
@@ -459,6 +459,15 @@ impl LinuxDurableNonceJournal {
         hmac::verify(&key, plaintext, tag)
             .map_err(|_| LinuxNonceJournalError::AuthenticationFailed)?;
         LinuxNonceJournalRecord::decode(plaintext)
+    }
+}
+
+fn linux_nonce_at_least(previous: Option<u64>, next: Option<u64>) -> bool {
+    match (previous, next) {
+        (None, None) => true,
+        (None, Some(_)) => false,
+        (Some(_), None) => true,
+        (Some(previous), Some(next)) => next >= previous,
     }
 }
 
