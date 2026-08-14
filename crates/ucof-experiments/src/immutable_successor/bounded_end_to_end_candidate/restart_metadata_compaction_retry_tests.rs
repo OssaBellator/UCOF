@@ -157,3 +157,80 @@ fn retry_after_terminal_source_set_prune_before_retirement_prune_completes() {
     assert_eq!(recovery.checkpoint_generation, Some(2));
     assert_eq!(recovery.journal_records, 0);
 }
+
+#[test]
+fn retry_after_prepared_retirement_prune_keeps_terminal_authority() {
+    let fixture = encrypted_retirement_fixture("terminal-last-prune-retry", 7);
+    let journal = open_journal(
+        &fixture.journal_directory.0,
+        &fixture.aes_key,
+        fixture.nonce_prefix,
+    );
+    prepare_encrypted_restart_retirement(
+        &journal,
+        &fixture.stage_directory.0,
+        &fixture.durable,
+        fixture.restart_limits,
+    )
+    .expect("prepare terminal-last retry retirement");
+    assert_eq!(
+        execute_encrypted_restart_retirement(
+            &journal,
+            &fixture.stage_directory.0,
+            1,
+            2,
+            fixture.restart_limits,
+            EncryptedRetirementCut::Complete,
+        )
+        .expect("terminalize terminal-last retry retirement"),
+        EncryptedRetirementOutcome::Terminal
+    );
+
+    let cut_report = compact_restart_metadata(
+        &journal,
+        None,
+        RestartMetadataCompactionCut::AfterPreparedRetirementPruneBeforeTerminalPrune,
+    )
+    .expect("cut after Prepared retirement prune");
+    assert_eq!(cut_report.checkpoint_generation, 2);
+    assert_eq!(cut_report.pruned_nonce_records, 2);
+    assert_eq!(cut_report.pruned_retirement_records, 1);
+    assert_eq!(cut_report.pruned_source_set_records, 0);
+    assert!(load_encrypted_retirement_record(
+        &journal,
+        1,
+        2,
+        EncryptedRetirementState::Prepared,
+    )
+    .expect("load pruned Prepared after retirement cut")
+    .is_none());
+    assert!(load_encrypted_retirement_record(
+        &journal,
+        1,
+        2,
+        EncryptedRetirementState::Terminal,
+    )
+    .expect("load retained Terminal after retirement cut")
+    .is_some());
+
+    let retry = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect("retry with Terminal-only completion authority");
+    assert_eq!(retry.checkpoint_generation, 2);
+    assert_eq!(retry.pruned_nonce_records, 0);
+    assert_eq!(retry.pruned_retirement_records, 1);
+    assert_eq!(retry.pruned_source_set_records, 0);
+    assert!(load_encrypted_retirement_record(
+        &journal,
+        1,
+        2,
+        EncryptedRetirementState::Terminal,
+    )
+    .expect("load reclaimed Terminal after retry")
+    .is_none());
+    let recovery = CompactedNonceJournal::new(&journal)
+        .scan(None)
+        .expect("recover terminal-last retry authority");
+    assert_eq!(recovery.durable.generation, 2);
+    assert_eq!(recovery.checkpoint_generation, Some(2));
+    assert_eq!(recovery.journal_records, 0);
+}
