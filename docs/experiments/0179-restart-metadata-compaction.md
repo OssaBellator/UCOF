@@ -9,7 +9,7 @@
 
 Experiments 0174–0178 deliberately use append-only authenticated metadata for nonce authority, encrypted restart-stage manifests, retirement authority, and external source-set binding. That is conservative for crash recovery, but unbounded append-only growth cannot be a production contract.
 
-Experiment 0179 adds a bounded reclamation mechanism without deleting history before replacement recovery authority exists and without deleting metadata still required by a live restart or unfinished retirement.
+Experiment 0179 adds a bounded reclamation mechanism without deleting history before replacement recovery authority exists and without deleting metadata still required by a live encrypted restart stage or unfinished cleanup authority.
 
 This is implementation/storage evidence only. It does not select EXP-0003 D1–D7, allocate an epoch, change public immutable-successor bytes, or create a compatibility promise.
 
@@ -48,6 +48,8 @@ Recovery:
 6. requires every post-checkpoint ordinary generation to be contiguous and to begin at the exact previous nonce floor;
 7. applies any caller-provided trusted generation/counter floor.
 
+The existing `max_journal_bytes` bound continues to constrain ordinary 128-byte nonce records. Checkpoint bytes are separately bounded by the directory-entry cap and are included in authenticated-byte diagnostics/private-storage accounting, so a file-synced checkpoint can coexist with a legacy journal already at its byte ceiling during a crash/retry window.
+
 New nonce reservations after compaction continue to use the accepted ordinary generation-record format. The checkpoint replaces history; it is not a new lease format.
 
 ## Authenticated metadata graph
@@ -69,32 +71,45 @@ It fails closed on authenticated contradictions, including:
 - Terminal retirement coexisting with a still-live stage manifest;
 - source-set authority that belongs to neither a live manifest nor an active/terminal cleanup lineage;
 - source-set operation/stage identity/object count disagreement with its live manifest;
+- source-set stage identity disagreement with its retirement lineage after the manifest is gone;
+- a live stage manifest that does not match the preserved original nonce record context;
 - lifecycle metadata that claims generations ahead of current global nonce authority.
 
 Cleanup work is derived from actual bounded directory inventory. It never loops from generation `1..N`; authenticated generation numbers are state, not acceptable work bounds.
 
-## Live-authority preservation
+## Exact nonce-record retention rule
 
-A checkpoint replaces obsolete nonce history, not live restart evidence.
+A checkpoint replaces obsolete nonce history, not live stage-verification evidence.
 
-The original nonce generation record is preserved when referenced by a live encrypted stage manifest or by non-terminal source authority. An outstanding Prepared retirement conservatively protects both its crashed and fresh nonce generations until matching Terminal authority exists.
+An ordinary nonce generation record is retained **only while a live encrypted stage manifest still needs that original record to reconstruct and authenticate the stage lease**. A source-set record does not independently require the ordinary nonce file; it is tied either to the live manifest or to durable cleanup authority. An outstanding Prepared retirement likewise does not require the fresh publication generation's ordinary nonce file once the checkpoint has durably captured the global nonce floor.
 
-This matters because encrypted-stage authentication still needs the original generation record to reconstruct and validate the old spill lease even when a later checkpoint or burned generation represents current global nonce authority.
+This gives a smaller and more precise retention rule:
 
-The compacted restart path therefore deliberately separates:
+- live crashed stage manifest → preserve its crashed-generation ordinary nonce record;
+- fresh publication generation with no live stage of its own → checkpoint is sufficient global nonce-history authority;
+- Prepared cleanup with the old stage still live → preserve only the crashed-stage record, not the fresh publication record;
+- Terminal cleanup after the stage manifest is gone → no ordinary nonce record is protected by that lineage.
 
-- **historical stage verification authority:** the preserved crashed-generation record; and
+A dedicated regression compacts the fresh generation-2 ordinary nonce record after durable Prepared(1→2), then executes the existing retirement protocol to Terminal successfully using the checkpoint for global nonce authority and the preserved generation-1 record only for stage verification.
+
+## Restart across burned and pruned generations
+
+The compacted restart path deliberately separates:
+
+- **historical stage verification authority:** the preserved crashed-generation ordinary record; and
 - **new allocation authority:** the current checkpoint/post-checkpoint global nonce state.
 
-A crash-retry regression targets:
+The hard lifecycle regression targets:
 
-`stage generation 1 -> checkpoint -> commit/burn generation 2 -> retry generation-1 stage -> allocate generation 3`
+`stage gen1 → checkpoint1 → commit/burn gen2 → checkpoint2/prune gen2 → retry gen1 → allocate/publish gen3 → Prepared(1→3) → checkpoint3/prune gen3 → Terminal → reclaim gen1 + cleanup metadata`
 
-The old stage is never re-encrypted under reused counters and the burned generation-2 range is not reissued.
+The old stage is authenticated with generation 1, but new allocation starts strictly after the checkpoint-2 counter floor. Generation 2 is never reissued even though its ordinary file has already been reclaimed.
+
+The compacted path is carried through canonical output staging and durable publication, not just in-memory continuation. `prepare_compacted_encrypted_restart_retirement` then uses checkpoint-aware current nonce authority while retaining the accepted Prepared/Terminal cleanup format and executor.
 
 ## Retirement and reclamation
 
-Prepared retirement authority is preserved until matching Terminal authority exists. Once a pair is terminally retired, the matching Prepared/Terminal records, obsolete source-set record, and nonce generations no longer protected by another live lineage become reclaimable.
+Prepared retirement authority is preserved until matching Terminal authority exists. Once a pair is terminally retired, the matching Prepared/Terminal records, obsolete source-set record, and ordinary nonce records no longer required by a live stage become reclaimable.
 
 Before each selected unlink, the compactor reopens the canonical file through the pinned directory, re-authenticates it, and compares the current record with the authenticated inventory snapshot. Only then does it unlink that pathname.
 
@@ -104,56 +119,54 @@ This narrows stale/replacement mistakes but does **not** eliminate the documente
 
 Checkpointing does not make persistent metadata free.
 
-`CompactedPersistentInventory` authenticates and charges surviving ordinary nonce records, compaction checkpoints, retirement records, and source-set records. The compaction admission plan charges existing authenticated persistent metadata plus one 112-byte checkpoint when the exact current checkpoint does not already exist.
+`CompactedPersistentInventory` authenticates and charges surviving ordinary nonce records, compaction checkpoints, retirement records, and source-set records. The base encrypted crash-resume plan already charges the durable encrypted stage, manifest, retained descriptor overlap, encrypted tree staging, output staging, and retirement overlap; checkpointed inventory is added on top without double-counting those stage/manifest bytes.
 
-A one-byte-short compaction metadata cap must fail before checkpoint creation or pruning. The exact computed cap may proceed.
+The compaction admission plan charges existing authenticated persistent metadata plus one 112-byte checkpoint when the exact current checkpoint does not already exist. A one-byte-short compaction metadata cap must fail before checkpoint creation or pruning. The exact computed cap may proceed.
 
-Post-compaction source-bound restart adds exact checkpointed persistent bytes to the accepted encrypted-tree crash-resume lifecycle plan. A one-byte-short restart cap therefore still fails before a fresh nonce generation or private output side effect.
+Both compacted continuation **and durable publication** use the same pre-side-effect private-storage enforcement. The publication regression requires a one-byte-short cap to leave the publication backend untouched, create no private staged output, and mint no fresh nonce generation; the exact computed cap may publish durably.
 
 ## Crash and adversarial evidence
 
-The wired Rust regression set covers:
+The wired Rust regression set now covers:
 
 - checkpoint file sync before directory sync;
 - retry from that cut through a fresh pinned-directory sync before pruning;
 - checkpoint directory sync before pruning;
 - pruning before final directory sync;
+- checkpoint coexistence with an ordinary journal exactly at the legacy journal-byte ceiling;
 - repeated checkpoint replacement and future nonce monotonicity;
 - authenticated checkpoint counter rollback;
 - orphan and mismatched source-set authority;
+- source-set/retirement identity lineage checks;
+- live-manifest/original-nonce context checks;
 - competing retirement generations;
 - mismatched Prepared/Terminal payload authority;
 - Terminal/live-manifest contradiction;
 - live source-bound restart after checkpointing;
-- retry after a burned intermediate generation;
+- retry after an intermediate generation is both burned and compacted away;
+- compacted canonical publication, Prepared/Terminal retirement, and final terminal-lineage reclamation;
 - trusted-floor rejection versus the explicit no-floor rollback non-claim;
-- exact-cap and one-byte-short private-storage admission;
+- exact-cap and one-byte-short compaction, continuation, and durable-publication admission;
+- authenticated byte-accounting of ordinary records versus checkpoint overhead;
 - a repeated 32-generation Rust commit/compact campaign.
 
 ## Independent model evidence
 
-`tools/verify_restart_metadata_compaction_model.py` is a standard-library-only state model that does not call or parse the Rust implementation. It independently models nonce generations, checkpoints, crash cuts, graph validity, preservation/reclamation, trusted floors, quota admission, and retry over burned generations.
+`tools/verify_restart_metadata_compaction_model.py` is a standard-library-only state model that does not call or parse the Rust implementation. It independently models nonce generations, checkpoints, crash cuts, graph validity, live-stage nonce-record retention, preservation/reclamation, trusted floors, quota admission, and retry across burned/pruned generations.
 
-On 2026-08-15 the model was executed locally in the development environment with:
-
-```text
-python3 tools/verify_restart_metadata_compaction_model.py --campaigns 256 --steps 192
-```
-
-Result:
+The stronger local development run on 2026-08-15 exercised:
 
 ```text
-restart metadata compaction independent model: PASS
-fixed_cases=8
-matrix_cases=64
-campaigns=256
-campaign_steps=192
-campaign_transitions=49152
+1024 randomized campaigns × 256 transitions = 262144 transitions
 ```
 
-The local verification runner itself was also syntax-checked and exercised in `--model-only` mode against a synthetic correctly-wired checkout. That runner self-test passed.
+plus 64 small-state matrix cases and the fixed crash/rollback/graph/quota/full-lifecycle cases. Result: **PASS**.
 
-This evidence is useful but is **not** a substitute for compiling and executing the newly wired Rust implementation.
+The fixed full-lifecycle model explicitly covers generation 1 live stage authority, generation 2 burn + compaction, generation 3 retry/publication authority, compaction of the fresh generation after Prepared, Terminal transition, and final reclamation to a single generation-3 checkpoint.
+
+The local verification runner itself was syntax-checked and exercised in `--model-only` mode against a synthetic correctly-wired checkout. Its dirty-worktree acceptance guard was also exercised and rejected before Cargo invocation as intended.
+
+This independent evidence is useful but is **not** a substitute for compiling and executing the newly wired Rust implementation.
 
 ## Local acceptance gate
 
@@ -165,15 +178,24 @@ python3 tools/verify_phase3_local.py --acceptance
 
 Use `--offline` when the required Cargo dependencies/toolchains are already available locally and network access should be forbidden.
 
-A complete `--acceptance` run performs the Phase 3 wiring guard and independent 0179 model, Cargo metadata/fmt/Clippy/tests, workspace tests/docs, HTTP/S3 adapter tests, policy/vector checks, Rust 1.85 checks, i686 and powerpc64 checks, and a 256-run smoke pass over every locally installed fuzz target. The script never installs missing tools; acceptance fails if the required MSRV/targets/nightly/cargo-fuzz environment is unavailable.
+A complete `--acceptance` run requires a clean resolvable Git HEAD before expensive work begins. It performs the Phase 3 wiring guard and independent 0179 model, Cargo metadata/fmt/Clippy/tests, workspace tests/docs, HTTP/S3 adapter tests, policy/vector checks, Rust 1.85 checks, i686 and powerpc64 checks, and a 256-run smoke pass over every locally installed fuzz target. The script never installs missing tools; acceptance fails if the required MSRV/targets/nightly/cargo-fuzz environment is unavailable.
 
 Every run writes `target/phase3-local-verification.json`, including exact Git SHA/branch, tool versions, dirty-worktree state, commands, elapsed times, skips, and final result.
+
+A successful report can then be normalized into repository evidence with:
+
+```text
+python3 tools/record_phase3_local_acceptance.py
+```
+
+The recorder refuses stale-SHA, dirty, skipped, partial, model-only, missing-fuzz, or failed reports and writes a SHA-bound record under `docs/verification/phase3-local-acceptance-<sha>.json`.
 
 Experiment 0179 must remain **pending** until a report from the exact candidate head has:
 
 - `mode: "acceptance"`;
 - `ok: true`;
 - no skipped checks;
+- a clean candidate SHA;
 - successful wired Rust tests/Clippy;
 - successful MSRV/portability/fuzz checks.
 
