@@ -1,0 +1,76 @@
+name: One-shot 0172 test split
+
+on:
+  push:
+    branches:
+      - phase-3/durable-nonce-journal-integration
+
+permissions:
+  contents: write
+
+jobs:
+  split:
+    if: github.event.head_commit.message != 'Split durable nonce journal regressions'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/durable-nonce-journal-integration
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Split definitions and bare tests
+        shell: python
+        run: |
+          from pathlib import Path
+          import textwrap
+
+          base = Path('crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate')
+          source = base / 'linux_durable_nonce_journal.rs'
+          tests = base / 'linux_durable_nonce_journal_tests.rs'
+          text = source.read_text()
+          marker = '#[cfg(test)]\nmod linux_durable_nonce_journal_tests {\n'
+          if marker in text:
+              definitions, body = text.split(marker, 1)
+              if not body.rstrip().endswith('}'):
+                  raise SystemExit('0172 test module does not end with a brace')
+              body = body.rstrip()[:-1]
+              body = textwrap.dedent(body).lstrip('\n')
+              body = body.replace('use super::*;\n\n', '', 1)
+              body = body.replace('super::super::', 'super::')
+              source.write_text(definitions.rstrip() + '\n')
+              tests.write_text(body.rstrip() + '\n')
+          elif not tests.exists():
+              raise SystemExit('0172 test split marker not found')
+
+          parent = Path('crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate.rs')
+          text = parent.read_text()
+          old = '''        include!("bounded_end_to_end_candidate/encrypted_descriptor.rs");
+                  include!("bounded_end_to_end_candidate/encrypted_descriptor_spill.rs");
+                  include!("bounded_end_to_end_candidate/encrypted_descriptor_spill_tests.rs");
+                  include!("../private_nonce_lease_contract.rs");
+          '''
+          new = '''        include!("bounded_end_to_end_candidate/encrypted_descriptor.rs");
+                  include!("bounded_end_to_end_candidate/encrypted_descriptor_spill.rs");
+                  include!("bounded_end_to_end_candidate/linux_durable_nonce_journal.rs");
+                  include!("bounded_end_to_end_candidate/encrypted_descriptor_spill_tests.rs");
+                  include!("bounded_end_to_end_candidate/linux_durable_nonce_journal_tests.rs");
+                  include!("../private_nonce_lease_contract.rs");
+          '''
+          if old not in text:
+              if 'linux_durable_nonce_journal.rs' not in text:
+                  raise SystemExit('0172 parent include pattern not found')
+          else:
+              parent.write_text(text.replace(old, new))
+      - name: Format
+        run: cargo fmt --all
+      - name: Commit
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate.rs crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate/linux_durable_nonce_journal.rs crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate/linux_durable_nonce_journal_tests.rs
+          git commit -m 'Split durable nonce journal regressions'
+          git push origin HEAD:phase-3/durable-nonce-journal-integration
