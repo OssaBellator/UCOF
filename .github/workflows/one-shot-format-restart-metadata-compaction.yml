@@ -1,0 +1,41 @@
+name: One-shot format restart metadata compaction
+
+on:
+  push:
+    branches:
+      - phase-3/restart-metadata-compaction
+    paths:
+      - 'crates/**/*.rs'
+      - '.github/workflows/one-shot-format-restart-metadata-compaction.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  format-and-retire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/restart-metadata-compaction
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: 1.85.0
+          components: rustfmt
+      - name: Format Rust tree
+        run: cargo fmt --all
+      - name: Retire formatter and commit result
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm -f .github/workflows/one-shot-format-restart-metadata-compaction.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m 'Format restart metadata compaction stack'
+          git push origin HEAD:phase-3/restart-metadata-compaction
