@@ -154,7 +154,7 @@ impl EncryptedRecordStage {
 
 pub(super) struct EncryptedRecordStageWriter<'a> {
     stage: &'a mut EncryptedRecordStage,
-    writer: BufWriter<File>,
+    writer: std::io::BufWriter<File>,
     session: &'a mut DescriptorEncryptionSession,
 }
 
