@@ -1,3 +1,5 @@
+use std::io::{Seek, SeekFrom};
+
 fn prepared_source_bound_restart_stage(
     label: &str,
     object_count: u64,
