@@ -111,7 +111,10 @@ fn encode_journal(journal: DurableJournal) -> [u8; 64] {
 }
 
 fn decode_journal(bytes: &[u8]) -> Result<DurableJournal, IntegrationError> {
-    if bytes.len() != 64 || bytes[41..48].iter().any(|byte| *byte != 0) || bytes[56..].iter().any(|byte| *byte != 0) {
+    if bytes.len() != 64
+        || bytes[41..48].iter().any(|byte| *byte != 0)
+        || bytes[56..].iter().any(|byte| *byte != 0)
+    {
         return Err(IntegrationError::CandidateMismatch);
     }
     if bytes[40] > 1 {
@@ -247,14 +250,9 @@ mod tests {
             assert_eq!(committed.next_unreserved, Some(4));
             let next_pending = reserve_lease(committed, 4, 16).expect("next reserve");
             let next_sealed = auth().seal(next_pending.candidate);
-            let (next_committed, mut next_lease) = activate_committed_lease(
-                committed,
-                next_pending,
-                &next_sealed,
-                &auth(),
-                true,
-            )
-            .expect("next activate");
+            let (next_committed, mut next_lease) =
+                activate_committed_lease(committed, next_pending, &next_sealed, &auth(), true)
+                    .expect("next activate");
             assert_eq!(next_committed.next_unreserved, Some(8));
             while let Ok(counter) = next_lease.allocate() {
                 assert!(counter >= 4);
@@ -286,8 +284,7 @@ mod tests {
         let mut sealed = auth().seal(pending.candidate);
         sealed[32] ^= 1;
         assert_eq!(
-            activate_committed_lease(durable, pending, &sealed, &auth(), true)
-                .expect_err("tamper"),
+            activate_committed_lease(durable, pending, &sealed, &auth(), true).expect_err("tamper"),
             IntegrationError::AuthenticationFailed
         );
 
@@ -306,14 +303,9 @@ mod tests {
         let stale = reserve_lease(durable, 4, 16).expect("stale reserve");
         let winning = reserve_lease(durable, 8, 16).expect("winning reserve");
         let winning_sealed = auth().seal(winning.candidate);
-        let (advanced, _) = activate_committed_lease(
-            durable,
-            winning,
-            &winning_sealed,
-            &auth(),
-            true,
-        )
-        .expect("winning activate");
+        let (advanced, _) =
+            activate_committed_lease(durable, winning, &winning_sealed, &auth(), true)
+                .expect("winning activate");
         let stale_sealed = auth().seal(stale.candidate);
         assert_eq!(
             activate_committed_lease(advanced, stale, &stale_sealed, &auth(), true)
@@ -328,8 +320,7 @@ mod tests {
         let pending = reserve_lease(durable, 3, 16).expect("reserve");
         let sealed = auth().seal(pending.candidate);
         let (committed, lease) =
-            activate_committed_lease(durable, pending, &sealed, &auth(), true)
-                .expect("activate");
+            activate_committed_lease(durable, pending, &sealed, &auth(), true).expect("activate");
         assert_eq!(lease.committed_generation, committed.generation);
         assert_eq!(lease.committed_generation, 1);
     }
