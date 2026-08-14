@@ -183,17 +183,24 @@ def verify_wiring(runner: Runner) -> None:
             'return Err("compaction retirement context".into());',
             'return Err("compaction source-set context".into());',
             "nonce_record.generation != manifest.generation",
+            "AfterSourceSetPruneBeforeRetirementPrune",
+            "AfterPreparedRetirementPruneBeforeTerminalPrune",
         ],
         "restart_metadata_compaction_graph_tests.rs": [
             "compacted_scan_rejects_authenticated_record_replayed_under_wrong_generation_name",
             "compaction_rejects_authenticated_retirement_from_foreign_journal_context",
             "compaction_rejects_authenticated_source_set_from_foreign_journal_context",
         ],
+        "restart_metadata_compaction_retry_tests.rs": [
+            "retry_after_terminal_source_set_prune_before_retirement_prune_completes",
+            "retry_after_prepared_retirement_prune_keeps_terminal_authority",
+        ],
         "compacted_restart_retry_tests.rs": [
             "compacted_restart_survives_pruned_burn_then_publishes_retires_and_reclaims",
         ],
         "compacted_private_lifecycle_quota_tests.rs": [
             "checkpointed_source_bound_restart_quota_preserves_pre_side_effect_rejection",
+            "checkpointed_publication_quota_rejects_before_nonce_or_backend_side_effects",
         ],
     }
     for name, tokens in required_tokens.items():
@@ -203,6 +210,28 @@ def verify_wiring(runner: Runner) -> None:
             raise VerificationFailure(
                 f"critical 0179 fail-closed coverage missing in {name}: {', '.join(missing_tokens)}"
             )
+
+    compaction_source = (base / "restart_metadata_compaction.rs").read_text()
+    try:
+        compact_body = compaction_source.split("fn compact_restart_metadata(", 1)[1]
+    except IndexError as exc:
+        raise VerificationFailure("Experiment 0179 compaction executor is missing") from exc
+    order_tokens = [
+        "for (name, record) in nonce_records {",
+        "for (name, record) in &metadata.source_sets {",
+        "record.state == EncryptedRetirementState::Prepared",
+        "record.state == EncryptedRetirementState::Terminal",
+        "for (name, old_checkpoint) in old_checkpoints {",
+    ]
+    positions = [compact_body.find(token) for token in order_tokens]
+    if any(position < 0 for position in positions) or positions != sorted(positions):
+        raise VerificationFailure(
+            "Experiment 0179 destructive order must remain nonce -> source-set -> Prepared -> Terminal -> old checkpoint"
+        )
+    runner.record_static(
+        "Experiment 0179 prune order",
+        "nonce -> terminal source-set -> Prepared retirement -> Terminal retirement -> old checkpoint",
+    )
 
     obsolete_actions = ROOT / ".github/workflows/one-shot-accept-restart-metadata-compaction.yml"
     if obsolete_actions.exists():
