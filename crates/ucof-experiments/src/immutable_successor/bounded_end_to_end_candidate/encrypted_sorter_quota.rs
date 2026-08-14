@@ -84,9 +84,11 @@ where
         writer,
         sources,
         directory,
-        settings.options,
-        settings.limits,
-        spill_limits,
+        EncryptedSorterPipelineSettings {
+            options: settings.options,
+            limits: settings.limits,
+            spill_limits,
+        },
         spill_session,
         retained_session,
     )?;
