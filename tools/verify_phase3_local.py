@@ -177,6 +177,33 @@ def verify_wiring(runner: Runner) -> None:
         if present:
             raise VerificationFailure(f"stale 0179 API references in {name}: {', '.join(present)}")
 
+    required_tokens = {
+        "restart_metadata_compaction.rs": [
+            'return Err("compacted nonce filename generation".into());',
+            'return Err("compaction retirement context".into());',
+            'return Err("compaction source-set context".into());',
+            "nonce_record.generation != manifest.generation",
+        ],
+        "restart_metadata_compaction_graph_tests.rs": [
+            "compacted_scan_rejects_authenticated_record_replayed_under_wrong_generation_name",
+            "compaction_rejects_authenticated_retirement_from_foreign_journal_context",
+            "compaction_rejects_authenticated_source_set_from_foreign_journal_context",
+        ],
+        "compacted_restart_retry_tests.rs": [
+            "compacted_restart_survives_pruned_burn_then_publishes_retires_and_reclaims",
+        ],
+        "compacted_private_lifecycle_quota_tests.rs": [
+            "checkpointed_source_bound_restart_quota_preserves_pre_side_effect_rejection",
+        ],
+    }
+    for name, tokens in required_tokens.items():
+        source = (base / name).read_text()
+        missing_tokens = [token for token in tokens if token not in source]
+        if missing_tokens:
+            raise VerificationFailure(
+                f"critical 0179 fail-closed coverage missing in {name}: {', '.join(missing_tokens)}"
+            )
+
     obsolete_actions = ROOT / ".github/workflows/one-shot-accept-restart-metadata-compaction.yml"
     if obsolete_actions.exists():
         raise VerificationFailure("obsolete Actions-based 0179 acceptance coordinator is still present")
