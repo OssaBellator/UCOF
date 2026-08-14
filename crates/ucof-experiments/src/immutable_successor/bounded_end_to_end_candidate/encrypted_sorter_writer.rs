@@ -1,5 +1,12 @@
 use std::cell::RefCell;
 
+#[derive(Clone, Copy)]
+struct EncryptedSorterPipelineSettings {
+    options: ImmutableSourceStreamingWriteOptions,
+    limits: ImmutableLimits,
+    spill_limits: BoundedSpillSortLimits,
+}
+
 struct EncryptedSorterPreflight {
     descriptor_stage: EncryptedDescriptorStage,
     descriptor_spill: BoundedSpillSortReport,
@@ -141,9 +148,7 @@ fn write_genesis_sources_end_to_end_encrypted_sorter_candidate<W, S>(
     writer: &mut W,
     sources: &mut [S],
     directory: &Path,
-    options: ImmutableSourceStreamingWriteOptions,
-    limits: ImmutableLimits,
-    spill_limits: BoundedSpillSortLimits,
+    settings: EncryptedSorterPipelineSettings,
     spill_session: &mut DescriptorEncryptionSession,
     retained_session: &mut DescriptorEncryptionSession,
 ) -> CandidateResult<EndToEndEvidence>
@@ -154,9 +159,9 @@ where
     let preflight = prepare_encrypted_sorter_preflight(
         directory,
         sources,
-        options,
-        limits,
-        spill_limits,
+        settings.options,
+        settings.limits,
+        settings.spill_limits,
         spill_session,
         retained_session,
     )?;
@@ -190,8 +195,8 @@ where
         writer,
         sources,
         directory,
-        options,
-        limits,
+        settings.options,
+        settings.limits,
         emission,
         descriptor_reader,
     );
