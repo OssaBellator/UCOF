@@ -18,6 +18,16 @@ mod bounded_end_to_end_candidate_tests {
 
     include!("bounded_end_to_end_candidate/stage.rs");
     include!("bounded_end_to_end_candidate/writer.rs");
+
+    mod encrypted_descriptor_crypto {
+        include!("../private_nonce_lease_contract.rs");
+        include!("bounded_end_to_end_candidate/encrypted_descriptor.rs");
+    }
+    use encrypted_descriptor_crypto::{
+        transcode_descriptor_stage, DescriptorEncryptionSession, DescriptorNonceAuthority,
+        EncryptedDescriptorReader, EncryptedDescriptorStage, ENCRYPTED_DESCRIPTOR_STAGE_BYTES,
+    };
+
     include!("bounded_end_to_end_candidate/prepared.rs");
     include!("bounded_end_to_end_candidate/quota.rs");
     include!("bounded_end_to_end_candidate/published_quota.rs");
