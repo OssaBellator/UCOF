@@ -39,6 +39,8 @@ mod semantic_history_multi_plan;
 mod semantic_history_streaming_compaction;
 mod semantic_streaming_compaction;
 mod snapshots;
+#[cfg(test)]
+mod stale_private_cleanup_plan;
 
 pub use active_file_selected_streaming::{
     rewrite_selected_active_file_to, ImmutableSelectedActiveStreamingReport,
