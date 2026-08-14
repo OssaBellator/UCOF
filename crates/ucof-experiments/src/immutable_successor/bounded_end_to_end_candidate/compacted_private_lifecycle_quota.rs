@@ -245,19 +245,12 @@ struct CompactedSourceBoundRestartQuotaSettings {
     source_set_id: [u8; 32],
 }
 
-fn continue_compacted_source_bound_restart_with_private_quota<W, S>(
+fn enforce_compacted_source_bound_restart_private_quota<S>(
     journal: &LinuxDurableNonceJournal,
-    stage_directory_path: &Path,
-    work_directory: &Path,
-    writer: &mut W,
     sources: &mut [S],
     settings: CompactedSourceBoundRestartQuotaSettings,
-) -> super::CandidateResult<(
-    CompactedCrashResumeStoragePlan,
-    EncryptedTreeRestartContinuationEvidence,
-)>
+) -> super::CandidateResult<CompactedCrashResumeStoragePlan>
 where
-    W: Write,
     S: super::ImmutableStreamingPayloadSource,
 {
     if settings.source_set_id == [0; 32] {
@@ -274,6 +267,25 @@ where
     if plan.required_bytes > settings.max_private_storage_bytes {
         return Err("compacted source-bound restart private storage limit".into());
     }
+    Ok(plan)
+}
+
+fn continue_compacted_source_bound_restart_with_private_quota<W, S>(
+    journal: &LinuxDurableNonceJournal,
+    stage_directory_path: &Path,
+    work_directory: &Path,
+    writer: &mut W,
+    sources: &mut [S],
+    settings: CompactedSourceBoundRestartQuotaSettings,
+) -> super::CandidateResult<(
+    CompactedCrashResumeStoragePlan,
+    EncryptedTreeRestartContinuationEvidence,
+)>
+where
+    W: Write,
+    S: super::ImmutableStreamingPayloadSource,
+{
+    let plan = enforce_compacted_source_bound_restart_private_quota(journal, sources, settings)?;
     let evidence = continue_compacted_source_bound_encrypted_tree_restart(
         journal,
         stage_directory_path,
@@ -284,4 +296,32 @@ where
         settings.continuation,
     )?;
     Ok((plan, evidence))
+}
+
+fn stage_and_publish_compacted_source_bound_restart_with_private_quota<B, S>(
+    journal: &LinuxDurableNonceJournal,
+    stage_directory_path: &Path,
+    work_directory: &Path,
+    backend: &mut B,
+    sources: &mut [S],
+    settings: CompactedSourceBoundRestartQuotaSettings,
+) -> super::CandidateResult<(
+    CompactedCrashResumeStoragePlan,
+    EncryptedTreeRestartPublicationOutcome,
+)>
+where
+    B: super::PersistentStagingBackend,
+    S: super::ImmutableStreamingPayloadSource,
+{
+    let plan = enforce_compacted_source_bound_restart_private_quota(journal, sources, settings)?;
+    let outcome = stage_and_publish_compacted_source_bound_encrypted_tree_restart(
+        journal,
+        stage_directory_path,
+        work_directory,
+        backend,
+        sources,
+        settings.source_set_id,
+        settings.continuation,
+    )?;
+    Ok((plan, outcome))
 }
