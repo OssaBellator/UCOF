@@ -338,18 +338,25 @@ struct EncryptedRestartContinuationSettings {
     fresh_operation_id: [u8; 16],
 }
 
-fn continue_verified_encrypted_spill_with_fresh_lease<W, S>(
+struct PreparedEncryptedRestartContinuation {
+    retained_stage: EncryptedDescriptorStage,
+    fresh_session: DescriptorEncryptionSession,
+    recovered: RestartRecoveredPreflight,
+    crashed_generation: u64,
+    crashed_lease_first: u64,
+    crashed_lease_last: u64,
+    fresh_lease_first: u64,
+    fresh_lease_last: u64,
+    persisted_spill_sha256: [u8; 32],
+}
+
+fn prepare_verified_encrypted_spill_with_fresh_lease(
     journal: &LinuxDurableNonceJournal,
     stage_directory_path: &Path,
     work_directory: &Path,
-    writer: &mut W,
-    sources: &mut [S],
+    source_count: usize,
     settings: EncryptedRestartContinuationSettings,
-) -> super::CandidateResult<EncryptedRestartContinuationEvidence>
-where
-    W: Write,
-    S: super::ImmutableStreamingPayloadSource,
-{
+) -> super::CandidateResult<PreparedEncryptedRestartContinuation> {
     let EncryptedRestartContinuationSettings {
         aes_key,
         crashed_generation,
@@ -383,7 +390,7 @@ where
             return Err("restart stage is indeterminate".into())
         }
     };
-    if sources.len() != object_count {
+    if source_count != object_count {
         return Err("restart source count".into());
     }
 
@@ -438,13 +445,59 @@ where
         return Err("restart retained descriptor count".into());
     }
     retained_stage.verify_all(&fresh_session)?;
+
+    Ok(PreparedEncryptedRestartContinuation {
+        retained_stage,
+        fresh_session,
+        recovered,
+        crashed_generation,
+        crashed_lease_first: crashed_nonce_record.lease_first,
+        crashed_lease_last: crashed_nonce_record.lease_last,
+        fresh_lease_first,
+        fresh_lease_last,
+        persisted_spill_sha256: manifest.stage_sha256,
+    })
+}
+
+fn emit_prepared_encrypted_restart_continuation<W, S>(
+    writer: &mut W,
+    sources: &mut [S],
+    work_directory: &Path,
+    options: super::ImmutableSourceStreamingWriteOptions,
+    limits: super::ImmutableLimits,
+    prepared: PreparedEncryptedRestartContinuation,
+) -> super::CandidateResult<EncryptedRestartContinuationEvidence>
+where
+    W: Write,
+    S: super::ImmutableStreamingPayloadSource,
+{
+    let PreparedEncryptedRestartContinuation {
+        retained_stage,
+        fresh_session,
+        recovered,
+        crashed_generation,
+        crashed_lease_first,
+        crashed_lease_last,
+        fresh_lease_first,
+        fresh_lease_last,
+        persisted_spill_sha256,
+    } = prepared;
+    if sources.len() != recovered.object_count {
+        return Err("restart source count".into());
+    }
     let descriptor_stage_bytes = retained_stage.bytes()?;
     let descriptor_ciphertext_sha256 = Some(retained_stage.ciphertext_sha256()?);
     let descriptor_reader = retained_stage.reader(&fresh_session)?;
     let descriptor_spill = reconstructed_restart_spill_report(
         recovered.object_count,
-        manifest.stage_length,
-        manifest.stage_sha256,
+        u64::try_from(recovered.object_count)
+            .map_err(|_| "restart spill record count".to_owned())?
+            .checked_mul(
+                u64::try_from(ENCRYPTED_DESCRIPTOR_SPILL_PAYLOAD_BYTES)
+                    .expect("encrypted spill width fits u64"),
+            )
+            .ok_or_else(|| "restart spill stage length".to_owned())?,
+        persisted_spill_sha256,
     )?;
     let emission = super::PreparedEmission {
         descriptor_stage_bytes,
@@ -472,10 +525,39 @@ where
         output,
         crashed_generation,
         fresh_generation: fresh_session.journal_generation,
-        crashed_lease_first: crashed_nonce_record.lease_first,
-        crashed_lease_last: crashed_nonce_record.lease_last,
+        crashed_lease_first,
+        crashed_lease_last,
         fresh_lease_first,
         fresh_lease_last,
-        persisted_spill_sha256: manifest.stage_sha256,
+        persisted_spill_sha256,
     })
+}
+
+fn continue_verified_encrypted_spill_with_fresh_lease<W, S>(
+    journal: &LinuxDurableNonceJournal,
+    stage_directory_path: &Path,
+    work_directory: &Path,
+    writer: &mut W,
+    sources: &mut [S],
+    settings: EncryptedRestartContinuationSettings,
+) -> super::CandidateResult<EncryptedRestartContinuationEvidence>
+where
+    W: Write,
+    S: super::ImmutableStreamingPayloadSource,
+{
+    let prepared = prepare_verified_encrypted_spill_with_fresh_lease(
+        journal,
+        stage_directory_path,
+        work_directory,
+        sources.len(),
+        settings,
+    )?;
+    emit_prepared_encrypted_restart_continuation(
+        writer,
+        sources,
+        work_directory,
+        settings.options,
+        settings.limits,
+        prepared,
+    )
 }
