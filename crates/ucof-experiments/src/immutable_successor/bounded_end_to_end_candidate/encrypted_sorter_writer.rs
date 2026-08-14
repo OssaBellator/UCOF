@@ -30,7 +30,8 @@ fn prepare_encrypted_sorter_preflight<S: ImmutableStreamingPayloadSource>(
         return Err("descriptor spill record size".into());
     }
 
-    let required_nonces = u64::try_from(sources.len()).map_err(|_| "descriptor nonce count")?;
+    let object_count = sources.len();
+    let required_nonces = u64::try_from(object_count).map_err(|_| "descriptor nonce count")?;
     if spill_session.remaining() < required_nonces {
         return Err("encrypted sorter nonce lease capacity".into());
     }
@@ -73,7 +74,7 @@ fn prepare_encrypted_sorter_preflight<S: ImmutableStreamingPayloadSource>(
         directory,
         encrypted_records,
         spill_limits,
-        sources.len(),
+        object_count,
         spill_context,
         retained_session,
     );
@@ -85,7 +86,7 @@ fn prepare_encrypted_sorter_preflight<S: ImmutableStreamingPayloadSource>(
     }
     let (descriptor_stage, descriptor_spill) = sorted?;
 
-    let source_count = u64::try_from(sources.len()).map_err(|_| "object count".to_owned())?;
+    let source_count = u64::try_from(object_count).map_err(|_| "object count".to_owned())?;
     let expected_sorter_payload_bytes = source_count
         .checked_mul(
             u64::try_from(ENCRYPTED_SORTER_PAYLOAD_BYTES).expect("encrypted sorter width fits u64"),
@@ -100,14 +101,14 @@ fn prepare_encrypted_sorter_preflight<S: ImmutableStreamingPayloadSource>(
     let stage_bytes = descriptor_stage.bytes()?;
     if descriptor_spill.output_records != source_count
         || descriptor_spill.output_payload_bytes != expected_sorter_payload_bytes
-        || descriptor_stage.records() != sources.len()
+        || descriptor_stage.records() != object_count
         || stage_bytes != expected_retained_bytes
     {
         return Err("encrypted descriptor sorter stage size".into());
     }
 
     let (expected_pages, expected_root_level) =
-        streaming_tree_shape(sources.len(), limits).map_err(|error| error.to_string())?;
+        streaming_tree_shape(object_count, limits).map_err(|error| error.to_string())?;
     let page_bytes = expected_pages
         .checked_mul(PAGE_SIZE)
         .ok_or_else(|| "page output size".to_owned())?;
@@ -132,7 +133,7 @@ fn prepare_encrypted_sorter_preflight<S: ImmutableStreamingPayloadSource>(
         expected_root_level,
         largest_source_buffer,
         version_checks,
-        object_count: sources.len(),
+        object_count,
     })
 }
 
