@@ -152,8 +152,7 @@ fn transcode_restart_spill_with_fresh_session(
     let old_key = descriptor_key(aes_key)?;
     let fresh_key = descriptor_key(&fresh_session.key)?;
     let mut reader = persisted_stage.try_clone().map_err(|error| error.to_string())?;
-    reader
-        .seek(SeekFrom::Start(0))
+    std::io::Seek::seek(&mut reader, std::io::SeekFrom::Start(0))
         .map_err(|error| error.to_string())?;
     let mut retained = super::FixedStage::create(
         work_directory,
