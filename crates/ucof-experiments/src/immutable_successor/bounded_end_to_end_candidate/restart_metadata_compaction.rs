@@ -194,6 +194,28 @@ fn load_nonce_compaction_checkpoint(
     Ok(Some(checkpoint))
 }
 
+fn compacted_directory_scan_ceiling(
+    journal: &LinuxDurableNonceJournal,
+) -> super::CandidateResult<usize> {
+    journal
+        .limits
+        .max_directory_entries
+        .checked_add(1)
+        .ok_or_else(|| "compacted directory entry ceiling".to_owned())
+}
+
+fn validate_compacted_directory_entry_count(
+    journal: &LinuxDurableNonceJournal,
+    directory_entries: usize,
+    saw_authenticated_checkpoint: bool,
+    label: &'static str,
+) -> super::CandidateResult<()> {
+    if directory_entries > journal.limits.max_directory_entries && !saw_authenticated_checkpoint {
+        return Err(format!("{label} directory entry limit"));
+    }
+    Ok(())
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct CompactedNonceRecovery {
     durable: DurableNonceState,
@@ -222,6 +244,8 @@ impl<'a> CompactedNonceJournal<'a> {
         let mut directory_entries = 0usize;
         let mut bytes_read = 0u64;
         let mut journal_bytes_read = 0u64;
+        let mut saw_authenticated_checkpoint = false;
+        let directory_scan_ceiling = compacted_directory_scan_ceiling(self.journal)?;
 
         for entry in std::fs::read_dir(linux_nonce_procfd_directory(&self.journal.directory))
             .map_err(|error| error.to_string())?
@@ -230,13 +254,14 @@ impl<'a> CompactedNonceJournal<'a> {
             directory_entries = directory_entries
                 .checked_add(1)
                 .ok_or_else(|| "compacted nonce directory entries".to_owned())?;
-            if directory_entries > self.journal.limits.max_directory_entries {
+            if directory_entries > directory_scan_ceiling {
                 return Err("compacted nonce directory entry limit".into());
             }
             let name = entry.file_name();
             if let Some(generation) = parse_nonce_compaction_name(&name) {
                 let checkpoint = load_nonce_compaction_checkpoint(self.journal, generation)?
                     .ok_or_else(|| "nonce compaction checkpoint disappeared".to_owned())?;
+                saw_authenticated_checkpoint = true;
                 bytes_read = bytes_read
                     .checked_add(u64::try_from(NONCE_COMPACTION_BYTES).expect("checkpoint width"))
                     .ok_or_else(|| "compacted nonce bytes".to_owned())?;
@@ -271,6 +296,12 @@ impl<'a> CompactedNonceJournal<'a> {
                 .ok_or_else(|| "compacted nonce bytes".to_owned())?;
             records.push(record);
         }
+        validate_compacted_directory_entry_count(
+            self.journal,
+            directory_entries,
+            saw_authenticated_checkpoint,
+            "compacted nonce",
+        )?;
 
         checkpoints.sort_unstable_by_key(|checkpoint| checkpoint.generation);
         for pair in checkpoints.windows(2) {
@@ -480,6 +511,8 @@ fn scan_compaction_metadata(
 ) -> super::CandidateResult<CompactionMetadataInventory> {
     let mut inventory = CompactionMetadataInventory::default();
     let mut directory_entries = 0usize;
+    let mut saw_authenticated_checkpoint = false;
+    let directory_scan_ceiling = compacted_directory_scan_ceiling(journal)?;
     for entry in std::fs::read_dir(linux_nonce_procfd_directory(&journal.directory))
         .map_err(|error| error.to_string())?
     {
@@ -487,10 +520,16 @@ fn scan_compaction_metadata(
         directory_entries = directory_entries
             .checked_add(1)
             .ok_or_else(|| "compaction metadata directory entries".to_owned())?;
-        if directory_entries > journal.limits.max_directory_entries {
+        if directory_entries > directory_scan_ceiling {
             return Err("compaction metadata directory entry limit".into());
         }
         let name = entry.file_name();
+        if let Some(generation) = parse_nonce_compaction_name(&name) {
+            load_nonce_compaction_checkpoint(journal, generation)?
+                .ok_or_else(|| "compaction checkpoint disappeared".to_owned())?;
+            saw_authenticated_checkpoint = true;
+            continue;
+        }
         if let Some((generation, role)) = parse_compaction_stage_manifest_name(&name) {
             let manifest = load_encrypted_stage_manifest(journal, generation, role)
                 .map_err(|error| error.to_string())?
@@ -557,6 +596,12 @@ fn scan_compaction_metadata(
             inventory.source_sets.push((name, record));
         }
     }
+    validate_compacted_directory_entry_count(
+        journal,
+        directory_entries,
+        saw_authenticated_checkpoint,
+        "compaction metadata",
+    )?;
 
     let mut fresh_by_crashed = std::collections::BTreeMap::new();
     for (crashed, fresh) in inventory
@@ -792,6 +837,8 @@ fn compaction_nonce_prune_inventory(
     let mut old_checkpoints = Vec::new();
     let mut preserved_nonce_records = 0usize;
     let mut directory_entries = 0usize;
+    let mut saw_authenticated_checkpoint = false;
+    let directory_scan_ceiling = compacted_directory_scan_ceiling(journal)?;
     for entry in std::fs::read_dir(linux_nonce_procfd_directory(&journal.directory))
         .map_err(|error| error.to_string())?
     {
@@ -799,7 +846,7 @@ fn compaction_nonce_prune_inventory(
         directory_entries = directory_entries
             .checked_add(1)
             .ok_or_else(|| "compaction prune directory entries".to_owned())?;
-        if directory_entries > journal.limits.max_directory_entries {
+        if directory_entries > directory_scan_ceiling {
             return Err("compaction prune directory entry limit".into());
         }
         let name = entry.file_name();
@@ -818,13 +865,20 @@ fn compaction_nonce_prune_inventory(
             continue;
         }
         if let Some(generation) = parse_nonce_compaction_name(&name) {
+            let checkpoint = load_nonce_compaction_checkpoint(journal, generation)?
+                .ok_or_else(|| "compaction checkpoint disappeared".to_owned())?;
+            saw_authenticated_checkpoint = true;
             if generation < checkpoint_generation {
-                let checkpoint = load_nonce_compaction_checkpoint(journal, generation)?
-                    .ok_or_else(|| "compaction old checkpoint disappeared".to_owned())?;
                 old_checkpoints.push((name, checkpoint));
             }
         }
     }
+    validate_compacted_directory_entry_count(
+        journal,
+        directory_entries,
+        saw_authenticated_checkpoint,
+        "compaction prune",
+    )?;
     Ok((nonce_records, old_checkpoints, preserved_nonce_records))
 }
 
