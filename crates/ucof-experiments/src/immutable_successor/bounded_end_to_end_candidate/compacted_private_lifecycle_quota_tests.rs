@@ -210,3 +210,119 @@ fn checkpointed_source_bound_restart_quota_preserves_pre_side_effect_rejection()
     );
     work_directory.assert_empty();
 }
+
+#[test]
+fn checkpointed_publication_quota_rejects_before_nonce_or_backend_side_effects() {
+    const OBJECTS: u64 = 11;
+    let source_set_id = [0x74; 32];
+    let (journal_directory, stage_directory, aes_key, nonce_prefix, restart_limits, _) =
+        prepared_source_bound_restart_stage(
+            "checkpointed-publication-quota",
+            OBJECTS,
+            source_set_id,
+        );
+    let journal = open_journal(&journal_directory.0, &aes_key, nonce_prefix);
+    compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect("checkpoint publication quota source state");
+    let work_directory = super::TestDirectory::new("checkpointed-publication-quota-work");
+    let original: Vec<_> = (1..=OBJECTS).rev().map(super::TinySource::new).collect();
+    let mut baseline_sources = original.clone();
+    let mut baseline = Vec::new();
+    super::write_genesis_sources_to(
+        &mut baseline,
+        &mut baseline_sources,
+        super::options(),
+        super::ImmutableLimits::default(),
+    )
+    .expect("checkpointed publication quota baseline");
+
+    let mut rejected_sources = original.clone();
+    let inventory = scan_compacted_persistent_inventory(&journal)
+        .expect("checkpointed publication inventory");
+    let output_bytes = super::expected_canonical_output_bytes(
+        &rejected_sources,
+        super::ImmutableLimits::default(),
+    )
+    .expect("checkpointed publication output size");
+    let spill = super::spill_limits(17, 3);
+    let plan = compacted_crash_resume_storage_plan(
+        rejected_sources.len(),
+        output_bytes,
+        spill,
+        inventory,
+    )
+    .expect("checkpointed publication storage plan");
+    let continuation = EncryptedRestartContinuationSettings {
+        aes_key,
+        crashed_generation: 1,
+        trusted_floor: None,
+        restart_limits,
+        options: super::options(),
+        limits: super::ImmutableLimits::default(),
+        fresh_operation_id: [0x75; 16],
+    };
+    let mut rejected_backend =
+        RestartPublicationTestBackend::new(super::PersistentPublicationLinkOutcome::Linked);
+    let error = stage_and_publish_compacted_source_bound_restart_with_private_quota(
+        &journal,
+        &stage_directory.0,
+        &work_directory.0,
+        &mut rejected_backend,
+        &mut rejected_sources,
+        CompactedSourceBoundRestartQuotaSettings {
+            continuation,
+            spill_limits: spill,
+            max_private_storage_bytes: plan.required_bytes - 1,
+            source_set_id,
+        },
+    )
+    .expect_err("one-byte-short compacted publication quota must fail");
+    assert!(error.contains("compacted source-bound restart private storage limit"));
+    assert!(!rejected_backend.begun);
+    assert!(rejected_backend.private.is_empty());
+    assert!(rejected_backend.destination.is_none());
+    assert_eq!(
+        CompactedNonceJournal::new(&journal)
+            .scan(None)
+            .expect("authority after compacted publication quota rejection")
+            .durable
+            .generation,
+        1
+    );
+    work_directory.assert_empty();
+
+    let mut exact_sources = original;
+    let mut exact_backend =
+        RestartPublicationTestBackend::new(super::PersistentPublicationLinkOutcome::Linked);
+    let (actual_plan, outcome) = stage_and_publish_compacted_source_bound_restart_with_private_quota(
+        &journal,
+        &stage_directory.0,
+        &work_directory.0,
+        &mut exact_backend,
+        &mut exact_sources,
+        CompactedSourceBoundRestartQuotaSettings {
+            continuation,
+            spill_limits: spill,
+            max_private_storage_bytes: plan.required_bytes,
+            source_set_id,
+        },
+    )
+    .expect("exact compacted publication quota");
+    assert_eq!(actual_plan, plan);
+    let EncryptedTreeRestartPublicationOutcome::PublishedAndDurable(durable) = outcome else {
+        panic!("exact compacted publication quota must publish durably");
+    };
+    assert_eq!(durable.durable.continuation.fresh_generation, 2);
+    assert_eq!(exact_backend.destination.as_deref(), Some(baseline.as_slice()));
+    assert!(!exact_backend.begun);
+    assert!(exact_backend.private.is_empty());
+    assert_eq!(
+        CompactedNonceJournal::new(&journal)
+            .scan(None)
+            .expect("authority after exact compacted publication quota")
+            .durable
+            .generation,
+        2
+    );
+    work_directory.assert_empty();
+}
