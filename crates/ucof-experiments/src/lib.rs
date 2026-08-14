@@ -31,6 +31,8 @@ mod mixed_update_plan;
 #[cfg(test)]
 mod private_cleanup_journal_commit_order;
 #[cfg(test)]
+mod private_cleanup_restart_inventory;
+#[cfg(test)]
 mod private_nonce_lease_contract;
 #[cfg(test)]
 mod private_restart_journal_contract_v2;
