@@ -88,7 +88,10 @@ fn encrypted_descriptor_writer_preserves_canonical_bytes_and_reports() {
         evidence_a.descriptor_stage_bytes,
         OBJECTS * u64::try_from(ENCRYPTED_DESCRIPTOR_STAGE_BYTES).expect("encrypted width")
     );
-    assert_eq!(evidence_a.descriptor_stage_bytes, evidence_b.descriptor_stage_bytes);
+    assert_eq!(
+        evidence_a.descriptor_stage_bytes,
+        evidence_b.descriptor_stage_bytes
+    );
     assert_ne!(
         evidence_a.descriptor_ciphertext_sha256,
         evidence_b.descriptor_ciphertext_sha256
@@ -130,10 +133,12 @@ fn encrypted_descriptor_quota_prices_transcode_and_emission_overlaps() {
             &mut exact_output,
             &mut exact_sources,
             &directory.0,
-            options(),
-            ImmutableLimits::default(),
             spill,
-            plan.required_bytes,
+            EncryptedPrivateWriterSettings {
+                options: options(),
+                limits: ImmutableLimits::default(),
+                max_private_storage_bytes: plan.required_bytes,
+            },
             &mut exact_session,
         )
         .expect("exact private quota");
@@ -157,10 +162,12 @@ fn encrypted_descriptor_quota_prices_transcode_and_emission_overlaps() {
         &mut short_output,
         &mut short_sources,
         &directory.0,
-        options(),
-        ImmutableLimits::default(),
         spill,
-        plan.required_bytes - 1,
+        EncryptedPrivateWriterSettings {
+            options: options(),
+            limits: ImmutableLimits::default(),
+            max_private_storage_bytes: plan.required_bytes - 1,
+        },
         &mut short_session,
     )
     .expect_err("one byte short must fail");
