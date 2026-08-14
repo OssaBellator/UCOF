@@ -28,6 +28,12 @@ pub mod immutable_successor;
 mod mixed_reference_plan;
 mod mixed_tree_plan;
 mod mixed_update_plan;
+#[cfg(test)]
+mod private_nonce_lease_contract;
+#[cfg(test)]
+mod private_restart_journal_contract_v2;
+#[cfg(test)]
+mod private_stage_crypto_contract_v3;
 mod publication;
 mod recovery;
 mod repair;
