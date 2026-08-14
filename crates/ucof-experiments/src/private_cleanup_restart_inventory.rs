@@ -185,7 +185,10 @@ mod tests {
         assert_eq!(report.scanned_entries, 32);
         assert_eq!(report.scanned_metadata_bytes, 2048);
         assert!(report.truncated);
-        assert_eq!(report.observation, InventoryObservation::MissingScanTruncated);
+        assert_eq!(
+            report.observation,
+            InventoryObservation::MissingScanTruncated
+        );
     }
 
     #[test]
@@ -240,7 +243,10 @@ mod tests {
         assert_eq!(report.scanned_entries, 1);
         assert_eq!(report.scanned_metadata_bytes, 64);
         assert!(report.truncated);
-        assert_eq!(report.observation, InventoryObservation::MissingScanTruncated);
+        assert_eq!(
+            report.observation,
+            InventoryObservation::MissingScanTruncated
+        );
     }
 
     #[test]
@@ -254,7 +260,10 @@ mod tests {
         ];
         let report = scan_restart_inventory(entries, identity(1), limits()).expect("inventory");
         assert_eq!(report.unreadable_entries, 1);
-        assert_eq!(report.observation, InventoryObservation::MissingScanTruncated);
+        assert_eq!(
+            report.observation,
+            InventoryObservation::MissingScanTruncated
+        );
     }
 
     #[test]
@@ -304,6 +313,9 @@ mod tests {
             scan_restart_inventory(entries, identity(1), huge).expect("overflow truncates");
         assert_eq!(report.scanned_entries, 1);
         assert!(report.truncated);
-        assert_eq!(report.observation, InventoryObservation::MissingScanTruncated);
+        assert_eq!(
+            report.observation,
+            InventoryObservation::MissingScanTruncated
+        );
     }
 }
