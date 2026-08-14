@@ -91,7 +91,7 @@ fn source_bound_normal_storage_plan(
     spill_limits: super::BoundedSpillSortLimits,
     inventory_before_operation: SourceBoundPersistentInventory,
 ) -> super::CandidateResult<SourceBoundNormalStoragePlan> {
-    let mut base = encrypted_normal_publication_storage_plan(
+    let (mut base, _) = consolidated_encrypted_tree_normal_lifecycle_plan(
         object_count,
         output_bytes,
         spill_limits,
@@ -146,7 +146,7 @@ fn source_bound_crash_resume_storage_plan(
     spill_limits: super::BoundedSpillSortLimits,
     inventory_at_restart: SourceBoundPersistentInventory,
 ) -> super::CandidateResult<SourceBoundCrashResumeStoragePlan> {
-    let mut base = encrypted_crash_resume_storage_plan(
+    let (mut base, _) = consolidated_encrypted_tree_crash_resume_lifecycle_plan(
         object_count,
         output_bytes,
         spill_limits,
