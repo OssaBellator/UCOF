@@ -14,6 +14,8 @@ mod persistent_linux_descriptor_staging_impl {
     use sha2::{Digest, Sha256};
 
     include!("persistent_linux_descriptor_staging_impl.rs");
+    #[cfg(test)]
+    include!("persistent_linux_authorized_cleanup.rs");
 }
 
 pub use persistent_linux_descriptor_staging_impl::*;
