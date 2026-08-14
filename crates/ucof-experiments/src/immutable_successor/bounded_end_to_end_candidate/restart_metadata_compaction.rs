@@ -395,6 +395,7 @@ impl<'a> CompactedNonceJournal<'a> {
 enum RestartMetadataCompactionCut {
     AfterCheckpointFileSyncBeforeDirectorySync,
     AfterCheckpointDirectorySyncBeforePrune,
+    AfterSourceSetPruneBeforeRetirementPrune,
     AfterPruneBeforeDirectorySync,
     Complete,
 }
@@ -907,15 +908,6 @@ fn compact_restart_metadata(
             .checked_add(1)
             .ok_or_else(|| "pruned nonce record count".to_owned())?;
     }
-    for (name, record) in &metadata.retirement_files {
-        let pair = (record.crashed_generation, record.fresh_generation);
-        if metadata.terminal_pairs.contains(&pair) {
-            remove_verified_retirement(journal, name, *record)?;
-            pruned_retirement_records = pruned_retirement_records
-                .checked_add(1)
-                .ok_or_else(|| "pruned retirement record count".to_owned())?;
-        }
-    }
     for (name, record) in &metadata.source_sets {
         if terminal_crashed.contains(&record.generation) {
             remove_verified_source_set(journal, name, *record)?;
@@ -926,6 +918,27 @@ fn compact_restart_metadata(
             preserved_source_set_records = preserved_source_set_records
                 .checked_add(1)
                 .ok_or_else(|| "preserved source-set record count".to_owned())?;
+        }
+    }
+    if cut == RestartMetadataCompactionCut::AfterSourceSetPruneBeforeRetirementPrune {
+        return Ok(RestartMetadataCompactionReport {
+            checkpoint_generation: checkpoint.generation,
+            pruned_nonce_records,
+            pruned_retirement_records: 0,
+            pruned_source_set_records,
+            pruned_old_checkpoints: 0,
+            preserved_nonce_records,
+            preserved_prepared_retirements,
+            preserved_source_set_records,
+        });
+    }
+    for (name, record) in &metadata.retirement_files {
+        let pair = (record.crashed_generation, record.fresh_generation);
+        if metadata.terminal_pairs.contains(&pair) {
+            remove_verified_retirement(journal, name, *record)?;
+            pruned_retirement_records = pruned_retirement_records
+                .checked_add(1)
+                .ok_or_else(|| "pruned retirement record count".to_owned())?;
         }
     }
     for (name, old_checkpoint) in old_checkpoints {
