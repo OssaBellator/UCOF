@@ -8,8 +8,8 @@ fn private_directory(label: &str) -> super::TestDirectory {
     directory
 }
 
-fn journal<'a>(
-    directory: &'a Path,
+fn journal(
+    directory: &Path,
     aes_key: &[u8; 32],
     prefix: [u8; 4],
 ) -> LinuxDurableNonceJournal {
@@ -21,6 +21,12 @@ fn journal<'a>(
         LinuxNonceJournalLimits::default(),
     )
     .expect("open durable nonce journal")
+}
+
+fn directory_entry_count(directory: &Path) -> usize {
+    std::fs::read_dir(directory)
+        .expect("journal directory listing")
+        .count()
 }
 
 #[test]
@@ -109,8 +115,10 @@ fn durable_journal_authorizes_real_encrypted_spill_writer_and_restart_burns_leas
     assert_eq!(second_evidence.output.output, baseline_report);
     assert_eq!(second_session.remaining(), 0);
     assert_eq!(restarted_authority.next_unreserved(), Some(lease_size * 2));
-    assert_eq!(restarted.scan(None).expect("final scan").generations, 2);
-    directory.assert_empty();
+    let final_scan = restarted.scan(None).expect("final scan");
+    assert_eq!(final_scan.generations, 2);
+    assert_eq!(final_scan.bytes_read, 2 * 128);
+    assert_eq!(directory_entry_count(&directory.0), 2);
 }
 
 #[test]
@@ -127,16 +135,23 @@ fn pre_directory_sync_cuts_never_return_an_issuable_session() {
         let directory = private_directory(label);
         let journal = journal(&directory.0, &aes_key, prefix);
         let mut authority = journal.recover_authority(None).expect("initial authority");
-        let error = journal
-            .commit_descriptor_session(&mut authority, aes_key, [0x51; 16], 4, cut)
-            .expect_err("cut must not activate session");
+        let error = match journal.commit_descriptor_session(
+            &mut authority,
+            aes_key,
+            [0x51; 16],
+            4,
+            cut,
+        ) {
+            Ok(_) => panic!("cut must not activate session"),
+            Err(error) => error,
+        };
         assert_eq!(error, LinuxNonceJournalError::InjectedCut(cut));
         assert_eq!(authority.durable, DurableNonceState::initial());
 
         let visible = journal.scan(None).expect("visible candidate is safe to burn");
         assert_eq!(visible.durable.generation, 1);
         assert_eq!(visible.durable.next_unreserved, Some(4));
-        directory.assert_empty();
+        assert_eq!(directory_entry_count(&directory.0), 1);
     }
 }
 
@@ -147,15 +162,16 @@ fn lost_pre_sync_candidate_can_be_reused_only_because_no_session_was_issued() {
     let prefix = [0x33; 4];
     let journal = journal(&directory.0, &aes_key, prefix);
     let mut authority = journal.recover_authority(None).expect("initial authority");
-    let error = journal
-        .commit_descriptor_session(
-            &mut authority,
-            aes_key,
-            [0x61; 16],
-            4,
-            JournalCommitCut::AfterWriteBeforeFileSync,
-        )
-        .expect_err("pre-sync cut");
+    let error = match journal.commit_descriptor_session(
+        &mut authority,
+        aes_key,
+        [0x61; 16],
+        4,
+        JournalCommitCut::AfterWriteBeforeFileSync,
+    ) {
+        Ok(_) => panic!("pre-sync cut must not activate session"),
+        Err(error) => error,
+    };
     assert_eq!(
         error,
         LinuxNonceJournalError::InjectedCut(JournalCommitCut::AfterWriteBeforeFileSync)
@@ -179,7 +195,7 @@ fn lost_pre_sync_candidate_can_be_reused_only_because_no_session_was_issued() {
         .expect("reuse never-issued counters");
     assert_eq!(session.lease.first, 0);
     assert_eq!(recovered.next_unreserved(), Some(4));
-    directory.assert_empty();
+    assert_eq!(directory_entry_count(&directory.0), 1);
 }
 
 #[test]
@@ -233,6 +249,7 @@ fn tamper_and_generation_gap_fail_closed() {
         journal.scan(None).expect_err("gap must fail"),
         LinuxNonceJournalError::GenerationGap
     );
+    assert_eq!(directory_entry_count(&directory.0), 1);
 }
 
 #[test]
@@ -272,12 +289,12 @@ fn external_floor_detects_tail_rollback_that_self_journal_cannot_prove() {
         .expect("self journal cannot know deleted tail existed");
     assert_eq!(self_only.durable.generation, 1);
     assert_eq!(self_only.next_unreserved(), Some(4));
-    assert_eq!(
-        journal
-            .recover_authority(Some(floor))
-            .expect_err("trusted floor must detect rollback"),
-        LinuxNonceJournalError::Rollback
-    );
+    let error = match journal.recover_authority(Some(floor)) {
+        Ok(_) => panic!("trusted floor must detect rollback"),
+        Err(error) => error,
+    };
+    assert_eq!(error, LinuxNonceJournalError::Rollback);
+    assert_eq!(directory_entry_count(&directory.0), 1);
 }
 
 #[test]
@@ -297,37 +314,35 @@ fn key_prefix_and_stale_authority_are_fail_closed() {
             JournalCommitCut::Complete,
         )
         .expect("winning lease");
-    assert_eq!(
-        journal
-            .commit_descriptor_session(
-                &mut stale_authority,
-                aes_key,
-                [0x92; 16],
-                4,
-                JournalCommitCut::Complete,
-            )
-            .expect_err("stale authority"),
-        LinuxNonceJournalError::StaleAuthority
-    );
-    assert_eq!(
-        journal
-            .commit_descriptor_session(
-                &mut first_authority,
-                [0xc2; 32],
-                [0x93; 16],
-                4,
-                JournalCommitCut::Complete,
-            )
-            .expect_err("wrong AES key"),
-        LinuxNonceJournalError::ForeignKey
-    );
+    let stale_error = match journal.commit_descriptor_session(
+        &mut stale_authority,
+        aes_key,
+        [0x92; 16],
+        4,
+        JournalCommitCut::Complete,
+    ) {
+        Ok(_) => panic!("stale authority must not activate session"),
+        Err(error) => error,
+    };
+    assert_eq!(stale_error, LinuxNonceJournalError::StaleAuthority);
+    let key_error = match journal.commit_descriptor_session(
+        &mut first_authority,
+        [0xc2; 32],
+        [0x93; 16],
+        4,
+        JournalCommitCut::Complete,
+    ) {
+        Ok(_) => panic!("wrong AES key must not activate session"),
+        Err(error) => error,
+    };
+    assert_eq!(key_error, LinuxNonceJournalError::ForeignKey);
 
     drop(journal);
     let wrong_prefix = journal(&directory.0, &aes_key, [0x37; 4]);
-    assert_eq!(
-        wrong_prefix
-            .recover_authority(None)
-            .expect_err("wrong prefix"),
-        LinuxNonceJournalError::ForeignNoncePrefix
-    );
+    let prefix_error = match wrong_prefix.recover_authority(None) {
+        Ok(_) => panic!("wrong prefix must not recover authority"),
+        Err(error) => error,
+    };
+    assert_eq!(prefix_error, LinuxNonceJournalError::ForeignNoncePrefix);
+    assert_eq!(directory_entry_count(&directory.0), 1);
 }
