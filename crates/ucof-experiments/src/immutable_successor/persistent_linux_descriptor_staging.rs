@@ -16,6 +16,8 @@ mod persistent_linux_descriptor_staging_impl {
     include!("persistent_linux_descriptor_staging_impl.rs");
     #[cfg(test)]
     include!("persistent_linux_authorized_cleanup.rs");
+    #[cfg(test)]
+    include!("persistent_linux_restart_inventory.rs");
 }
 
 pub use persistent_linux_descriptor_staging_impl::*;
