@@ -1482,6 +1482,7 @@ dependencies = [
 name = "ucof-experiments"
 version = "0.1.0"
 dependencies = [
+ "aws-lc-rs",
  "reqwest",
  "sha2",
  "tokio",
