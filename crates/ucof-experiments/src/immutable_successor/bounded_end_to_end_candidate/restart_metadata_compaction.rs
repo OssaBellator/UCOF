@@ -141,7 +141,8 @@ fn open_nonce_compaction_checkpoint(
 ) -> super::CandidateResult<NonceCompactionCheckpoint> {
     let (body, tag) = sealed.split_at(NONCE_COMPACTION_BODY_BYTES);
     let key = hmac::Key::new(hmac::HMAC_SHA256, &journal.journal_auth_key);
-    hmac::verify(&key, body, tag).map_err(|_| "nonce compaction authentication".to_owned())?;
+    hmac::verify(&key, body, tag)
+        .map_err(|_| "nonce compaction authentication".to_owned())?;
     let checkpoint = NonceCompactionCheckpoint::decode(body)?;
     if checkpoint.key_id != journal.key_id || checkpoint.nonce_prefix != journal.nonce_prefix {
         return Err("nonce compaction journal context".into());
@@ -228,6 +229,9 @@ impl<'a> CompactedNonceJournal<'a> {
             let Some(generation) = linux_nonce_parse_generation_name(&name) else {
                 continue;
             };
+            if records.len() >= self.journal.limits.max_generations {
+                return Err("compacted nonce generation limit".into());
+            }
             let file = linux_nonce_open_relative_readonly(&self.journal.directory, &name)
                 .map_err(|error| error.to_string())?
                 .ok_or_else(|| "compacted nonce journal disappeared".to_owned())?;
@@ -262,12 +266,38 @@ impl<'a> CompactedNonceJournal<'a> {
         }
 
         checkpoints.sort_unstable_by_key(|checkpoint| checkpoint.generation);
+        for pair in checkpoints.windows(2) {
+            let previous = pair[0];
+            let next = pair[1];
+            if next.generation <= previous.generation
+                || !linux_nonce_at_least(previous.next_unreserved, next.next_unreserved)
+            {
+                return Err("nonce compaction checkpoint rollback".into());
+            }
+        }
         let checkpoint = checkpoints.last().copied();
         let mut durable = checkpoint
             .map(NonceCompactionCheckpoint::durable)
             .unwrap_or_else(DurableNonceState::initial);
         let checkpoint_generation = checkpoint.map(|checkpoint| checkpoint.generation);
+
         records.sort_unstable_by_key(|record| record.generation);
+        if let Some(checkpoint) = checkpoint {
+            for record in records
+                .iter()
+                .filter(|record| record.generation <= checkpoint.generation)
+            {
+                if !linux_nonce_at_least(record.next_unreserved, checkpoint.next_unreserved) {
+                    return Err("nonce compaction checkpoint rollback".into());
+                }
+                if record.generation == checkpoint.generation
+                    && record.next_unreserved != checkpoint.next_unreserved
+                {
+                    return Err("nonce compaction checkpoint generation mismatch".into());
+                }
+            }
+        }
+
         let mut journal_records = 0usize;
         for record in records {
             if record.generation <= durable.generation {
@@ -379,7 +409,7 @@ struct RestartMetadataCompactionReport {
 struct CompactionMetadataInventory {
     terminal_pairs: std::collections::BTreeSet<(u64, u64)>,
     prepared_pairs: std::collections::BTreeSet<(u64, u64)>,
-    live_manifest_generations: std::collections::BTreeSet<u64>,
+    live_manifests: std::collections::BTreeMap<u64, LinuxEncryptedStageManifest>,
     source_sets: Vec<(OsString, RestartSourceSetAuthority)>,
     retirement_files: Vec<(OsString, EncryptedRestartRetirementRecord)>,
 }
@@ -403,13 +433,38 @@ fn parse_compaction_stage_manifest_name(
         return None;
     }
     let role = match &body[21..] {
-        "sorted-descriptor-spill" => EncryptedRestartStageRole::SortedDescriptorSpill,
+        "descriptor-spill" => EncryptedRestartStageRole::SortedDescriptorSpill,
         _ => return None,
     };
     if encrypted_stage_manifest_name(generation, role) != OsString::from(name) {
         return None;
     }
     Some((generation, role))
+}
+
+fn restart_manifest_object_count(
+    manifest: LinuxEncryptedStageManifest,
+) -> super::CandidateResult<u64> {
+    let width = u64::try_from(ENCRYPTED_DESCRIPTOR_SPILL_PAYLOAD_BYTES)
+        .expect("encrypted spill width fits u64");
+    if manifest.stage_length == 0 || manifest.stage_length % width != 0 {
+        return Err("compaction manifest stage length".into());
+    }
+    Ok(manifest.stage_length / width)
+}
+
+fn same_retirement_payload(
+    left: EncryptedRestartRetirementRecord,
+    right: EncryptedRestartRetirementRecord,
+) -> bool {
+    left.key_id == right.key_id
+        && left.nonce_prefix == right.nonce_prefix
+        && left.crashed_generation == right.crashed_generation
+        && left.fresh_generation == right.fresh_generation
+        && left.stage_identity == right.stage_identity
+        && left.manifest_identity == right.manifest_identity
+        && left.output_length == right.output_length
+        && left.output_sha256 == right.output_sha256
 }
 
 fn scan_compaction_metadata(
@@ -429,12 +484,15 @@ fn scan_compaction_metadata(
         }
         let name = entry.file_name();
         if let Some((generation, role)) = parse_compaction_stage_manifest_name(&name) {
-            let manifest = load_encrypted_stage_manifest(journal, generation, role)?
+            let manifest = load_encrypted_stage_manifest(journal, generation, role)
+                .map_err(|error| error.to_string())?
                 .ok_or_else(|| "compaction stage manifest disappeared".to_owned())?;
             if manifest.generation != generation || manifest.role != role {
                 return Err("compaction stage manifest identity".into());
             }
-            inventory.live_manifest_generations.insert(generation);
+            if inventory.live_manifests.insert(generation, manifest).is_some() {
+                return Err("compaction duplicate live manifest generation".into());
+            }
             continue;
         }
         let name_bytes = name.as_bytes();
@@ -510,18 +568,83 @@ fn scan_compaction_metadata(
             inventory.source_sets.push((name, record));
         }
     }
+
+    let mut fresh_by_crashed = std::collections::BTreeMap::new();
+    for (crashed, fresh) in inventory
+        .prepared_pairs
+        .iter()
+        .chain(inventory.terminal_pairs.iter())
+        .copied()
+    {
+        if let Some(previous) = fresh_by_crashed.insert(crashed, fresh) {
+            if previous != fresh {
+                return Err("compaction competing retirement generations".into());
+            }
+        }
+    }
+
+    for pair in inventory
+        .prepared_pairs
+        .intersection(&inventory.terminal_pairs)
+        .copied()
+    {
+        let prepared = inventory
+            .retirement_files
+            .iter()
+            .find_map(|(_, record)| {
+                (record.state == EncryptedRetirementState::Prepared
+                    && (record.crashed_generation, record.fresh_generation) == pair)
+                    .then_some(*record)
+            })
+            .ok_or_else(|| "compaction prepared retirement missing".to_owned())?;
+        let terminal = inventory
+            .retirement_files
+            .iter()
+            .find_map(|(_, record)| {
+                (record.state == EncryptedRetirementState::Terminal
+                    && (record.crashed_generation, record.fresh_generation) == pair)
+                    .then_some(*record)
+            })
+            .ok_or_else(|| "compaction terminal retirement missing".to_owned())?;
+        if !same_retirement_payload(prepared, terminal) {
+            return Err("compaction retirement payload mismatch".into());
+        }
+    }
+
     let terminal_crashed: std::collections::BTreeSet<u64> = inventory
         .terminal_pairs
         .iter()
         .map(|(crashed, _)| *crashed)
         .collect();
     if inventory
-        .live_manifest_generations
-        .iter()
+        .live_manifests
+        .keys()
         .any(|generation| terminal_crashed.contains(generation))
     {
         return Err("terminal retirement retains live stage manifest".into());
     }
+
+    let prepared_crashed: std::collections::BTreeSet<u64> = inventory
+        .prepared_pairs
+        .iter()
+        .map(|(crashed, _)| *crashed)
+        .collect();
+    for (_, source_set) in &inventory.source_sets {
+        if let Some(manifest) = inventory.live_manifests.get(&source_set.generation) {
+            if source_set.role != manifest.role
+                || source_set.operation_id != manifest.operation_id
+                || source_set.stage_identity != manifest.identity()
+                || source_set.object_count != restart_manifest_object_count(*manifest)?
+            {
+                return Err("compaction source-set/live-manifest mismatch".into());
+            }
+        } else if !prepared_crashed.contains(&source_set.generation)
+            && !terminal_crashed.contains(&source_set.generation)
+        {
+            return Err("source-set authority without live restart or cleanup".into());
+        }
+    }
+
     Ok(inventory)
 }
 
@@ -534,11 +657,15 @@ fn persist_nonce_compaction_checkpoint(
         if existing != checkpoint {
             return Err("nonce compaction checkpoint conflict".into());
         }
+        linux_nonce_verify_procfd_directory(&journal.directory)
+            .map_err(|error| error.to_string())?;
+        journal.directory.sync_all().map_err(|error| error.to_string())?;
         return Ok(());
     }
     let name = nonce_compaction_name(checkpoint.generation);
     let sealed = seal_nonce_compaction_checkpoint(journal, checkpoint)?;
-    let path = linux_nonce_procfd_child(&journal.directory, &name).map_err(|error| error.to_string())?;
+    let path = linux_nonce_procfd_child(&journal.directory, &name)
+        .map_err(|error| error.to_string())?;
     let mut file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
@@ -552,30 +679,105 @@ fn persist_nonce_compaction_checkpoint(
     if cut == RestartMetadataCompactionCut::AfterCheckpointFileSyncBeforeDirectorySync {
         return Err("injected compaction cut after checkpoint file sync".into());
     }
-    linux_nonce_verify_procfd_directory(&journal.directory).map_err(|error| error.to_string())?;
+    linux_nonce_verify_procfd_directory(&journal.directory)
+        .map_err(|error| error.to_string())?;
     journal.directory.sync_all().map_err(|error| error.to_string())?;
     Ok(())
 }
 
-fn remove_compaction_file(
+fn remove_verified_nonce_record(
     journal: &LinuxDurableNonceJournal,
     name: &OsStr,
+    expected: LinuxNonceJournalRecord,
 ) -> super::CandidateResult<()> {
-    let path = linux_nonce_procfd_child(&journal.directory, name).map_err(|error| error.to_string())?;
-    match std::fs::remove_file(path) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error.to_string()),
+    if OsString::from(linux_nonce_journal_name(expected.generation)) != name {
+        return Err("compaction nonce prune canonical name".into());
     }
+    let current = load_nonce_generation_record(journal, expected.generation)
+        .map_err(|error| error.to_string())?;
+    if current != expected {
+        return Err("compaction nonce prune identity changed".into());
+    }
+    let path = linux_nonce_procfd_child(&journal.directory, name)
+        .map_err(|error| error.to_string())?;
+    std::fs::remove_file(path).map_err(|error| error.to_string())
 }
 
-fn compaction_prune_names(
+fn remove_verified_checkpoint(
+    journal: &LinuxDurableNonceJournal,
+    name: &OsStr,
+    expected: NonceCompactionCheckpoint,
+) -> super::CandidateResult<()> {
+    if nonce_compaction_name(expected.generation) != name {
+        return Err("compaction checkpoint prune canonical name".into());
+    }
+    let current = load_nonce_compaction_checkpoint(journal, expected.generation)?
+        .ok_or_else(|| "compaction checkpoint prune disappeared".to_owned())?;
+    if current != expected {
+        return Err("compaction checkpoint prune identity changed".into());
+    }
+    let path = linux_nonce_procfd_child(&journal.directory, name)
+        .map_err(|error| error.to_string())?;
+    std::fs::remove_file(path).map_err(|error| error.to_string())
+}
+
+fn remove_verified_retirement(
+    journal: &LinuxDurableNonceJournal,
+    name: &OsStr,
+    expected: EncryptedRestartRetirementRecord,
+) -> super::CandidateResult<()> {
+    if encrypted_retirement_name(
+        expected.crashed_generation,
+        expected.fresh_generation,
+        expected.state,
+    ) != name
+    {
+        return Err("compaction retirement prune canonical name".into());
+    }
+    let current = load_encrypted_retirement_record(
+        journal,
+        expected.crashed_generation,
+        expected.fresh_generation,
+        expected.state,
+    )?
+    .ok_or_else(|| "compaction retirement prune disappeared".to_owned())?;
+    if current != expected {
+        return Err("compaction retirement prune identity changed".into());
+    }
+    let path = linux_nonce_procfd_child(&journal.directory, name)
+        .map_err(|error| error.to_string())?;
+    std::fs::remove_file(path).map_err(|error| error.to_string())
+}
+
+fn remove_verified_source_set(
+    journal: &LinuxDurableNonceJournal,
+    name: &OsStr,
+    expected: RestartSourceSetAuthority,
+) -> super::CandidateResult<()> {
+    if restart_source_set_authority_name(expected.generation, expected.role) != name {
+        return Err("compaction source-set prune canonical name".into());
+    }
+    let current = load_restart_source_set_authority(journal, expected.generation, expected.role)?
+        .ok_or_else(|| "compaction source-set prune disappeared".to_owned())?;
+    if current != expected {
+        return Err("compaction source-set prune identity changed".into());
+    }
+    let path = linux_nonce_procfd_child(&journal.directory, name)
+        .map_err(|error| error.to_string())?;
+    std::fs::remove_file(path).map_err(|error| error.to_string())
+}
+
+fn compaction_nonce_prune_inventory(
     journal: &LinuxDurableNonceJournal,
     checkpoint_generation: u64,
     protected_nonce_generations: &std::collections::BTreeSet<u64>,
-) -> super::CandidateResult<(Vec<OsString>, Vec<OsString>, usize)> {
-    let mut nonce_names = Vec::new();
-    let mut old_checkpoint_names = Vec::new();
+) -> super::CandidateResult<(
+    Vec<(OsString, LinuxNonceJournalRecord)>,
+    Vec<(OsString, NonceCompactionCheckpoint)>,
+    usize,
+)> {
+    let mut nonce_records = Vec::new();
+    let mut old_checkpoints = Vec::new();
     let mut preserved_nonce_records = 0usize;
     let mut directory_entries = 0usize;
     for entry in std::fs::read_dir(linux_nonce_procfd_directory(&journal.directory))
@@ -596,18 +798,22 @@ fn compaction_prune_names(
                         .checked_add(1)
                         .ok_or_else(|| "preserved nonce record count".to_owned())?;
                 } else {
-                    nonce_names.push(name);
+                    let record = load_nonce_generation_record(journal, generation)
+                        .map_err(|error| error.to_string())?;
+                    nonce_records.push((name, record));
                 }
             }
             continue;
         }
-        if parse_nonce_compaction_name(&name)
-            .is_some_and(|generation| generation < checkpoint_generation)
-        {
-            old_checkpoint_names.push(name);
+        if let Some(generation) = parse_nonce_compaction_name(&name) {
+            if generation < checkpoint_generation {
+                let checkpoint = load_nonce_compaction_checkpoint(journal, generation)?
+                    .ok_or_else(|| "compaction old checkpoint disappeared".to_owned())?;
+                old_checkpoints.push((name, checkpoint));
+            }
         }
     }
-    Ok((nonce_names, old_checkpoint_names, preserved_nonce_records))
+    Ok((nonce_records, old_checkpoints, preserved_nonce_records))
 }
 
 fn compact_restart_metadata(
@@ -621,6 +827,27 @@ fn compact_restart_metadata(
         return Err("restart metadata compaction requires durable generation".into());
     }
     let metadata = scan_compaction_metadata(journal)?;
+    for (crashed, fresh) in metadata
+        .prepared_pairs
+        .iter()
+        .chain(metadata.terminal_pairs.iter())
+        .copied()
+    {
+        if crashed > recovery.durable.generation || fresh > recovery.durable.generation {
+            return Err("compaction retirement generation ahead of nonce authority".into());
+        }
+    }
+    for generation in metadata.live_manifests.keys().copied() {
+        if generation > recovery.durable.generation {
+            return Err("compaction live manifest ahead of nonce authority".into());
+        }
+    }
+    for (_, source_set) in &metadata.source_sets {
+        if source_set.generation > recovery.durable.generation {
+            return Err("compaction source-set ahead of nonce authority".into());
+        }
+    }
+
     let terminal_crashed: std::collections::BTreeSet<u64> = metadata
         .terminal_pairs
         .iter()
@@ -630,11 +857,20 @@ fn compact_restart_metadata(
         .prepared_pairs
         .difference(&metadata.terminal_pairs)
         .count();
-    let mut protected_nonce_generations = metadata.live_manifest_generations.clone();
+    let mut protected_nonce_generations: std::collections::BTreeSet<u64> =
+        metadata.live_manifests.keys().copied().collect();
     for (_, source_set) in &metadata.source_sets {
         if !terminal_crashed.contains(&source_set.generation) {
             protected_nonce_generations.insert(source_set.generation);
         }
+    }
+    for (crashed, fresh) in metadata
+        .prepared_pairs
+        .difference(&metadata.terminal_pairs)
+        .copied()
+    {
+        protected_nonce_generations.insert(crashed);
+        protected_nonce_generations.insert(fresh);
     }
 
     let checkpoint = NonceCompactionCheckpoint::from_durable(journal, recovery.durable)?;
@@ -652,19 +888,20 @@ fn compact_restart_metadata(
         });
     }
 
-    let (nonce_names, old_checkpoint_names, preserved_nonce_records) = compaction_prune_names(
-        journal,
-        checkpoint.generation,
-        &protected_nonce_generations,
-    )?;
+    let (nonce_records, old_checkpoints, preserved_nonce_records) =
+        compaction_nonce_prune_inventory(
+            journal,
+            checkpoint.generation,
+            &protected_nonce_generations,
+        )?;
     let mut pruned_nonce_records = 0usize;
     let mut pruned_retirement_records = 0usize;
     let mut pruned_source_set_records = 0usize;
     let mut pruned_old_checkpoints = 0usize;
     let mut preserved_source_set_records = 0usize;
 
-    for name in nonce_names {
-        remove_compaction_file(journal, &name)?;
+    for (name, record) in nonce_records {
+        remove_verified_nonce_record(journal, &name, record)?;
         pruned_nonce_records = pruned_nonce_records
             .checked_add(1)
             .ok_or_else(|| "pruned nonce record count".to_owned())?;
@@ -672,7 +909,7 @@ fn compact_restart_metadata(
     for (name, record) in &metadata.retirement_files {
         let pair = (record.crashed_generation, record.fresh_generation);
         if metadata.terminal_pairs.contains(&pair) {
-            remove_compaction_file(journal, name)?;
+            remove_verified_retirement(journal, name, *record)?;
             pruned_retirement_records = pruned_retirement_records
                 .checked_add(1)
                 .ok_or_else(|| "pruned retirement record count".to_owned())?;
@@ -680,7 +917,7 @@ fn compact_restart_metadata(
     }
     for (name, record) in &metadata.source_sets {
         if terminal_crashed.contains(&record.generation) {
-            remove_compaction_file(journal, name)?;
+            remove_verified_source_set(journal, name, *record)?;
             pruned_source_set_records = pruned_source_set_records
                 .checked_add(1)
                 .ok_or_else(|| "pruned source-set record count".to_owned())?;
@@ -690,8 +927,8 @@ fn compact_restart_metadata(
                 .ok_or_else(|| "preserved source-set record count".to_owned())?;
         }
     }
-    for name in old_checkpoint_names {
-        remove_compaction_file(journal, &name)?;
+    for (name, old_checkpoint) in old_checkpoints {
+        remove_verified_checkpoint(journal, &name, old_checkpoint)?;
         pruned_old_checkpoints = pruned_old_checkpoints
             .checked_add(1)
             .ok_or_else(|| "pruned checkpoint count".to_owned())?;
@@ -709,7 +946,8 @@ fn compact_restart_metadata(
             preserved_source_set_records,
         });
     }
-    linux_nonce_verify_procfd_directory(&journal.directory).map_err(|error| error.to_string())?;
+    linux_nonce_verify_procfd_directory(&journal.directory)
+        .map_err(|error| error.to_string())?;
     journal.directory.sync_all().map_err(|error| error.to_string())?;
     Ok(RestartMetadataCompactionReport {
         checkpoint_generation: checkpoint.generation,
