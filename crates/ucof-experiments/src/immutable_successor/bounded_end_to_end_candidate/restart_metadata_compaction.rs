@@ -150,28 +150,46 @@ fn open_nonce_compaction_checkpoint(
     Ok(checkpoint)
 }
 
+fn read_compaction_exact<const N: usize>(
+    journal: &LinuxDurableNonceJournal,
+    name: &OsStr,
+    label: &'static str,
+) -> super::CandidateResult<[u8; N]> {
+    let Some(mut file) = linux_nonce_open_relative_readonly(&journal.directory, name)
+        .map_err(|error| error.to_string())?
+    else {
+        return Err(format!("{label} disappeared"));
+    };
+    let metadata = file.metadata().map_err(|error| error.to_string())?;
+    if !metadata.file_type().is_file()
+        || metadata.len() != u64::try_from(N).map_err(|_| format!("{label} width"))?
+    {
+        return Err(format!("{label} file shape"));
+    }
+    let mut bytes = [0u8; N];
+    file.read_exact(&mut bytes).map_err(|error| error.to_string())?;
+    let mut trailing = [0u8; 1];
+    if file.read(&mut trailing).map_err(|error| error.to_string())? != 0 {
+        return Err(format!("{label} exact end"));
+    }
+    Ok(bytes)
+}
+
 fn load_nonce_compaction_checkpoint(
     journal: &LinuxDurableNonceJournal,
     generation: u64,
 ) -> super::CandidateResult<Option<NonceCompactionCheckpoint>> {
     let name = nonce_compaction_name(generation);
-    let Some(mut file) = linux_nonce_open_relative_readonly(&journal.directory, &name)
+    let Some(_) = linux_nonce_open_relative_readonly(&journal.directory, &name)
         .map_err(|error| error.to_string())?
     else {
         return Ok(None);
     };
-    let metadata = file.metadata().map_err(|error| error.to_string())?;
-    if !metadata.file_type().is_file()
-        || metadata.len() != u64::try_from(NONCE_COMPACTION_BYTES).expect("checkpoint width")
-    {
-        return Err("nonce compaction file shape".into());
-    }
-    let mut sealed = [0u8; NONCE_COMPACTION_BYTES];
-    file.read_exact(&mut sealed).map_err(|error| error.to_string())?;
-    let mut trailing = [0u8; 1];
-    if file.read(&mut trailing).map_err(|error| error.to_string())? != 0 {
-        return Err("nonce compaction exact end".into());
-    }
+    let sealed = read_compaction_exact::<NONCE_COMPACTION_BYTES>(
+        journal,
+        &name,
+        "nonce compaction checkpoint",
+    )?;
     let checkpoint = open_nonce_compaction_checkpoint(journal, &sealed)?;
     if checkpoint.generation != generation {
         return Err("nonce compaction filename generation".into());
@@ -206,6 +224,8 @@ impl<'a> CompactedNonceJournal<'a> {
         let mut records = Vec::new();
         let mut directory_entries = 0usize;
         let mut bytes_read = 0u64;
+        let mut journal_bytes_read = 0u64;
+
         for entry in std::fs::read_dir(linux_nonce_procfd_directory(&self.journal.directory))
             .map_err(|error| error.to_string())?
         {
@@ -242,6 +262,12 @@ impl<'a> CompactedNonceJournal<'a> {
             {
                 return Err("compacted nonce journal file shape".into());
             }
+            journal_bytes_read = journal_bytes_read
+                .checked_add(metadata.len())
+                .ok_or_else(|| "compacted nonce journal bytes".to_owned())?;
+            if journal_bytes_read > self.journal.limits.max_journal_bytes {
+                return Err("compacted nonce byte limit".into());
+            }
             bytes_read = bytes_read
                 .checked_add(metadata.len())
                 .ok_or_else(|| "compacted nonce bytes".to_owned())?;
@@ -260,9 +286,6 @@ impl<'a> CompactedNonceJournal<'a> {
                 return Err("compacted nonce foreign prefix".into());
             }
             records.push(record);
-        }
-        if bytes_read > self.journal.limits.max_journal_bytes {
-            return Err("compacted nonce byte limit".into());
         }
 
         checkpoints.sort_unstable_by_key(|checkpoint| checkpoint.generation);
@@ -499,22 +522,11 @@ fn scan_compaction_metadata(
         if name_bytes.starts_with(ENCRYPTED_RETIREMENT_PREFIX.as_bytes())
             && name_bytes.ends_with(ENCRYPTED_RETIREMENT_SUFFIX.as_bytes())
         {
-            let mut file = linux_nonce_open_relative_readonly(&journal.directory, &name)
-                .map_err(|error| error.to_string())?
-                .ok_or_else(|| "compaction retirement disappeared".to_owned())?;
-            let metadata = file.metadata().map_err(|error| error.to_string())?;
-            if !metadata.file_type().is_file()
-                || metadata.len()
-                    != u64::try_from(ENCRYPTED_RETIREMENT_BYTES).expect("retirement width")
-            {
-                return Err("compaction retirement file shape".into());
-            }
-            let mut sealed = [0u8; ENCRYPTED_RETIREMENT_BYTES];
-            file.read_exact(&mut sealed).map_err(|error| error.to_string())?;
-            let mut trailing = [0u8; 1];
-            if file.read(&mut trailing).map_err(|error| error.to_string())? != 0 {
-                return Err("compaction retirement exact end".into());
-            }
+            let sealed = read_compaction_exact::<ENCRYPTED_RETIREMENT_BYTES>(
+                journal,
+                &name,
+                "compaction retirement",
+            )?;
             let record = open_encrypted_retirement_record(journal, &sealed)?;
             if record.key_id != journal.key_id || record.nonce_prefix != journal.nonce_prefix {
                 return Err("compaction retirement context".into());
@@ -542,22 +554,11 @@ fn scan_compaction_metadata(
         if name_bytes.starts_with(RESTART_SOURCE_SET_PREFIX.as_bytes())
             && name_bytes.ends_with(RESTART_SOURCE_SET_SUFFIX.as_bytes())
         {
-            let mut file = linux_nonce_open_relative_readonly(&journal.directory, &name)
-                .map_err(|error| error.to_string())?
-                .ok_or_else(|| "compaction source-set disappeared".to_owned())?;
-            let metadata = file.metadata().map_err(|error| error.to_string())?;
-            if !metadata.file_type().is_file()
-                || metadata.len()
-                    != u64::try_from(RESTART_SOURCE_SET_BYTES).expect("source-set width")
-            {
-                return Err("compaction source-set file shape".into());
-            }
-            let mut sealed = [0u8; RESTART_SOURCE_SET_BYTES];
-            file.read_exact(&mut sealed).map_err(|error| error.to_string())?;
-            let mut trailing = [0u8; 1];
-            if file.read(&mut trailing).map_err(|error| error.to_string())? != 0 {
-                return Err("compaction source-set exact end".into());
-            }
+            let sealed = read_compaction_exact::<RESTART_SOURCE_SET_BYTES>(
+                journal,
+                &name,
+                "compaction source-set",
+            )?;
             let record = open_restart_source_set_authority(journal, &sealed)?;
             if record.key_id != journal.key_id || record.nonce_prefix != journal.nonce_prefix {
                 return Err("compaction source-set context".into());
@@ -629,6 +630,19 @@ fn scan_compaction_metadata(
         .iter()
         .map(|(crashed, _)| *crashed)
         .collect();
+
+    for manifest in inventory.live_manifests.values().copied() {
+        let nonce_record = load_nonce_generation_record(journal, manifest.generation)
+            .map_err(|error| error.to_string())?;
+        if nonce_record.generation != manifest.generation
+            || nonce_record.key_id != manifest.key_id
+            || nonce_record.nonce_prefix != manifest.nonce_prefix
+            || nonce_record.operation_id != manifest.operation_id
+        {
+            return Err("compaction live manifest/nonce mismatch".into());
+        }
+    }
+
     for (_, source_set) in &inventory.source_sets {
         if let Some(manifest) = inventory.live_manifests.get(&source_set.generation) {
             if source_set.role != manifest.role
@@ -638,10 +652,22 @@ fn scan_compaction_metadata(
             {
                 return Err("compaction source-set/live-manifest mismatch".into());
             }
-        } else if !prepared_crashed.contains(&source_set.generation)
+            continue;
+        }
+        if !prepared_crashed.contains(&source_set.generation)
             && !terminal_crashed.contains(&source_set.generation)
         {
             return Err("source-set authority without live restart or cleanup".into());
+        }
+        let retirement = inventory
+            .retirement_files
+            .iter()
+            .find_map(|(_, record)| {
+                (record.crashed_generation == source_set.generation).then_some(*record)
+            })
+            .ok_or_else(|| "compaction source-set cleanup authority missing".to_owned())?;
+        if source_set.stage_identity != retirement.stage_identity {
+            return Err("compaction source-set/retirement mismatch".into());
         }
     }
 
@@ -872,9 +898,22 @@ fn compact_restart_metadata(
         protected_nonce_generations.insert(crashed);
         protected_nonce_generations.insert(fresh);
     }
+    for generation in protected_nonce_generations.iter().copied() {
+        let record = load_nonce_generation_record(journal, generation)
+            .map_err(|error| error.to_string())?;
+        if record.generation != generation {
+            return Err("compaction protected nonce generation mismatch".into());
+        }
+    }
 
     let checkpoint = NonceCompactionCheckpoint::from_durable(journal, recovery.durable)?;
     persist_nonce_compaction_checkpoint(journal, checkpoint, cut)?;
+    let (nonce_records, old_checkpoints, preserved_nonce_records) =
+        compaction_nonce_prune_inventory(
+            journal,
+            checkpoint.generation,
+            &protected_nonce_generations,
+        )?;
     if cut == RestartMetadataCompactionCut::AfterCheckpointDirectorySyncBeforePrune {
         return Ok(RestartMetadataCompactionReport {
             checkpoint_generation: checkpoint.generation,
@@ -882,18 +921,12 @@ fn compact_restart_metadata(
             pruned_retirement_records: 0,
             pruned_source_set_records: 0,
             pruned_old_checkpoints: 0,
-            preserved_nonce_records: protected_nonce_generations.len(),
+            preserved_nonce_records,
             preserved_prepared_retirements,
             preserved_source_set_records: metadata.source_sets.len(),
         });
     }
 
-    let (nonce_records, old_checkpoints, preserved_nonce_records) =
-        compaction_nonce_prune_inventory(
-            journal,
-            checkpoint.generation,
-            &protected_nonce_generations,
-        )?;
     let mut pruned_nonce_records = 0usize;
     let mut pruned_retirement_records = 0usize;
     let mut pruned_source_set_records = 0usize;
