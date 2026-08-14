@@ -197,6 +197,13 @@ where
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
+#[derive(Clone, Copy)]
+struct EncryptedPreparedSettings {
+    options: ImmutableSourceStreamingWriteOptions,
+    limits: ImmutableLimits,
+}
+
+#[cfg(all(target_os = "linux", target_arch = "x86_64"))]
 fn write_prepared_encrypted_bounded_candidate<W, S>(
     writer: &mut W,
     sources: &mut [S],
@@ -214,8 +221,7 @@ where
         writer,
         sources,
         directory,
-        options,
-        limits,
+        EncryptedPreparedSettings { options, limits },
         preflight,
         session,
         |_| Ok(()),
@@ -223,13 +229,11 @@ where
 }
 
 #[cfg(all(target_os = "linux", target_arch = "x86_64"))]
-#[allow(clippy::too_many_arguments)]
 fn write_prepared_encrypted_bounded_candidate_with_stage_hook<W, S, F>(
     writer: &mut W,
     sources: &mut [S],
     directory: &Path,
-    options: ImmutableSourceStreamingWriteOptions,
-    limits: ImmutableLimits,
+    settings: EncryptedPreparedSettings,
     preflight: BoundedPreflight,
     session: &mut DescriptorEncryptionSession,
     stage_hook: F,
@@ -273,8 +277,8 @@ where
         writer,
         sources,
         directory,
-        options,
-        limits,
+        settings.options,
+        settings.limits,
         emission,
         descriptor_reader,
     );
