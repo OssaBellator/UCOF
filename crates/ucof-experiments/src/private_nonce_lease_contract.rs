@@ -181,9 +181,7 @@ mod tests {
 
             assert!(used.iter().all(|counter| *counter < 4));
             assert!(after_restart.iter().all(|counter| *counter >= 4));
-            assert!(used
-                .iter()
-                .all(|counter| !after_restart.contains(counter)));
+            assert!(used.iter().all(|counter| !after_restart.contains(counter)));
         }
     }
 
