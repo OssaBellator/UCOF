@@ -53,11 +53,11 @@ struct PendingTerminal {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum RestartNameObservation {
-    ExpectedExactIdentity,
-    ExpectedDifferentIdentity,
-    ExpectedMissingNoMatchingIdentityCompleteScan,
-    ExpectedMissingMatchingIdentityElsewhere,
-    ExpectedMissingScanTruncated,
+    ExactIdentity,
+    DifferentIdentity,
+    MissingNoMatchingIdentityCompleteScan,
+    MissingMatchingIdentityElsewhere,
+    MissingScanTruncated,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -213,19 +213,15 @@ fn restart_disposition(
         CleanupPhase::PrivateActive => RestartDisposition::ResumePrivate,
         CleanupPhase::TerminalDiscarded(_) => RestartDisposition::CleanupTerminal,
         CleanupPhase::CleanupPrepared(_) => match observation {
-            RestartNameObservation::ExpectedExactIdentity => RestartDisposition::RetryExactCleanup,
-            RestartNameObservation::ExpectedDifferentIdentity => {
-                RestartDisposition::RetainIndeterminate
-            }
-            RestartNameObservation::ExpectedMissingNoMatchingIdentityCompleteScan => {
+            RestartNameObservation::ExactIdentity => RestartDisposition::RetryExactCleanup,
+            RestartNameObservation::DifferentIdentity => RestartDisposition::RetainIndeterminate,
+            RestartNameObservation::MissingNoMatchingIdentityCompleteScan => {
                 RestartDisposition::SyncDirectoryThenFinalize
             }
-            RestartNameObservation::ExpectedMissingMatchingIdentityElsewhere => {
+            RestartNameObservation::MissingMatchingIdentityElsewhere => {
                 RestartDisposition::ResolveRenamedPrivate
             }
-            RestartNameObservation::ExpectedMissingScanTruncated => {
-                RestartDisposition::RetainIndeterminate
-            }
+            RestartNameObservation::MissingScanTruncated => RestartDisposition::RetainIndeterminate,
         },
     }
 }
@@ -250,7 +246,7 @@ mod tests {
             CleanupJournalError::NotDurablyCommitted
         );
         assert_eq!(
-            restart_disposition(durable, RestartNameObservation::ExpectedExactIdentity,),
+            restart_disposition(durable, RestartNameObservation::ExactIdentity,),
             RestartDisposition::ResumePrivate
         );
     }
@@ -264,10 +260,7 @@ mod tests {
         assert_eq!(execution.journal.generation, 1);
         assert!(!execution.unlink_complete);
         assert_eq!(
-            restart_disposition(
-                execution.journal,
-                RestartNameObservation::ExpectedExactIdentity,
-            ),
+            restart_disposition(execution.journal, RestartNameObservation::ExactIdentity,),
             RestartDisposition::RetryExactCleanup
         );
     }
@@ -307,7 +300,7 @@ mod tests {
         assert_eq!(
             restart_disposition(
                 execution.journal,
-                RestartNameObservation::ExpectedMissingNoMatchingIdentityCompleteScan,
+                RestartNameObservation::MissingNoMatchingIdentityCompleteScan,
             ),
             RestartDisposition::SyncDirectoryThenFinalize
         );
@@ -334,7 +327,7 @@ mod tests {
         assert_eq!(
             restart_disposition(
                 execution.journal,
-                RestartNameObservation::ExpectedMissingNoMatchingIdentityCompleteScan,
+                RestartNameObservation::MissingNoMatchingIdentityCompleteScan,
             ),
             RestartDisposition::SyncDirectoryThenFinalize
         );
@@ -353,7 +346,7 @@ mod tests {
             commit_terminal_cleanup(execution.journal, terminal, true).expect("terminal commit");
         assert_eq!(committed.generation, 2);
         assert_eq!(
-            restart_disposition(committed, RestartNameObservation::ExpectedDifferentIdentity,),
+            restart_disposition(committed, RestartNameObservation::DifferentIdentity,),
             RestartDisposition::CleanupTerminal
         );
     }
@@ -367,7 +360,7 @@ mod tests {
         assert_eq!(
             restart_disposition(
                 execution.journal,
-                RestartNameObservation::ExpectedMissingMatchingIdentityElsewhere,
+                RestartNameObservation::MissingMatchingIdentityElsewhere,
             ),
             RestartDisposition::ResolveRenamedPrivate
         );
@@ -380,17 +373,11 @@ mod tests {
         let execution =
             activate_cleanup_prepared(durable, pending, true).expect("activate prepared");
         assert_eq!(
-            restart_disposition(
-                execution.journal,
-                RestartNameObservation::ExpectedMissingScanTruncated,
-            ),
+            restart_disposition(execution.journal, RestartNameObservation::MissingScanTruncated,),
             RestartDisposition::RetainIndeterminate
         );
         assert_eq!(
-            restart_disposition(
-                execution.journal,
-                RestartNameObservation::ExpectedDifferentIdentity,
-            ),
+            restart_disposition(execution.journal, RestartNameObservation::DifferentIdentity,),
             RestartDisposition::RetainIndeterminate
         );
     }
