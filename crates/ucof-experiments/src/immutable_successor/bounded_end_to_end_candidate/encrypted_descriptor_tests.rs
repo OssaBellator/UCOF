@@ -198,8 +198,10 @@ fn encrypted_descriptor_corruption_fails_before_first_output_byte() {
         &mut output,
         &mut sources,
         &directory.0,
-        options(),
-        ImmutableLimits::default(),
+        EncryptedPreparedSettings {
+            options: options(),
+            limits: ImmutableLimits::default(),
+        },
         preflight,
         &mut session,
         |stage| stage.flip_byte_for_test(20),
