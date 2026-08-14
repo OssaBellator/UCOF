@@ -103,3 +103,6 @@ pub use snapshots::{
     RootSelectionLimits, RootSelectionMode, RootSelectionReport, SnapshotCandidate,
     SnapshotIdentity,
 };
+
+#[cfg(test)]
+mod journal_nonce_lease_integration;
