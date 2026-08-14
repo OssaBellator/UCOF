@@ -1,0 +1,125 @@
+name: One-shot 0175 retirement target enum
+
+on:
+  push:
+    branches:
+      - phase-3/encrypted-restart-stage-retirement
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.event.head_commit.message != 'Use explicit encrypted retirement target states'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/encrypted-restart-stage-retirement
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Refactor actionable target states
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate/encrypted_restart_retirement.rs')
+          text = path.read_text()
+          old = '''fn retirement_actionable_name(
+              report: &EncryptedStageInventoryReport,
+              expected_name: &OsStr,
+          ) -> Option<Option<OsString>> {
+              match report.observation {
+                  crate::private_cleanup_restart_inventory::InventoryObservation::ExactIdentity => {
+                      Some(Some(expected_name.to_os_string()))
+                  }
+                  crate::private_cleanup_restart_inventory::InventoryObservation::MissingMatchingIdentityElsewhere => {
+                      report.matched_name.clone().map(Some)
+                  }
+                  crate::private_cleanup_restart_inventory::InventoryObservation::MissingNoMatchingIdentityCompleteScan => {
+                      Some(None)
+                  }
+                  crate::private_cleanup_restart_inventory::InventoryObservation::DifferentIdentity
+                  | crate::private_cleanup_restart_inventory::InventoryObservation::MissingScanTruncated
+                  | crate::private_cleanup_restart_inventory::InventoryObservation::NameMetadataUnreadable => None,
+              }
+          }
+          '''
+          new = '''#[derive(Clone, Debug, PartialEq, Eq)]
+          enum EncryptedRetirementTarget {
+              Present(OsString),
+              Absent,
+          }
+
+          fn retirement_actionable_target(
+              report: &EncryptedStageInventoryReport,
+              expected_name: &OsStr,
+          ) -> Option<EncryptedRetirementTarget> {
+              match report.observation {
+                  crate::private_cleanup_restart_inventory::InventoryObservation::ExactIdentity => {
+                      Some(EncryptedRetirementTarget::Present(expected_name.to_os_string()))
+                  }
+                  crate::private_cleanup_restart_inventory::InventoryObservation::MissingMatchingIdentityElsewhere => {
+                      report
+                          .matched_name
+                          .clone()
+                          .map(EncryptedRetirementTarget::Present)
+                  }
+                  crate::private_cleanup_restart_inventory::InventoryObservation::MissingNoMatchingIdentityCompleteScan => {
+                      Some(EncryptedRetirementTarget::Absent)
+                  }
+                  crate::private_cleanup_restart_inventory::InventoryObservation::DifferentIdentity
+                  | crate::private_cleanup_restart_inventory::InventoryObservation::MissingScanTruncated
+                  | crate::private_cleanup_restart_inventory::InventoryObservation::NameMetadataUnreadable => None,
+              }
+          }
+          '''
+          if old not in text:
+              raise SystemExit('retirement actionable helper pattern missing')
+          text = text.replace(old, new, 1)
+          text = text.replace(
+              'retirement_actionable_name(&stage_report, &stage_name)',
+              'retirement_actionable_target(&stage_report, &stage_name)',
+              1,
+          )
+          text = text.replace(
+              'retirement_actionable_name(&manifest_report, &manifest_name)',
+              'retirement_actionable_target(&manifest_report, &manifest_name)',
+              1,
+          )
+          text = text.replace(
+              '''    if let Some(name) = stage_action {
+                  unlink_identity_bound_target(
+                      &stage_directory,
+                      &name,
+          ''',
+              '''    if let EncryptedRetirementTarget::Present(name) = stage_action {
+                  unlink_identity_bound_target(
+                      &stage_directory,
+                      &name,
+          ''',
+              1,
+          )
+          text = text.replace(
+              '''    if let Some(name) = manifest_action {
+                  unlink_identity_bound_target(
+                      &journal.directory,
+                      &name,
+          ''',
+              '''    if let EncryptedRetirementTarget::Present(name) = manifest_action {
+                  unlink_identity_bound_target(
+                      &journal.directory,
+                      &name,
+          ''',
+              1,
+          )
+          path.write_text(text)
+      - name: Format
+        run: cargo fmt --all
+      - name: Commit
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate/encrypted_restart_retirement.rs
+          git commit -m 'Use explicit encrypted retirement target states'
+          git push origin HEAD:phase-3/encrypted-restart-stage-retirement
