@@ -1,6 +1,6 @@
 # Experiment 0176 — Unified encrypted private-storage lifecycle
 
-**Status:** non-normative Phase 3 implementation candidate; acceptance pending repository CI  
+**Status:** accepted non-normative Phase 3 implementation evidence  
 **Date:** 2026-08-14  
 **Tracking:** issue #11  
 **Depends on:** Experiments 0152, 0171–0175
@@ -134,13 +134,23 @@ The planner accounts for existing append-only journal records, but it does not m
 
 ## Verification
 
-Repository CI for the Experiment 0176 branch is the acceptance authority. This document must be updated with the accepted implementation head and workflow run only after the relevant Rust/Phase 3 gates complete successfully.
+Accepted implementation head:
+
+`7e011d1324e66f9444d80baeb387cd7c86981822`
+
+Repository Rust workflow:
+
+`31804526996` — completed successfully, including locked dependency metadata, formatting, Clippy, full Rust implementation tests, Rust 1.85.0 compatibility, and the repository portability matrix.
+
+Phase 3 integration workflow:
+
+`31804526979` — completed successfully on the same accepted head.
 
 ## Next consolidation slice
 
-After 0176 is green, the highest-value Phase 3 writer work is no longer another independent crypto primitive. The next slice should bind restart continuation to an authenticated durable source-set/order manifest so that a valid old encrypted descriptor stage cannot be continued against a different external source list that merely has the same object count.
+The next consolidation slice is the encrypted-tree restart integration stack: transplant the unique encrypted locator/page-reference staging evidence onto the durability/restart spine, reserve its exact nonce range crash-safely, and feed its encrypted widths back into this lifecycle accounting model without reintroducing the older divergent sorter or restart-journal implementations.
 
-That source-set binding should be designed to coexist with journal compaction rather than creating another append-only namespace that must later be reconciled.
+After that confidentiality gap is closed, durable external source-set/order binding remains the next restart-authority gap.
 
 ## Governance boundary
 
