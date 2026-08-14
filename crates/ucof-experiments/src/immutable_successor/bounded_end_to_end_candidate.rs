@@ -20,8 +20,11 @@ mod bounded_end_to_end_candidate_tests {
     include!("bounded_end_to_end_candidate/writer.rs");
     include!("bounded_end_to_end_candidate/prepared.rs");
     include!("bounded_end_to_end_candidate/quota.rs");
+    include!("bounded_end_to_end_candidate/published_quota.rs");
+    include!("bounded_end_to_end_candidate/staged_publication.rs");
     include!("bounded_end_to_end_candidate/tests.rs");
     include!("bounded_end_to_end_candidate/quota_tests.rs");
     include!("bounded_end_to_end_candidate/post_preflight_failure_tests.rs");
     include!("bounded_end_to_end_candidate/prepared_tests.rs");
+    include!("bounded_end_to_end_candidate/staged_publication_tests.rs");
 }
