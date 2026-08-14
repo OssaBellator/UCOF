@@ -123,18 +123,20 @@ This experiment does **not** establish a production restart journal. Still requi
 
 ## Verification
 
-Implementation head `a37b87dc31324d6789765739e734ddebdc1bd30f` is green in Rust workflow run `31781382608` on:
+The first documentation draft accidentally referenced a green workflow from a commit where the integration source existed but was not yet wired into the crate test graph. That was detected before building the next experiment and is not used as evidence here.
+
+Corrected implementation head `28f0945b3f2addd8ed798963319b2bcef5033ba3` wires `journal_nonce_lease_integration` into `ucof-experiments` and is green on the decisive Experiment 0159 gates in Rust workflow run `31782843935`:
 
 - locked dependency graph;
 - workspace formatting;
 - Clippy with warnings denied;
-- full Rust implementation tests, including every journal/lease crash-cut and substitution case;
-- concrete HTTP/source tests;
-- parser, adversarial, policy, invalid-corpus, vector, and EXP-0003 scaffold/amendment verification;
-- framing experiment replay;
+- full Rust implementation tests with the six journal/lease integration regressions actually compiled and executed;
+- concrete HTTP/source tests completed after the implementation gate;
 - Rust 1.85.0 MSRV;
 - i686 portability checks;
 - powerpc64 portability checks.
+
+The workflow continues through the repository's broader policy, parser, vector, and framing replay; those checks are validation breadth rather than a prerequisite for the journal/lease handoff claim.
 
 ## Next executable slice
 
