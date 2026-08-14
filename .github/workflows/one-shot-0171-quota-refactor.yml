@@ -1,0 +1,148 @@
+name: One-shot 0171 quota refactor
+
+on:
+  push:
+    branches:
+      - phase-3/encrypted-descriptor-spill-sort
+
+permissions:
+  contents: write
+
+jobs:
+  refactor:
+    if: github.event.head_commit.message != 'Apply typed encrypted spill quota settings'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: phase-3/encrypted-descriptor-spill-sort
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+      - name: Apply typed settings refactor
+        shell: python
+        run: |
+          from pathlib import Path
+
+          impl = Path('crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate/encrypted_descriptor_spill.rs')
+          text = impl.read_text()
+          old = '''pub(super) fn write_genesis_sources_with_encrypted_spill_private_quota_candidate<W, S>(
+              writer: &mut W,
+              sources: &mut [S],
+              directory: &Path,
+              options: super::ImmutableSourceStreamingWriteOptions,
+              limits: super::ImmutableLimits,
+              spill_limits: super::BoundedSpillSortLimits,
+              max_private_storage_bytes: u64,
+              session: &mut DescriptorEncryptionSession,
+          ) -> super::CandidateResult<(EncryptedSpillPrivateStoragePlan, EncryptedSpillEndToEndEvidence)>
+          where
+              W: Write,
+              S: super::ImmutableStreamingPayloadSource,
+          {
+              let plan = encrypted_spill_private_storage_plan(sources.len(), spill_limits)?;
+              if plan.required_bytes > max_private_storage_bytes {
+                  return Err("private storage limit".into());
+              }
+              let evidence = write_genesis_sources_end_to_end_encrypted_spill_candidate(
+                  writer,
+                  sources,
+                  directory,
+                  options,
+                  limits,
+                  spill_limits,
+                  session,
+              )?;
+              Ok((plan, evidence))
+          }
+          '''
+          new = '''#[derive(Clone, Copy)]
+          pub(super) struct EncryptedSpillPrivateWriterSettings {
+              pub(super) options: super::ImmutableSourceStreamingWriteOptions,
+              pub(super) limits: super::ImmutableLimits,
+              pub(super) max_private_storage_bytes: u64,
+          }
+
+          pub(super) fn write_genesis_sources_with_encrypted_spill_private_quota_candidate<W, S>(
+              writer: &mut W,
+              sources: &mut [S],
+              directory: &Path,
+              spill_limits: super::BoundedSpillSortLimits,
+              settings: EncryptedSpillPrivateWriterSettings,
+              session: &mut DescriptorEncryptionSession,
+          ) -> super::CandidateResult<(EncryptedSpillPrivateStoragePlan, EncryptedSpillEndToEndEvidence)>
+          where
+              W: Write,
+              S: super::ImmutableStreamingPayloadSource,
+          {
+              let plan = encrypted_spill_private_storage_plan(sources.len(), spill_limits)?;
+              if plan.required_bytes > settings.max_private_storage_bytes {
+                  return Err("private storage limit".into());
+              }
+              let evidence = write_genesis_sources_end_to_end_encrypted_spill_candidate(
+                  writer,
+                  sources,
+                  directory,
+                  settings.options,
+                  settings.limits,
+                  spill_limits,
+                  session,
+              )?;
+              Ok((plan, evidence))
+          }
+          '''
+          if old not in text:
+              if 'EncryptedSpillPrivateWriterSettings' in text:
+                  raise SystemExit(0)
+              raise SystemExit('0171 quota wrapper pattern not found')
+          impl.write_text(text.replace(old, new))
+
+          tests = Path('crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate/encrypted_descriptor_spill_tests.rs')
+          text = tests.read_text()
+          text = text.replace(
+          '''        &directory.0,
+                  super::options(),
+                  super::ImmutableLimits::default(),
+                  spill,
+                  plan.required_bytes,
+                  &mut exact_session,
+          ''',
+          '''        &directory.0,
+                  spill,
+                  EncryptedSpillPrivateWriterSettings {
+                      options: super::options(),
+                      limits: super::ImmutableLimits::default(),
+                      max_private_storage_bytes: plan.required_bytes,
+                  },
+                  &mut exact_session,
+          ''', 1)
+          text = text.replace(
+          '''        &directory.0,
+              super::options(),
+              super::ImmutableLimits::default(),
+              spill,
+              plan.required_bytes - 1,
+              &mut short_session,
+          ''',
+          '''        &directory.0,
+              spill,
+              EncryptedSpillPrivateWriterSettings {
+                  options: super::options(),
+                  limits: super::ImmutableLimits::default(),
+                  max_private_storage_bytes: plan.required_bytes - 1,
+              },
+              &mut short_session,
+          ''', 1)
+          tests.write_text(text)
+      - name: Format
+        run: cargo fmt --all
+      - name: Commit
+        run: |
+          if git diff --quiet; then
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate/encrypted_descriptor_spill.rs crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate/encrypted_descriptor_spill_tests.rs
+          git commit -m 'Apply typed encrypted spill quota settings'
+          git push origin HEAD:phase-3/encrypted-descriptor-spill-sort
