@@ -2,6 +2,7 @@ use super::{
     read_exact_end, CandidateResult, FixedStage, SourceDescriptor, DESCRIPTOR_STAGE_BYTES,
 };
 use aws_lc_rs::aead::{Aad, LessSafeKey, Nonce, UnboundKey, AES_256_GCM};
+use sha2::{Digest, Sha256};
 use std::fs::File;
 use std::io::{BufReader, Read, Write};
 use std::path::Path;
@@ -109,6 +110,32 @@ impl EncryptedDescriptorStage {
             records: self.stage.records,
             next_sequence: 0,
         })
+    }
+
+    pub(super) fn verify_all(
+        &self,
+        session: &DescriptorEncryptionSession,
+    ) -> CandidateResult<()> {
+        let mut reader = self.reader(session)?;
+        for _ in 0..self.records() {
+            let raw = reader.read_descriptor()?;
+            SourceDescriptor::decode(&raw)?;
+        }
+        reader.finish()
+    }
+
+    pub(super) fn ciphertext_sha256(&self) -> CandidateResult<[u8; 32]> {
+        let mut reader = self.stage.reader()?;
+        let mut hasher = Sha256::new();
+        let mut buffer = [0u8; 4096];
+        loop {
+            let read = reader.read(&mut buffer).map_err(|error| error.to_string())?;
+            if read == 0 {
+                break;
+            }
+            hasher.update(&buffer[..read]);
+        }
+        Ok(hasher.finalize().into())
     }
 
     #[cfg(test)]
