@@ -176,3 +176,85 @@ fn unrelated_extra_directory_entry_does_not_receive_checkpoint_headroom() {
     assert!(inventory_error.contains("compacted inventory directory entry limit"));
     assert!(!directory.0.join(nonce_compaction_name(2)).exists());
 }
+
+#[test]
+fn compacted_nonce_commit_reserves_one_directory_slot_for_next_checkpoint() {
+    let (directory, key, prefix) =
+        nonce_compaction_fixture("nonce-compaction-commit-headroom", &[5, 7]);
+    let journal = LinuxDurableNonceJournal::open(
+        &directory.0,
+        &key,
+        prefix,
+        [0x5a; 32],
+        LinuxNonceJournalLimits {
+            max_directory_entries: 2,
+            ..LinuxNonceJournalLimits::default()
+        },
+    )
+    .expect("open compacted commit-headroom journal");
+    let compacted = CompactedNonceJournal::new(&journal);
+    let mut authority = compacted
+        .recover_authority(None)
+        .expect("recover full-directory authority");
+    let error = compacted
+        .commit_descriptor_session(
+            &mut authority,
+            key,
+            [0x31; 16],
+            3,
+            JournalCommitCut::Complete,
+        )
+        .expect_err("full directory must reserve checkpoint headroom");
+    assert!(error.contains("compacted nonce checkpoint directory headroom"));
+    assert_eq!(authority.durable.generation, 2);
+    assert!(!directory.0.join(linux_nonce_journal_name(3)).exists());
+
+    compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect("compact full directory to one checkpoint");
+    assert_eq!(directory_entry_count(&directory.0), 1);
+    let mut authority = compacted
+        .recover_authority(None)
+        .expect("recover post-compaction authority");
+    let generation_three = compacted
+        .commit_descriptor_session(
+            &mut authority,
+            key,
+            [0x32; 16],
+            3,
+            JournalCommitCut::Complete,
+        )
+        .expect("one ordinary generation may consume the reserved slot");
+    assert_eq!(generation_three.journal_generation, 3);
+    drop(generation_three);
+    assert_eq!(directory_entry_count(&directory.0), 2);
+
+    let error = compacted
+        .commit_descriptor_session(
+            &mut authority,
+            key,
+            [0x33; 16],
+            3,
+            JournalCommitCut::Complete,
+        )
+        .expect_err("second ordinary generation must wait for compaction");
+    assert!(error.contains("compacted nonce checkpoint directory headroom"));
+    assert_eq!(authority.durable.generation, 3);
+    assert!(!directory.0.join(linux_nonce_journal_name(4)).exists());
+
+    let report = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect("new checkpoint may use the reserved transient entry");
+    assert_eq!(report.checkpoint_generation, 3);
+    assert_eq!(report.pruned_nonce_records, 1);
+    assert_eq!(report.pruned_old_checkpoints, 1);
+    assert_eq!(directory_entry_count(&directory.0), 1);
+    let generation_four = compacted
+        .commit_descriptor_session(
+            &mut authority,
+            key,
+            [0x34; 16],
+            3,
+            JournalCommitCut::Complete,
+        )
+        .expect("allocation resumes after compaction restores headroom");
+    assert_eq!(generation_four.journal_generation, 4);
+}
