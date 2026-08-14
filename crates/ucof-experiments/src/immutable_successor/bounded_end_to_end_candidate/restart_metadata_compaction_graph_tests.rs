@@ -324,3 +324,127 @@ fn retirement_generation_ahead_of_global_nonce_authority_fails_before_checkpoint
     assert!(error.contains("compaction retirement generation ahead of nonce authority"));
     assert!(!fixture.journal_directory.0.join(nonce_compaction_name(2)).exists());
 }
+
+#[test]
+fn compacted_scan_rejects_authenticated_record_replayed_under_wrong_generation_name() {
+    let (directory, key, prefix) = nonce_compaction_fixture(
+        "nonce-compaction-filename-replay",
+        &[5, 7],
+    );
+    let journal = open_journal(&directory.0, &key, prefix);
+    let generation_one = load_nonce_generation_record(&journal, 1)
+        .expect("load generation-one record for replay");
+    let generation_two_name = OsString::from(linux_nonce_journal_name(2));
+    std::fs::remove_file(directory.0.join(&generation_two_name))
+        .expect("remove original generation-two record");
+    let replay = journal
+        .seal_record(generation_one)
+        .expect("seal authenticated replay record");
+    let path = linux_nonce_procfd_child(&journal.directory, &generation_two_name)
+        .expect("replayed nonce procfd path");
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(LINUX_O_NOFOLLOW | LINUX_O_CLOEXEC)
+        .open(path)
+        .expect("create replayed generation-two filename");
+    file.write_all(&replay).expect("write replayed nonce record");
+    file.flush().expect("flush replayed nonce record");
+    file.sync_all().expect("sync replayed nonce record");
+    journal.directory.sync_all().expect("sync replayed nonce directory entry");
+
+    let error = CompactedNonceJournal::new(&journal)
+        .scan(None)
+        .expect_err("authenticated nonce record under wrong filename must fail closed");
+    assert!(error.contains("compacted nonce filename generation"));
+    assert!(!directory.0.join(nonce_compaction_name(2)).exists());
+}
+
+#[test]
+fn compaction_rejects_authenticated_retirement_from_foreign_journal_context() {
+    let fixture = encrypted_retirement_fixture("compaction-foreign-retirement-context", 7);
+    let journal = open_journal(
+        &fixture.journal_directory.0,
+        &fixture.aes_key,
+        fixture.nonce_prefix,
+    );
+    let prepared = prepare_encrypted_restart_retirement(
+        &journal,
+        &fixture.stage_directory.0,
+        &fixture.durable,
+        fixture.restart_limits,
+    )
+    .expect("prepare retirement before foreign-context replacement");
+    let name = encrypted_retirement_name(1, 2, EncryptedRetirementState::Prepared);
+    std::fs::remove_file(fixture.journal_directory.0.join(&name))
+        .expect("remove original prepared retirement");
+    let forged = EncryptedRestartRetirementRecord {
+        key_id: [0xf1; 16],
+        ..prepared
+    };
+    let sealed = seal_encrypted_retirement_record(&journal, forged)
+        .expect("seal foreign-context retirement with local auth key");
+    let path = linux_nonce_procfd_child(&journal.directory, &name)
+        .expect("foreign retirement procfd path");
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(LINUX_O_NOFOLLOW | LINUX_O_CLOEXEC)
+        .open(path)
+        .expect("create foreign-context retirement");
+    file.write_all(&sealed).expect("write foreign-context retirement");
+    file.flush().expect("flush foreign-context retirement");
+    file.sync_all().expect("sync foreign-context retirement");
+    journal.directory.sync_all().expect("sync foreign retirement directory entry");
+
+    let error = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect_err("foreign retirement context must fail before checkpoint creation");
+    assert!(error.contains("compaction retirement context"));
+    assert!(!fixture.journal_directory.0.join(nonce_compaction_name(2)).exists());
+}
+
+#[test]
+fn compaction_rejects_authenticated_source_set_from_foreign_journal_context() {
+    const OBJECTS: u64 = 7;
+    let source_set_id = [0xa5; 32];
+    let (journal_directory, _stage_directory, aes_key, nonce_prefix, _restart_limits, _) =
+        prepared_source_bound_restart_stage(
+            "compaction-foreign-source-context",
+            OBJECTS,
+            source_set_id,
+        );
+    let journal = open_journal(&journal_directory.0, &aes_key, nonce_prefix);
+    let role = EncryptedRestartStageRole::SortedDescriptorSpill;
+    let original = load_restart_source_set_authority(&journal, 1, role)
+        .expect("load original source-set context")
+        .expect("original source-set context");
+    let name = restart_source_set_authority_name(1, role);
+    std::fs::remove_file(journal_directory.0.join(&name))
+        .expect("remove original source-set context");
+    let forged = RestartSourceSetAuthority {
+        nonce_prefix: [0xf2; 4],
+        ..original
+    };
+    let sealed = seal_restart_source_set_authority(&journal, forged)
+        .expect("seal foreign-context source-set with local auth key");
+    let path = linux_nonce_procfd_child(&journal.directory, &name)
+        .expect("foreign source-set procfd path");
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(LINUX_O_NOFOLLOW | LINUX_O_CLOEXEC)
+        .open(path)
+        .expect("create foreign-context source-set");
+    file.write_all(&sealed).expect("write foreign-context source-set");
+    file.flush().expect("flush foreign-context source-set");
+    file.sync_all().expect("sync foreign-context source-set");
+    journal.directory.sync_all().expect("sync foreign source-set directory entry");
+
+    let error = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect_err("foreign source-set context must fail before checkpoint creation");
+    assert!(error.contains("compaction source-set context"));
+    assert!(!journal_directory.0.join(nonce_compaction_name(1)).exists());
+}
