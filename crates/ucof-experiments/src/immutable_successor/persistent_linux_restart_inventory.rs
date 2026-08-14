@@ -198,15 +198,15 @@ mod persistent_linux_restart_inventory_tests {
         let root = test_root("entry-bound");
         let staging = root.join("staging");
         private_directory(&staging);
+        for index in 0..8 {
+            fs::write(staging.join(format!("other-{index}.tmp")), b"other").expect("write other");
+        }
         let expected_name = OsStr::new("stage.tmp");
         let expected_path = staging.join(expected_name);
         fs::write(&expected_path, b"private").expect("write expected");
         let directory = open_private_directory(&staging);
         let identity = expected_identity(&directory, expected_name);
         fs::remove_file(expected_path).expect("unlink expected");
-        for index in 0..8 {
-            fs::write(staging.join(format!("other-{index}.tmp")), b"other").expect("write other");
-        }
         let report = scan(&directory, expected_name, identity, 1, 4096);
         assert_eq!(report.0, InventoryObservation::MissingScanTruncated);
         assert!(report.3);
@@ -219,13 +219,13 @@ mod persistent_linux_restart_inventory_tests {
         let root = test_root("byte-bound");
         let staging = root.join("staging");
         private_directory(&staging);
+        fs::write(staging.join("other.tmp"), b"other").expect("write other");
         let expected_name = OsStr::new("stage.tmp");
         let expected_path = staging.join(expected_name);
         fs::write(&expected_path, b"private").expect("write expected");
         let directory = open_private_directory(&staging);
         let identity = expected_identity(&directory, expected_name);
         fs::remove_file(expected_path).expect("unlink expected");
-        fs::write(staging.join("other.tmp"), b"other").expect("write other");
         let report = scan(&directory, expected_name, identity, 32, 1);
         assert_eq!(report.0, InventoryObservation::MissingScanTruncated);
         assert!(report.3);
