@@ -210,8 +210,32 @@ fn validate_compacted_directory_entry_count(
     saw_authenticated_checkpoint: bool,
     label: &'static str,
 ) -> super::CandidateResult<()> {
-    if directory_entries > journal.limits.max_directory_entries && !saw_authenticated_checkpoint {
+    if directory_entries > journal.limits.max_directory_entries
+        && !saw_authenticated_checkpoint
+    {
         return Err(format!("{label} directory entry limit"));
+    }
+    Ok(())
+}
+
+fn ensure_compacted_nonce_commit_directory_headroom(
+    journal: &LinuxDurableNonceJournal,
+) -> super::CandidateResult<()> {
+    let directory_scan_ceiling = compacted_directory_scan_ceiling(journal)?;
+    let mut directory_entries = 0usize;
+    for entry in std::fs::read_dir(linux_nonce_procfd_directory(&journal.directory))
+        .map_err(|error| error.to_string())?
+    {
+        entry.map_err(|error| error.to_string())?;
+        directory_entries = directory_entries
+            .checked_add(1)
+            .ok_or_else(|| "compacted nonce commit directory entries".to_owned())?;
+        if directory_entries > directory_scan_ceiling {
+            return Err("compacted nonce commit directory entry limit".into());
+        }
+    }
+    if directory_entries >= journal.limits.max_directory_entries {
+        return Err("compacted nonce checkpoint directory headroom".into());
     }
     Ok(())
 }
@@ -393,6 +417,7 @@ impl<'a> CompactedNonceJournal<'a> {
         if observed != authority.durable {
             return Err("compacted nonce stale authority".into());
         }
+        ensure_compacted_nonce_commit_directory_headroom(self.journal)?;
         let pending = reserve_nonce_lease(
             authority.durable,
             lease_size,
