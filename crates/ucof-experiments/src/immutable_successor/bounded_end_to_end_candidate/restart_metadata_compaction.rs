@@ -112,7 +112,7 @@ fn parse_nonce_compaction_name(name: &OsStr) -> Option<u64> {
         return None;
     }
     let generation = digits.parse::<u64>().ok()?;
-    if generation == 0 || nonce_compaction_name(generation) != OsString::from(name) {
+    if generation == 0 || nonce_compaction_name(generation) != name {
         return None;
     }
     Some(generation)
@@ -521,7 +521,7 @@ fn parse_compaction_stage_manifest_name(
         "descriptor-spill" => EncryptedRestartStageRole::SortedDescriptorSpill,
         _ => return None,
     };
-    if encrypted_stage_manifest_name(generation, role) != OsString::from(name) {
+    if encrypted_stage_manifest_name(generation, role) != name {
         return None;
     }
     Some((generation, role))
@@ -877,15 +877,17 @@ fn remove_verified_source_set(
     std::fs::remove_file(path).map_err(|error| error.to_string())
 }
 
+type CompactionNoncePruneInventory = (
+    Vec<(OsString, LinuxNonceJournalRecord)>,
+    Vec<(OsString, NonceCompactionCheckpoint)>,
+    usize,
+);
+
 fn compaction_nonce_prune_inventory(
     journal: &LinuxDurableNonceJournal,
     checkpoint_generation: u64,
     protected_nonce_generations: &std::collections::BTreeSet<u64>,
-) -> super::CandidateResult<(
-    Vec<(OsString, LinuxNonceJournalRecord)>,
-    Vec<(OsString, NonceCompactionCheckpoint)>,
-    usize,
-)> {
+) -> super::CandidateResult<CompactionNoncePruneInventory> {
     let mut nonce_records = Vec::new();
     let mut old_checkpoints = Vec::new();
     let mut preserved_nonce_records = 0usize;
