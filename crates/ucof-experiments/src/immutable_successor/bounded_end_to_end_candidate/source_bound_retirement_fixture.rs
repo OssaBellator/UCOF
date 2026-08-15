@@ -41,3 +41,53 @@ fn source_bound_retirement_fixture(
         durable: Box::new(durable.durable),
     }
 }
+
+#[test]
+fn source_set_persistence_retry_is_idempotent_but_cannot_rebind_history() {
+    const OBJECTS: u64 = 7;
+    let source_set_id = [0xd8; 32];
+    let fixture = source_bound_retirement_fixture(
+        "source-set-idempotent-retry",
+        OBJECTS,
+        source_set_id,
+    );
+    let journal = open_journal(
+        &fixture.journal_directory.0,
+        &fixture.aes_key,
+        fixture.nonce_prefix,
+    );
+    assert_eq!(
+        journal
+            .recover_authority(None)
+            .expect("recover advanced source-set authority")
+            .durable
+            .generation,
+        2
+    );
+    let manifest = load_encrypted_stage_manifest(
+        &journal,
+        1,
+        EncryptedRestartStageRole::SortedDescriptorSpill,
+    )
+    .expect("load idempotent source-set manifest")
+    .expect("idempotent source-set manifest");
+
+    let existing = persist_restart_source_set_authority(
+        &journal,
+        manifest,
+        source_set_id,
+        usize::try_from(OBJECTS).expect("object count"),
+    )
+    .expect("exact persisted source-set retry remains idempotent after generation advance");
+    assert_eq!(existing.source_set_id, source_set_id);
+    assert_eq!(existing.generation, 1);
+
+    let error = persist_restart_source_set_authority(
+        &journal,
+        manifest,
+        [0xd9; 32],
+        usize::try_from(OBJECTS).expect("object count"),
+    )
+    .expect_err("historical source-set authority cannot be rebound after generation advance");
+    assert!(error.contains("restart source-set authority conflict"));
+}
