@@ -8,7 +8,14 @@ from pathlib import Path
 import tempfile
 import unittest
 
+from tools import test_run_phase3_deployment_preflight_bundle as bundle_tests
 from tools import verify_phase3_deployment_preflight as preflight
+
+
+def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: str | None):
+    """Keep the shareable deployment-bundle tests acceptance-loaded with preflight tests."""
+    tests.addTests(loader.loadTestsFromModule(bundle_tests))
+    return tests
 
 
 def valid_filesystem_report() -> dict:
