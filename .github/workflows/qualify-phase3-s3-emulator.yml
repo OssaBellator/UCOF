@@ -58,6 +58,37 @@ jobs:
             uname -a
           } > target/phase3-s3-emulator-environment.txt
 
+      - name: Resolve pinned MinIO module provenance
+        shell: bash
+        run: |
+          set -euo pipefail
+          go mod download -json "github.com/minio/minio@${MINIO_SOURCE_TAG}" \
+            > target/phase3-s3-emulator-minio-module.json
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = json.loads(Path("target/phase3-s3-emulator-minio-module.json").read_text())
+          expected = os.environ["MINIO_SOURCE_TAG"]
+          if payload.get("Path") != "github.com/minio/minio":
+              raise SystemExit("unexpected MinIO module path")
+          if payload.get("Version") != expected:
+              raise SystemExit("resolved MinIO module version does not match pinned tag")
+          for name in ("Sum", "GoModSum"):
+              value = payload.get(name)
+              if not isinstance(value, str) or not value.startswith("h1:"):
+                  raise SystemExit(f"missing MinIO module checksum: {name}")
+          origin = payload.get("Origin")
+          if origin is not None:
+              if not isinstance(origin, dict):
+                  raise SystemExit("invalid MinIO module origin")
+              vcs_hash = origin.get("Hash")
+              if not isinstance(vcs_hash, str) or not vcs_hash:
+                  raise SystemExit("MinIO module origin lacks VCS hash")
+          print(f"resolved MinIO module {expected}")
+          PY
+
       - name: Build pinned MinIO emulator from source
         shell: bash
         run: |
@@ -150,6 +181,10 @@ jobs:
               if line not in environment:
                   raise SystemExit(f"missing environment binding: {line.strip()}")
 
+          module = json.loads(Path("target/phase3-s3-emulator-minio-module.json").read_text())
+          if module.get("Version") != os.environ["MINIO_SOURCE_TAG"]:
+              raise SystemExit("MinIO module provenance no longer matches pinned tag")
+
           report = json.loads(Path("target/phase3-s3-emulator-qualification.json").read_text())
           if report.get("schema") != "ucof-phase3-s3-versioned-source-qualification-v1":
               raise SystemExit("unexpected S3 qualification schema")
@@ -225,6 +260,7 @@ jobs:
           name: phase3-s3-emulator-${{ env.QUALIFICATION_SOURCE_SHA }}
           path: |
             target/phase3-s3-emulator-environment.txt
+            target/phase3-s3-emulator-minio-module.json
             target/phase3-s3-emulator-qualification.json
             target/phase3-s3-emulator-qualification.stdout.json
             target/phase3-s3-emulator-server.log
