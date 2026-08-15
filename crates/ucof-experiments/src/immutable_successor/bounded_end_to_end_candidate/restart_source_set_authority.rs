@@ -164,10 +164,6 @@ fn persist_restart_source_set_authority(
     if nonce_record.operation_id != manifest.operation_id {
         return Err("restart source-set operation mismatch".into());
     }
-    let recovery = journal.scan(None).map_err(|error| error.to_string())?;
-    if recovery.durable.generation != manifest.generation {
-        return Err("restart source-set stale generation".into());
-    }
     let record = RestartSourceSetAuthority {
         role: manifest.role,
         key_id: manifest.key_id,
@@ -178,6 +174,16 @@ fn persist_restart_source_set_authority(
         source_set_id,
         object_count: u64::try_from(object_count).map_err(|_| "restart source-set object count")?,
     };
+    if let Some(existing) = load_restart_source_set_authority(journal, record.generation, record.role)? {
+        if existing != record {
+            return Err("restart source-set authority conflict".into());
+        }
+        return Ok(existing);
+    }
+    let recovery = journal.scan(None).map_err(|error| error.to_string())?;
+    if recovery.durable.generation != manifest.generation {
+        return Err("restart source-set stale generation".into());
+    }
     let sealed = seal_restart_source_set_authority(journal, record)?;
     let name = restart_source_set_authority_name(record.generation, record.role);
     require_linux_nonce_journal_metadata_slots(journal, 1, "restart source-set authority")?;
