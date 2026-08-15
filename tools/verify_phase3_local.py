@@ -183,6 +183,9 @@ def verify_wiring(runner: Runner) -> None:
             'return Err("compaction retirement context".into());',
             'return Err("compaction source-set context".into());',
             "nonce_record.generation != manifest.generation",
+            "for checkpoint in checkpoints.iter().copied()",
+            "validate_compacted_directory_entry_count",
+            "ensure_compacted_nonce_commit_directory_headroom",
             "AfterSourceSetPruneBeforeRetirementPrune",
             "AfterPreparedRetirementPruneBeforeTerminalPrune",
         ],
@@ -193,10 +196,17 @@ def verify_wiring(runner: Runner) -> None:
             "compacted_scan_rejects_authenticated_record_replayed_under_wrong_generation_name",
             "compaction_rejects_authenticated_retirement_from_foreign_journal_context",
             "compaction_rejects_authenticated_source_set_from_foreign_journal_context",
+            "older_checkpoint_cannot_be_masked_by_newer_checkpoint_when_below_surviving_record",
+            "older_same_generation_checkpoint_mismatch_cannot_be_masked_by_newer_checkpoint",
         ],
         "restart_metadata_compaction_retry_tests.rs": [
             "retry_after_terminal_source_set_prune_before_retirement_prune_completes",
             "retry_after_prepared_retirement_prune_keeps_terminal_authority",
+        ],
+        "restart_metadata_compaction_accounting_tests.rs": [
+            "authenticated_checkpoint_gets_exactly_one_transient_directory_entry_at_ceiling",
+            "unrelated_extra_directory_entry_does_not_receive_checkpoint_headroom",
+            "compacted_nonce_commit_reserves_one_directory_slot_for_next_checkpoint",
         ],
         "compacted_restart_retry_tests.rs": [
             "compacted_restart_survives_pruned_burn_then_publishes_retires_and_reclaims",
@@ -214,6 +224,15 @@ def verify_wiring(runner: Runner) -> None:
             raise VerificationFailure(
                 f"critical 0179 fail-closed coverage missing in {name}: {', '.join(missing_tokens)}"
             )
+
+    runner.record_static(
+        "Experiment 0179 checkpoint history consistency",
+        "every authenticated checkpoint is checked against all surviving nonce records at/below it",
+    )
+    runner.record_static(
+        "Experiment 0179 directory headroom",
+        "one authenticated checkpoint transient entry is allowed and ordinary commits reserve the next checkpoint slot",
+    )
 
     compaction_source = (base / "restart_metadata_compaction.rs").read_text()
     try:
