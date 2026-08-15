@@ -2,8 +2,9 @@
 """Bundle Phase 3 deployment-adjacent local preflights.
 
 This requires the actual target filesystem path, actual local AES/HMAC key
-files (when file-backed secrets are the deployment mechanism), and the exact
-private byte requirement produced by the deterministic lifecycle planner.
+files (when file-backed secrets are the deployment mechanism), the exact
+private byte requirement produced by the deterministic lifecycle planner, and
+the configured bounded-spill initial-run limit used to derive inode demand.
 
 A successful bundle is not production acceptance: it records mechanical
 filesystem behavior, key-file hygiene, and current byte/inode headroom only.
@@ -12,6 +13,7 @@ filesystem behavior, key-file hygiene, and current byte/inode headroom only.
 from __future__ import annotations
 
 import argparse
+from dataclasses import asdict
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -21,6 +23,9 @@ import tempfile
 import time
 
 ROOT = Path(__file__).resolve().parents[1]
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+from tools import plan_phase3_private_inodes as inode_planner
 
 FILESYSTEM_SCHEMA = "ucof-phase3-filesystem-smoke-v1"
 KEY_SCHEMA = "ucof-phase3-key-material-preflight-v1"
@@ -147,13 +152,37 @@ def validate_storage_report(report: dict) -> None:
         raise DeploymentPreflightError("storage observation does not satisfy byte/inode headroom")
 
 
+def resolve_inode_requirement(
+    max_initial_runs: int,
+    operator_required_inodes: int,
+) -> tuple[inode_planner.UnifiedInodePlan, int]:
+    if operator_required_inodes < 0:
+        raise DeploymentPreflightError("required inodes must be nonnegative")
+    try:
+        plan = inode_planner.unified_inode_plan(max_initial_runs)
+    except inode_planner.InodePlanError as exc:
+        raise DeploymentPreflightError(str(exc)) from exc
+    return plan, max(plan.required_additional_inodes, operator_required_inodes)
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("--filesystem-path", type=Path, required=True)
     parser.add_argument("--aes-key", type=Path, required=True)
     parser.add_argument("--hmac-key", type=Path, required=True)
     parser.add_argument("--required-bytes", type=int, required=True)
-    parser.add_argument("--required-inodes", type=int, default=0)
+    parser.add_argument(
+        "--max-initial-runs",
+        type=int,
+        required=True,
+        help="bounded-spill max_initial_runs used to derive additional inode demand",
+    )
+    parser.add_argument(
+        "--required-inodes",
+        type=int,
+        default=0,
+        help="optional operator floor; cannot reduce the lifecycle planner requirement",
+    )
     parser.add_argument("--reserve-bytes", type=int, default=0)
     parser.add_argument("--reserve-inodes", type=int, default=0)
     parser.add_argument(
@@ -168,13 +197,20 @@ def main() -> int:
     args = parse_args()
     for label, value in (
         ("required bytes", args.required_bytes),
-        ("required inodes", args.required_inodes),
         ("reserve bytes", args.reserve_bytes),
         ("reserve inodes", args.reserve_inodes),
     ):
         if value < 0:
             print(f"deployment preflight: FAIL: {label} must be nonnegative", file=sys.stderr)
             return 2
+    try:
+        inode_plan, effective_required_inodes = resolve_inode_requirement(
+            args.max_initial_runs,
+            args.required_inodes,
+        )
+    except DeploymentPreflightError as exc:
+        print(f"deployment preflight: FAIL: {exc}", file=sys.stderr)
+        return 2
 
     output = args.output if args.output.is_absolute() else ROOT / args.output
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -223,7 +259,7 @@ def main() -> int:
                     "--required-bytes",
                     str(args.required_bytes),
                     "--required-inodes",
-                    str(args.required_inodes),
+                    str(effective_required_inodes),
                     "--reserve-bytes",
                     str(args.reserve_bytes),
                     "--reserve-inodes",
@@ -242,6 +278,13 @@ def main() -> int:
                 validate_key_report(key_material)
                 storage_headroom = read_json_report(storage_report, STORAGE_SCHEMA)
                 validate_storage_report(storage_headroom)
+                observation = storage_headroom.get("observation")
+                if not isinstance(observation, dict) or observation.get(
+                    "required_inodes"
+                ) != effective_required_inodes:
+                    raise DeploymentPreflightError(
+                        "storage child report did not use the effective lifecycle inode requirement"
+                    )
             except DeploymentPreflightError as exc:
                 validation_errors.append(str(exc))
 
@@ -257,7 +300,7 @@ def main() -> int:
         )
 
         report = {
-            "schema": "ucof-phase3-deployment-preflight-v2",
+            "schema": "ucof-phase3-deployment-preflight-v3",
             "recorded_utc": datetime.now(timezone.utc).isoformat(),
             "ok": ok,
             "inputs": {
@@ -265,9 +308,20 @@ def main() -> int:
                 "aes_key_path": str(args.aes_key.resolve()),
                 "hmac_key_path": str(args.hmac_key.resolve()),
                 "required_bytes": args.required_bytes,
-                "required_inodes": args.required_inodes,
+                "max_initial_runs": args.max_initial_runs,
+                "operator_required_inodes": args.required_inodes,
+                "effective_required_inodes": effective_required_inodes,
                 "reserve_bytes": args.reserve_bytes,
                 "reserve_inodes": args.reserve_inodes,
+            },
+            "private_inode_plan": {
+                "schema": "ucof-phase3-private-inode-plan-v1",
+                "normal": asdict(inode_plan.normal),
+                "crash_resume": asdict(inode_plan.crash_resume),
+                "required_additional_inodes": inode_plan.required_additional_inodes,
+                "effective_required_inodes": effective_required_inodes,
+                "operator_floor_applied": args.required_inodes
+                > inode_plan.required_additional_inodes,
             },
             "checks": checks,
             "child_evidence_valid": evidence_ok,
@@ -288,7 +342,8 @@ def main() -> int:
                 "power_loss_qualified": False,
                 "anti_rollback_qualified": False,
                 "same_uid_unlink_race_closed": False,
-                "free_space_reserved": False,
+                "free_space_or_inodes_reserved": False,
+                "concurrent_inode_consumption_prevented": False,
                 "key_provisioning_or_rotation_qualified": False,
                 "ancestor_key_path_pinning_qualified": False,
             },
@@ -301,7 +356,8 @@ def main() -> int:
             print(check["output"], file=sys.stderr)
     for error in validation_errors:
         print(f"FAIL child evidence: {error}", file=sys.stderr)
-    print(f"report={output.relative_to(ROOT) if output.is_relative_to(ROOT) else output}")
+    display = output.relative_to(ROOT) if output.is_relative_to(ROOT) else output
+    print(f"report={display}")
     return 0 if ok else 1
 
 
