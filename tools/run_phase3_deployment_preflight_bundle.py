@@ -326,7 +326,9 @@ def main() -> int:
         "deployment_preflight": inner_report,
         "validation_error": validation_error,
         "non_claims": {
-            "raw_local_paths_persisted": False,
+            "operator_supplied_paths_persisted": False,
+            "child_command_or_output_text_persisted": False,
+            "candidate_execution_proven_by_sha_field_alone": False,
             "key_material_persisted": False,
             "production_key_provisioning_qualified": False,
             "kms_hsm_backing_qualified": False,
