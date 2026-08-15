@@ -73,20 +73,26 @@ jobs:
           expected = os.environ["MINIO_SOURCE_TAG"]
           if payload.get("Path") != "github.com/minio/minio":
               raise SystemExit("unexpected MinIO module path")
-          if payload.get("Version") != expected:
-              raise SystemExit("resolved MinIO module version does not match pinned tag")
+          if payload.get("Query") != expected:
+              raise SystemExit("MinIO module query does not match pinned release tag")
+          version = payload.get("Version")
+          if not isinstance(version, str) or not version:
+              raise SystemExit("resolved MinIO module lacks pseudo-version")
           for name in ("Sum", "GoModSum"):
               value = payload.get(name)
               if not isinstance(value, str) or not value.startswith("h1:"):
                   raise SystemExit(f"missing MinIO module checksum: {name}")
           origin = payload.get("Origin")
-          if origin is not None:
-              if not isinstance(origin, dict):
-                  raise SystemExit("invalid MinIO module origin")
-              vcs_hash = origin.get("Hash")
-              if not isinstance(vcs_hash, str) or not vcs_hash:
-                  raise SystemExit("MinIO module origin lacks VCS hash")
-          print(f"resolved MinIO module {expected}")
+          if not isinstance(origin, dict):
+              raise SystemExit("MinIO module provenance lacks VCS origin")
+          if origin.get("VCS") != "git" or origin.get("URL") != "https://github.com/minio/minio":
+              raise SystemExit("unexpected MinIO module VCS origin")
+          vcs_hash = origin.get("Hash")
+          if not isinstance(vcs_hash, str) or len(vcs_hash) < 12:
+              raise SystemExit("MinIO module origin lacks VCS hash")
+          if not version.endswith("-" + vcs_hash[:12]):
+              raise SystemExit("MinIO pseudo-version is not bound to VCS hash")
+          print(f"resolved MinIO {expected} -> {version} ({vcs_hash})")
           PY
 
       - name: Build pinned MinIO emulator from source
@@ -182,8 +188,15 @@ jobs:
                   raise SystemExit(f"missing environment binding: {line.strip()}")
 
           module = json.loads(Path("target/phase3-s3-emulator-minio-module.json").read_text())
-          if module.get("Version") != os.environ["MINIO_SOURCE_TAG"]:
-              raise SystemExit("MinIO module provenance no longer matches pinned tag")
+          if module.get("Query") != os.environ["MINIO_SOURCE_TAG"]:
+              raise SystemExit("MinIO module provenance no longer matches pinned tag query")
+          origin = module.get("Origin")
+          version = module.get("Version")
+          if not isinstance(origin, dict) or not isinstance(version, str):
+              raise SystemExit("MinIO module provenance is incomplete")
+          vcs_hash = origin.get("Hash")
+          if not isinstance(vcs_hash, str) or not version.endswith("-" + vcs_hash[:12]):
+              raise SystemExit("MinIO pseudo-version/VCS provenance mismatch")
 
           report = json.loads(Path("target/phase3-s3-emulator-qualification.json").read_text())
           if report.get("schema") != "ucof-phase3-s3-versioned-source-qualification-v1":
