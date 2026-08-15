@@ -21,6 +21,7 @@ REQUIRED_CHECKS = {
     "Experiment 0179 prune order",
     "Experiment 0179 wiring",
     "Independent restart-metadata compaction model",
+    "Phase 3 Python tool self-tests",
     "Locked dependency graph",
     "Rust formatting",
     "Phase 3 Clippy",
