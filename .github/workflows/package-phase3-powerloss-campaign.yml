@@ -1,0 +1,183 @@
+name: Package Phase 3 Power-Loss Campaign
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/package-phase3-powerloss-campaign.yml"
+      - "tools/plan_phase3_powerloss_campaign.py"
+      - "tools/init_phase3_powerloss_results.py"
+      - "tools/verify_phase3_powerloss_results.py"
+      - "tools/test_init_phase3_powerloss_results.py"
+      - "tools/test_verify_phase3_powerloss_results.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TARGET_CANDIDATE_SHA: 67beca9ce5d1242c5df839c9ef2d7b1ce5a8b774
+      QUALIFICATION_TOOL_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.QUALIFICATION_TOOL_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact tool and target commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${QUALIFICATION_TOOL_SHA}"
+          git cat-file -e "${TARGET_CANDIDATE_SHA}^{commit}"
+          mkdir -p target/powerloss-kit/qualification-tools/tools
+          {
+            echo "target_candidate_sha=${TARGET_CANDIDATE_SHA}"
+            echo "qualification_tool_sha=${QUALIFICATION_TOOL_SHA}"
+            echo "workflow_event_sha=${GITHUB_SHA}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+            python3 --version
+            uname -a
+          } > target/powerloss-kit/package-environment.txt
+
+      - name: Run power-loss tooling self-tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest \
+            tools.test_init_phase3_powerloss_results \
+            tools.test_verify_phase3_powerloss_results
+
+      - name: Generate candidate-bound campaign inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          kit=target/powerloss-kit
+          python3 -m tools.plan_phase3_powerloss_campaign > "${kit}/campaign-plan.json"
+          python3 -m tools.init_phase3_powerloss_results \
+            --ucof-git-sha "${TARGET_CANDIDATE_SHA}" \
+            "${kit}/results-template.json"
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          target = os.environ["TARGET_CANDIDATE_SHA"]
+          kit = Path("target/powerloss-kit")
+          plan = json.loads((kit / "campaign-plan.json").read_text())
+          template = json.loads((kit / "results-template.json").read_text())
+          cases = plan.get("cases")
+          if plan.get("schema") != "ucof-phase3-powerloss-campaign-plan-v1":
+              raise SystemExit("unexpected campaign plan schema")
+          if plan.get("destructive_external_execution_required") is not True:
+              raise SystemExit("campaign plan lost destructive external-execution requirement")
+          if not isinstance(cases, list) or len(cases) != 14:
+              raise SystemExit("campaign plan is not the canonical 14-case set")
+          if template.get("schema") != "ucof-phase3-powerloss-campaign-results-v1":
+              raise SystemExit("unexpected campaign result-template schema")
+          if template.get("platform", {}).get("ucof_git_sha") != target:
+              raise SystemExit("result template is not bound to target candidate SHA")
+          template_cases = template.get("cases")
+          if not isinstance(template_cases, list) or len(template_cases) != 14:
+              raise SystemExit("result template is not the complete canonical case set")
+          if any(case.get("status") != "unexecuted" for case in template_cases):
+              raise SystemExit("result template contains fabricated executed status")
+          PY
+
+      - name: Prove unexecuted template is not accepted evidence
+        shell: bash
+        run: |
+          set -euo pipefail
+          set +e
+          python3 -m tools.verify_phase3_powerloss_results \
+            target/powerloss-kit/results-template.json \
+            --expected-git-sha "${TARGET_CANDIDATE_SHA}" \
+            > target/powerloss-kit/unexecuted-template-validation.stdout.txt \
+            2> target/powerloss-kit/unexecuted-template-validation.stderr.txt
+          status=$?
+          set -e
+          test "${status}" -eq 2
+          grep -Eq "missing|pass or fail" \
+            target/powerloss-kit/unexecuted-template-validation.stderr.txt
+          echo "expected_validator_exit=${status}" \
+            > target/powerloss-kit/unexecuted-template-validation.status.txt
+
+      - name: Package exact candidate source and validator tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          kit=target/powerloss-kit
+          git archive \
+            --format=tar.gz \
+            --prefix="ucof-${TARGET_CANDIDATE_SHA}/" \
+            "${TARGET_CANDIDATE_SHA}" \
+            > "${kit}/ucof-candidate-${TARGET_CANDIDATE_SHA}.tar.gz"
+          cp tools/__init__.py "${kit}/qualification-tools/tools/__init__.py"
+          cp tools/plan_phase3_powerloss_campaign.py \
+            "${kit}/qualification-tools/tools/plan_phase3_powerloss_campaign.py"
+          cp tools/init_phase3_powerloss_results.py \
+            "${kit}/qualification-tools/tools/init_phase3_powerloss_results.py"
+          cp tools/verify_phase3_powerloss_results.py \
+            "${kit}/qualification-tools/tools/verify_phase3_powerloss_results.py"
+          cat > "${kit}/QUALIFICATION.md" <<EOF
+          # Phase 3 destructive power-loss campaign kit
+
+          Target UCOF candidate: \`${TARGET_CANDIDATE_SHA}\`
+
+          Qualification-tool source: \`${QUALIFICATION_TOOL_SHA}\`
+
+          This kit does **not** contain power-loss results. The result template is deliberately \`unexecuted\` and is expected to fail the final validator until an external operator completes every required platform/campaign field and every canonical case with explicit \`pass\` or \`fail\`, cut evidence, reboot observation, and retry result.
+
+          Run the complete 14-case campaign in \`campaign-plan.json\` on the exact target filesystem/storage stack using the exact candidate source archive. Do not transfer results between filesystem, mount, controller, virtualization, cache-policy, host/provider, or image/snapshot configurations.
+
+          Final validation from the \`qualification-tools\` directory:
+
+          \`python3 -m tools.verify_phase3_powerloss_results ../results.json --expected-git-sha ${TARGET_CANDIDATE_SHA}\`
+
+          A green result validates evidence shape, complete canonical case coverage, and exact candidate-SHA binding. It does not independently prove that cut references or physical power interruptions were truthful; those remain external campaign evidence and review obligations.
+          EOF
+
+      - name: Write kit manifest and hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          kit = Path("target/powerloss-kit")
+          manifest = {
+              "schema": "ucof-phase3-powerloss-campaign-kit-v1",
+              "target_candidate_sha": os.environ["TARGET_CANDIDATE_SHA"],
+              "qualification_tool_sha": os.environ["QUALIFICATION_TOOL_SHA"],
+              "plan_schema": "ucof-phase3-powerloss-campaign-plan-v1",
+              "result_schema": "ucof-phase3-powerloss-campaign-results-v1",
+              "case_count": 14,
+              "destructive_external_execution_required": True,
+              "contains_executed_results": False,
+          }
+          (kit / "kit-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+          (
+            cd target/powerloss-kit
+            find . -type f ! -name SHA256SUMS -print0 \
+              | sort -z \
+              | xargs -0 sha256sum \
+              > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+
+      - name: Upload external campaign kit
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-powerloss-kit-${{ env.TARGET_CANDIDATE_SHA }}-tools-${{ env.QUALIFICATION_TOOL_SHA }}
+          path: target/powerloss-kit
+          if-no-files-found: error
+          retention-days: 30

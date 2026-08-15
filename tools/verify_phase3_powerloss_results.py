@@ -6,11 +6,13 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import re
 import sys
 
 from tools import plan_phase3_powerloss_campaign as plan
 
 SCHEMA = "ucof-phase3-powerloss-campaign-results-v1"
+GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 class PowerlossResultError(RuntimeError):
@@ -19,6 +21,14 @@ class PowerlossResultError(RuntimeError):
 
 def nonempty(value: object) -> bool:
     return isinstance(value, str) and bool(value.strip())
+
+
+def canonical_expected_git_sha(value: str) -> str:
+    if not GIT_SHA_RE.fullmatch(value):
+        raise PowerlossResultError(
+            "expected UCOF git SHA must be exactly 40 lowercase hexadecimal characters"
+        )
+    return value
 
 
 def load(path: Path) -> dict:
@@ -31,7 +41,7 @@ def load(path: Path) -> dict:
     return payload
 
 
-def validate(payload: dict) -> dict:
+def validate(payload: dict, expected_git_sha: str | None = None) -> dict:
     if payload.get("schema") != SCHEMA:
         raise PowerlossResultError("unexpected power-loss result schema")
     if payload.get("plan_schema") != plan.SCHEMA:
@@ -39,11 +49,24 @@ def validate(payload: dict) -> dict:
     platform = payload.get("platform")
     if not isinstance(platform, dict):
         raise PowerlossResultError("power-loss result is missing platform metadata")
-    missing_platform = [name for name in plan.build_plan()["required_platform_metadata"] if not nonempty(platform.get(name))]
+    missing_platform = [
+        name
+        for name in plan.build_plan()["required_platform_metadata"]
+        if not nonempty(platform.get(name))
+    ]
     if missing_platform:
         raise PowerlossResultError(
             "power-loss platform metadata missing: " + ", ".join(missing_platform)
         )
+
+    observed_git_sha = platform["ucof_git_sha"]
+    if expected_git_sha is not None:
+        expected = canonical_expected_git_sha(expected_git_sha)
+        if observed_git_sha != expected:
+            raise PowerlossResultError(
+                "power-loss result UCOF git SHA mismatch: "
+                f"expected {expected}, observed {observed_git_sha}"
+            )
 
     cases = payload.get("cases")
     if not isinstance(cases, list):
@@ -73,7 +96,9 @@ def validate(payload: dict) -> dict:
             failures.append(case_id)
 
     if observed_ids != expected:
-        raise PowerlossResultError("power-loss cases must match the complete canonical plan order")
+        raise PowerlossResultError(
+            "power-loss cases must match the complete canonical plan order"
+        )
     if len(observed_ids) != len(set(observed_ids)):
         raise PowerlossResultError("duplicate power-loss case id")
 
@@ -88,20 +113,30 @@ def validate(payload: dict) -> dict:
         "ok": not failures,
         "case_count": len(expected),
         "failed_cases": failures,
-        "ucof_git_sha": platform["ucof_git_sha"],
+        "ucof_git_sha": observed_git_sha,
     }
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("result", type=Path)
+    parser.add_argument(
+        "--expected-git-sha",
+        help=(
+            "require platform.ucof_git_sha to equal this exact 40-character "
+            "lowercase candidate commit SHA"
+        ),
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     try:
-        summary = validate(load(args.result))
+        summary = validate(
+            load(args.result),
+            expected_git_sha=args.expected_git_sha,
+        )
     except PowerlossResultError as exc:
         print(f"Phase 3 power-loss results: FAIL: {exc}", file=sys.stderr)
         return 2
