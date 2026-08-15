@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib.util
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 from unittest import mock
@@ -15,6 +16,7 @@ SPEC = importlib.util.spec_from_file_location("check_phase3_storage_headroom", M
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError("cannot load storage headroom preflight")
 headroom = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = headroom
 SPEC.loader.exec_module(headroom)
 
 
