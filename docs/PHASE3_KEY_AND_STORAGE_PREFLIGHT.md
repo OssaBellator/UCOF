@@ -1,11 +1,12 @@
 # Phase 3 key-material and storage preflight boundary
 
-This document covers two deployment-adjacent checks that can be performed locally without GitHub Actions:
+This document covers deployment-adjacent checks that can be performed locally without GitHub Actions:
 
 - static key-file hygiene;
+- deterministic additional-private-inode planning;
 - point-in-time filesystem byte/inode headroom.
 
-Both are non-normative implementation/qualification aids. They do not change FCP-0003, EXP-0003, D1–D7, epoch allocation, or compatibility policy.
+All are non-normative implementation/qualification aids. They do not change FCP-0003, EXP-0003, D1–D7, epoch allocation, or compatibility policy.
 
 ## Key-file preflight
 
@@ -44,75 +45,83 @@ The JSON report contains only metadata such as path, mode, uid/gid, device/inode
 
 ### Key preflight non-claims
 
-A PASS does not establish:
+A PASS does not establish secure key generation/provisioning, rotation/revocation, KMS/HSM/TPM backing, memory locking, zeroization, backup/recovery policy, anti-rollback, multi-process distribution safety, or descriptor-pinned validation of every ancestor pathname component.
 
-- secure key generation or provisioning;
-- key rotation/revocation semantics;
-- KMS/HSM/TPM backing;
-- secret memory locking;
-- zeroization after use;
-- backup/recovery policy;
-- anti-rollback or freshness anchoring;
-- multi-process key distribution safety;
-- descriptor-pinned validation of every ancestor component of the supplied pathname.
+The immediate-parent check closes the obvious writable-parent replacement hole in the local file preflight; it is **not** a general proof against ancestor-path replacement or privileged/same-UID interference after preflight.
 
-The immediate-parent check closes the obvious writable-parent replacement hole in the local file preflight; it is **not** a general proof against ancestor-path replacement or privileged/same-UID interference after preflight. Those remain production design/qualification work under issue #11.
+## Private inode lifecycle planner
+
+The byte lifecycle planner is not an inode planner: bytes, directory entries, open file descriptors and filesystem inodes are different resources. Use:
+
+```text
+python3 tools/plan_phase3_private_inodes.py \
+  --max-initial-runs <bounded-spill-max-initial-runs> \
+  --output target/phase3-private-inodes.json
+```
+
+The v1 inode planner reports **additional free inodes required above the files already present when the operation starts**. It derives its normal-path peak from actual file overlap:
+
+- fresh nonce generation record;
+- encrypted descriptor destination stage;
+- bounded spill runs, including the one merge-output inode created before its inputs are removed;
+- durable restart stage + manifest + source-set authority;
+- retained/locator/page-reference tree working stages;
+- one staged canonical output inode.
+
+It separately models compacted crash-resume/retirement and conservatively allows the fresh nonce, staged output, Prepared, Terminal and new checkpoint to coexist before reclamation credits are taken.
+
+The resulting `required_additional_inodes` is suitable as the minimum `--required-inodes` input to the storage headroom observer. Publication by hard link contributes **zero additional inodes** because the destination name references the same staged-output inode; it still consumes a directory entry.
+
+The planner deliberately does not claim inode reservation or protection against unrelated concurrent inode consumption.
 
 ## Storage headroom observation
 
-Use the deterministic lifecycle planner's required byte count as input to:
+Use the deterministic lifecycle byte requirement and inode planner result as inputs to:
 
 ```text
 python3 tools/check_phase3_storage_headroom.py \
   --path /path/on/private-filesystem \
   --required-bytes <planner-required-bytes> \
-  --required-inodes <expected-new-inodes> \
+  --required-inodes <private-inode-plan-required-additional-inodes> \
   --reserve-bytes <deployment-safety-margin> \
   --reserve-inodes <deployment-safety-margin> \
   --output target/phase3-storage-headroom.json
 ```
 
-Self-test with:
-
-```text
-python3 tools/test_check_phase3_storage_headroom.py
-```
-
-The checker reads `statvfs` and compares current **available** bytes/inodes with:
-
-```text
-required + deployment reserve
-```
-
-It uses exact arithmetic and reports byte/inode headroom independently, including one-byte/one-inode boundary behavior.
-
-### Storage preflight non-claims
-
-The report always records:
+The checker reads `statvfs` and compares current **available** bytes/inodes with `required + deployment reserve`, with byte and inode dimensions reported independently. Its report always records:
 
 ```text
 reserved = false
 race_free = false
 ```
 
-A PASS is only a point-in-time admission observation. Another process can consume blocks or inodes immediately afterward. This helper therefore complements, but does not replace:
+A PASS is only a point-in-time admission observation. Another process can consume blocks or inodes immediately afterward. It does not replace filesystem/provider reservation, quota mechanisms, deployment isolation, or policy for delayed allocation, copy-on-write, metadata overhead, snapshots, sparse files or provider semantics.
 
-- deterministic private-lifecycle quota accounting;
-- filesystem/provider-specific reservation or quota mechanisms;
-- operational isolation from unrelated writers;
-- handling of delayed allocation, copy-on-write, metadata overhead, snapshots, quotas, sparse files, or provider billing/storage semantics.
+## Recommended local deployment bundle
 
-## Recommended local qualification bundle
+`tools/verify_phase3_deployment_preflight.py` now derives the inode requirement itself. Supply the exact byte-plan result and the same bounded-spill configuration used by the candidate:
 
-Before treating a deployment environment as a serious Phase 3 candidate, retain all of the following for the same software/environment revision:
+```text
+python3 tools/verify_phase3_deployment_preflight.py \
+  --filesystem-path /path/on/private-filesystem \
+  --aes-key /secure/path/aes.key \
+  --hmac-key /secure/path/hmac.key \
+  --required-bytes <planner-required-bytes> \
+  --max-initial-runs <bounded-spill-max-initial-runs> \
+  --reserve-bytes <deployment-safety-margin> \
+  --reserve-inodes <deployment-safety-margin> \
+  --output target/phase3-deployment-preflight.json
+```
 
-1. successful deterministic code acceptance from `tools/verify_phase3_local.py --acceptance`;
+The bundle schema is `ucof-phase3-deployment-preflight-v3`. It embeds the private inode plan and passes its derived requirement to the storage child. `--required-inodes` remains available only as an **operator floor**: it can raise the requirement, never lower the lifecycle planner result. The bundle validates that the storage child actually used the effective inode requirement.
+
+Before treating an environment as a serious Phase 3 candidate, retain for the same revision:
+
+1. deterministic code acceptance from `tools/verify_phase3_local.py --acceptance`;
 2. SHA-bound acceptance record from `tools/record_phase3_local_acceptance.py`;
 3. filesystem mechanical/qualification report from `tools/verify_phase3_qualification_local.py`;
-4. key-material preflight report for the actual local key files if file-backed secrets are used;
-5. storage headroom observation using the exact lifecycle planner requirement;
+4. key-material preflight for the actual local key files if file-backed secrets are used;
+5. the private inode plan and storage headroom observation;
 6. separate destructive/power-loss evidence before making physical-durability claims.
-
-`tools/verify_phase3_deployment_preflight.py` can collect the filesystem, key and storage observations into one deployment-adjacent report. That bundle is still only as strong as the individual reports and their explicit non-claims.
 
 No combination of these local preflights selects EXP-0003 wire decisions or turns the current research mechanism into a stable compatibility contract.
