@@ -90,7 +90,17 @@ fn scan_compacted_persistent_inventory(
             continue;
         }
 
-        if parse_compaction_stage_manifest_name(&name).is_some() {
+        if let Some((generation, role)) = parse_compaction_stage_manifest_name(&name) {
+            let manifest = load_encrypted_stage_manifest(journal, generation, role)
+                .map_err(|error| error.to_string())?
+                .ok_or_else(|| "compacted inventory stage manifest disappeared".to_owned())?;
+            if manifest.generation != generation
+                || manifest.role != role
+                || manifest.key_id != journal.key_id
+                || manifest.nonce_prefix != journal.nonce_prefix
+            {
+                return Err("compacted inventory stage manifest context".into());
+            }
             continue;
         }
 
