@@ -236,6 +236,7 @@ def verify_wiring(runner: Runner) -> None:
             "for checkpoint in checkpoints.iter().copied()",
             "validate_compacted_directory_entry_count",
             "ensure_compacted_nonce_commit_directory_headroom",
+            "saw_unrecognized_entry",
             "AfterSourceSetPruneBeforeRetirementPrune",
             "AfterPreparedRetirementPruneBeforeTerminalPrune",
         ],
@@ -259,6 +260,7 @@ def verify_wiring(runner: Runner) -> None:
             "authenticated_checkpoint_gets_exactly_one_transient_directory_entry_at_ceiling",
             "unrelated_extra_directory_entry_does_not_receive_checkpoint_headroom",
             "compacted_nonce_commit_reserves_one_directory_slot_for_next_checkpoint",
+            "checkpoint_does_not_lend_transient_headroom_to_unknown_entry",
         ],
         "compacted_restart_retry_tests.rs": [
             "compacted_restart_survives_pruned_burn_then_publishes_retires_and_reclaims",
