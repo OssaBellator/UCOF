@@ -31,6 +31,7 @@ fn scan_compacted_persistent_inventory(
     let mut total_bytes = 0u64;
     let mut directory_entries = 0usize;
     let mut saw_authenticated_checkpoint = false;
+    let mut saw_unrecognized_entry = false;
     let directory_scan_ceiling = compacted_directory_scan_ceiling(journal)?;
 
     for entry in std::fs::read_dir(linux_nonce_procfd_directory(&journal.directory))
@@ -86,6 +87,10 @@ fn scan_compacted_persistent_inventory(
             total_bytes = total_bytes
                 .checked_add(u64::try_from(NONCE_COMPACTION_BYTES).expect("checkpoint width"))
                 .ok_or_else(|| "compacted inventory byte overflow".to_owned())?;
+            continue;
+        }
+
+        if parse_compaction_stage_manifest_name(&name).is_some() {
             continue;
         }
 
@@ -161,12 +166,16 @@ fn scan_compacted_persistent_inventory(
             total_bytes = total_bytes
                 .checked_add(metadata.len())
                 .ok_or_else(|| "compacted inventory byte overflow".to_owned())?;
+            continue;
         }
+
+        saw_unrecognized_entry = true;
     }
     validate_compacted_directory_entry_count(
         journal,
         directory_entries,
         saw_authenticated_checkpoint,
+        saw_unrecognized_entry,
         "compacted inventory",
     )?;
 
