@@ -400,11 +400,48 @@ impl LinuxDurableNonceJournal {
         })
     }
 
+    fn preflight_record_create_capacity(&self) -> Result<(), LinuxNonceJournalError> {
+        linux_nonce_verify_procfd_directory(&self.directory)?;
+        let mut directory_entries = 0usize;
+        let mut generations = 0usize;
+        for entry in std::fs::read_dir(linux_nonce_procfd_directory(&self.directory))
+            .map_err(|_| LinuxNonceJournalError::Io("capacity directory scan"))?
+        {
+            let entry = entry.map_err(|_| LinuxNonceJournalError::Io("capacity directory entry"))?;
+            directory_entries = directory_entries
+                .checked_add(1)
+                .ok_or(LinuxNonceJournalError::Limit("directory entry capacity"))?;
+            if linux_nonce_parse_generation_name(&entry.file_name()).is_some() {
+                generations = generations
+                    .checked_add(1)
+                    .ok_or(LinuxNonceJournalError::Limit("journal generation capacity"))?;
+            }
+        }
+        if directory_entries >= self.limits.max_directory_entries {
+            return Err(LinuxNonceJournalError::Limit("directory entry capacity"));
+        }
+        if generations >= self.limits.max_generations {
+            return Err(LinuxNonceJournalError::Limit("journal generation capacity"));
+        }
+        let generations_after = generations
+            .checked_add(1)
+            .ok_or(LinuxNonceJournalError::Limit("journal generation capacity"))?;
+        let bytes_after = u64::try_from(generations_after)
+            .map_err(|_| LinuxNonceJournalError::Limit("journal byte capacity"))?
+            .checked_mul(u64::try_from(LINUX_NONCE_JOURNAL_BYTES).expect("journal width"))
+            .ok_or(LinuxNonceJournalError::Limit("journal byte capacity"))?;
+        if bytes_after > self.limits.max_journal_bytes {
+            return Err(LinuxNonceJournalError::Limit("journal byte capacity"));
+        }
+        Ok(())
+    }
+
     fn persist_record(
         &self,
         record: LinuxNonceJournalRecord,
         cut: JournalCommitCut,
     ) -> Result<(), LinuxNonceJournalError> {
+        self.preflight_record_create_capacity()?;
         let sealed = self.seal_record(record)?;
         let name = OsString::from(linux_nonce_journal_name(record.generation));
         let path = linux_nonce_procfd_child(&self.directory, &name)?;
