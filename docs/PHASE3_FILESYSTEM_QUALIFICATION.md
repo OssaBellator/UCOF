@@ -9,7 +9,9 @@ It is non-normative and does not change FCP-0003, EXP-0003, D1–D7, epoch alloc
 Run on the filesystem intended to hold private restart metadata and publication staging:
 
 ```text
-python3 tools/qualify_phase3_filesystem.py --scratch-dir /path/on/target/filesystem --output target/phase3-filesystem-smoke.json
+python3 tools/qualify_phase3_filesystem.py \
+  --scratch-dir /path/on/target/filesystem \
+  --output target/phase3-filesystem-smoke.json
 ```
 
 Self-test the harness with:
@@ -31,27 +33,53 @@ The harness records the actual Linux kernel/machine, mount point, filesystem typ
 - private unlink followed by private-directory `fsync` while the published link remains valid;
 - publication unlink followed by publication-directory `fsync`.
 
-The harness removes its temporary subtree after the run.
+The harness removes its temporary subtree after the run. Its report schema is:
+
+```text
+ucof-phase3-filesystem-smoke-v1
+```
+
+## Validated local qualification wrapper
+
+For a combined filesystem-mechanics + independent Terminal-last prune-order qualification adjunct, run:
+
+```text
+python3 tools/verify_phase3_qualification_local.py \
+  --scratch-dir /path/on/target/filesystem \
+  --report target/phase3-local-qualification.json
+```
+
+The wrapper runs the filesystem harness self-tests, the independent prune-order campaign, and the mechanical smoke. It does **not** trust the smoke subprocess exit code alone: the child JSON must exist, have the expected schema, contain an explicit network/distributed classification, and contain every required mechanical check with value `true`.
+
+Its report schema is:
+
+```text
+ucof-phase3-local-qualification-v2
+```
+
+The wrapper embeds the validated filesystem evidence and records a separate production policy. An external report path is valid; the CLI no longer assumes the report lives below the repository root.
 
 ## What a PASS means
 
-A passing report means that, in the observed running environment:
+A passing smoke or validated qualification report means that, in the observed running environment:
 
 - the relevant syscalls were accepted by the mounted filesystem;
 - expected permission and hard-link/no-overwrite behavior was observed;
 - file and directory `fsync` calls completed successfully;
 - published hard links retained the exact payload after the private pathname was removed;
-- current capacity/inode observations were recorded.
+- current capacity/inode observations were recorded;
+- for the v2 wrapper, the child evidence matched the expected report contract rather than merely returning exit status zero.
 
 That is useful qualification input. It is not a crash/power-cycle experiment.
 
 ## What a PASS does **not** mean
 
-The report deliberately sets these claims to false:
+The report deliberately keeps these claims false:
 
 - `power_loss_qualified`;
 - `anti_rollback_qualified`;
-- `same_uid_unlink_race_closed`.
+- `same_uid_unlink_race_closed`;
+- `free_space_reserved` in the qualification wrapper.
 
 A successful smoke run therefore does not establish:
 
@@ -69,6 +97,8 @@ Known network/distributed filesystem types such as NFS/NFS4, CIFS/SMB, Ceph, 9p,
 ```text
 unsupported-without-provider-qualification
 ```
+
+Mechanical syscall success on one of these mounts is still recorded as evidence, but neither the smoke harness nor the v2 qualification wrapper converts it into a local-filesystem production claim.
 
 The harness does not assume that local-Linux `fsync`, directory sync, hard-link, cache-coherence, or failure semantics transfer to those providers.
 
