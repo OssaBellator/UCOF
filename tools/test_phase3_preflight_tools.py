@@ -25,6 +25,7 @@ from tools import test_plan_phase3_private_inodes as inode_planner_tests
 from tools import test_qualify_phase3_process_crash_cuts as process_crash_tests
 from tools import test_qualify_phase3_s3_versioned_source as s3_tests
 from tools import test_restart_metadata_headroom_model as headroom_model_tests
+from tools import test_run_phase3_s3_live_qualification as s3_live_bundle_tests
 from tools import test_verify_phase3_decision_state as decision_state_tests
 from tools import test_verify_phase3_deployment_preflight as deployment_tests
 from tools import test_verify_phase3_powerloss_results as powerloss_verify_tests
@@ -61,6 +62,7 @@ def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: 
     tests.addTests(loader.loadTestsFromModule(cleanroom_handoff_tests))
     tests.addTests(loader.loadTestsFromModule(cleanroom_compare_tests))
     tests.addTests(loader.loadTestsFromModule(s3_tests))
+    tests.addTests(loader.loadTestsFromModule(s3_live_bundle_tests))
     tests.addTests(loader.loadTestsFromModule(process_crash_tests))
     tests.addTests(loader.loadTestsFromModule(powerloss_plan_tests))
     tests.addTests(loader.loadTestsFromModule(powerloss_init_tests))
