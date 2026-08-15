@@ -220,7 +220,11 @@ fn live_manifest_must_match_original_nonce_operation_context() {
 fn source_set_cleanup_identity_must_match_retirement_lineage() {
     const OBJECTS: u64 = 7;
     let source_set_id = [0xa4; 32];
-    let fixture = encrypted_retirement_fixture("source-set-retirement-mismatch", OBJECTS);
+    let fixture = source_bound_retirement_fixture(
+        "source-set-retirement-mismatch",
+        OBJECTS,
+        source_set_id,
+    );
     let journal = open_journal(
         &fixture.journal_directory.0,
         &fixture.aes_key,
