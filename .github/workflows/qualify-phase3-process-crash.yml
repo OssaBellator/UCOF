@@ -1,0 +1,115 @@
+name: Qualify Phase 3 Process Crash Cuts
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/qualify-phase3-process-crash.yml"
+      - "tools/qualify_phase3_process_crash_cuts.py"
+      - "tools/test_qualify_phase3_process_crash_cuts.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      QUALIFICATION_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.QUALIFICATION_SOURCE_SHA }}
+
+      - name: Record qualification environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          checkout_sha="$(git rev-parse HEAD)"
+          test "${checkout_sha}" = "${QUALIFICATION_SOURCE_SHA}"
+          mkdir -p target
+          {
+            echo "qualification_source_sha=${QUALIFICATION_SOURCE_SHA}"
+            echo "checkout_sha=${checkout_sha}"
+            echo "workflow_event_sha=${GITHUB_SHA}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+            python3 --version
+            uname -a
+            echo "runner_temp=${RUNNER_TEMP}"
+            df -T "${RUNNER_TEMP}"
+            if command -v findmnt >/dev/null 2>&1; then
+              findmnt -T "${RUNNER_TEMP}" -o TARGET,SOURCE,FSTYPE,OPTIONS
+            fi
+          } > target/phase3-process-crash-environment.txt
+
+      - name: Run fresh-process crash-cut qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/qualify_phase3_process_crash_cuts.py \
+            --scratch-dir "${RUNNER_TEMP}" \
+            --output target/phase3-process-crash-cuts.json
+
+      - name: Validate qualification report contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          source_sha = os.environ["QUALIFICATION_SOURCE_SHA"]
+          environment = Path("target/phase3-process-crash-environment.txt").read_text()
+          if f"qualification_source_sha={source_sha}\n" not in environment:
+              raise SystemExit("qualification environment is not bound to exact source SHA")
+          if f"checkout_sha={source_sha}\n" not in environment:
+              raise SystemExit("qualification checkout does not match exact source SHA")
+
+          path = Path("target/phase3-process-crash-cuts.json")
+          report = json.loads(path.read_text())
+          expected_cases = [
+              "checkpoint-file-sync-before-dir-sync",
+              "publication-link-before-dir-sync",
+              "retirement-after-stage-unlink",
+              "retirement-after-both-unlinks",
+          ]
+          if report.get("schema") != "ucof-phase3-process-crash-cuts-v1":
+              raise SystemExit("unexpected process-crash report schema")
+          if report.get("ok") is not True:
+              raise SystemExit("process-crash qualification did not pass")
+          cases = report.get("cases")
+          if not isinstance(cases, list) or [case.get("name") for case in cases] != expected_cases:
+              raise SystemExit("unexpected process-crash case set/order")
+          for case in cases:
+              if case.get("ok") is not True or case.get("child_returncode") != 86:
+                  raise SystemExit(f"process-crash case did not reach expected cut: {case.get('name')}")
+          non_claims = report.get("non_claims")
+          required_false = [
+              "physical_power_loss_simulated",
+              "kernel_page_cache_dropped",
+              "storage_controller_cache_flushed_by_power_cut",
+              "filesystem_crash_consistency_proven",
+              "network_filesystem_qualified",
+              "same_uid_unlink_race_closed",
+              "production_accepted",
+          ]
+          if not isinstance(non_claims, dict):
+              raise SystemExit("missing process-crash non-claims")
+          for name in required_false:
+              if non_claims.get(name) is not False:
+                  raise SystemExit(f"process-crash non-claim changed: {name}")
+          print(f"validated {len(cases)} fresh-process crash cuts for {source_sha}")
+          PY
+
+      - name: Upload process-crash qualification evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-process-crash-cuts-${{ env.QUALIFICATION_SOURCE_SHA }}
+          path: |
+            target/phase3-process-crash-cuts.json
+            target/phase3-process-crash-environment.txt
+          if-no-files-found: error
+          retention-days: 14
