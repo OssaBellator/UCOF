@@ -197,11 +197,7 @@ fn load_nonce_compaction_checkpoint(
 fn compacted_directory_scan_ceiling(
     journal: &LinuxDurableNonceJournal,
 ) -> super::CandidateResult<usize> {
-    journal
-        .limits
-        .max_directory_entries
-        .checked_add(1)
-        .ok_or_else(|| "compacted directory entry ceiling".to_owned())
+    Ok(journal.limits.max_directory_entries.saturating_add(1))
 }
 
 fn is_known_compacted_metadata_name(name: &OsStr) -> bool {
@@ -397,6 +393,11 @@ impl<'a> CompactedNonceJournal<'a> {
             journal_records = journal_records
                 .checked_add(1)
                 .ok_or_else(|| "compacted nonce journal record count".to_owned())?;
+        }
+        if directory_entries > self.journal.limits.max_directory_entries
+            && checkpoint_generation != Some(durable.generation)
+        {
+            return Err("compacted nonce stale checkpoint headroom".into());
         }
         if let Some(floor) = trusted_floor {
             if durable.generation < floor.generation
