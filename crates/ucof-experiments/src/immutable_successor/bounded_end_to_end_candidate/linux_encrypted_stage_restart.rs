@@ -429,6 +429,8 @@ fn persist_sorted_encrypted_spill_restart_stage(
     if journal_recovery.durable.generation != session.journal_generation {
         return Err(LinuxEncryptedStageRestartError::StaleGeneration);
     }
+    require_linux_nonce_journal_metadata_slots(journal, 1, "encrypted stage manifest")
+        .map_err(LinuxEncryptedStageRestartError::Journal)?;
 
     let source_bytes = preflight
         .descriptor_stage
@@ -530,6 +532,8 @@ fn persist_sorted_encrypted_spill_restart_stage(
         return Err(LinuxEncryptedStageRestartError::InjectedCut(cut));
     }
 
+    require_linux_nonce_journal_metadata_slots(journal, 1, "encrypted stage manifest")
+        .map_err(LinuxEncryptedStageRestartError::Journal)?;
     let manifest_name = encrypted_stage_manifest_name(manifest.generation, manifest.role);
     let manifest_path = linux_nonce_procfd_child(&journal.directory, &manifest_name)
         .map_err(|error| LinuxEncryptedStageRestartError::Journal(error.to_string()))?;

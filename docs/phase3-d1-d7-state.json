@@ -1,0 +1,70 @@
+{
+  "schema": "ucof-phase3-d1-d7-state-v1",
+  "normative_effect": false,
+  "source_packet": "docs/PHASE3_D1_D7_DECISION_PACKET.md",
+  "decisions": {
+    "D1": {
+      "title": "Candidate 1 disposition",
+      "status": "unselected",
+      "selection": null,
+      "rationale": null,
+      "normative_locations": [],
+      "corpus_impact": null,
+      "review_reference": null
+    },
+    "D2": {
+      "title": "ObjectId and geometry",
+      "status": "unselected",
+      "selection": null,
+      "rationale": null,
+      "normative_locations": [],
+      "corpus_impact": null,
+      "review_reference": null
+    },
+    "D3": {
+      "title": "Occupancy and split rules",
+      "status": "unselected",
+      "selection": null,
+      "rationale": null,
+      "normative_locations": [],
+      "corpus_impact": null,
+      "review_reference": null
+    },
+    "D4": {
+      "title": "Deletion policy",
+      "status": "unselected",
+      "selection": null,
+      "rationale": null,
+      "normative_locations": [],
+      "corpus_impact": null,
+      "review_reference": null
+    },
+    "D5": {
+      "title": "Catalog semantics",
+      "status": "unselected",
+      "selection": null,
+      "rationale": null,
+      "normative_locations": [],
+      "corpus_impact": null,
+      "review_reference": null
+    },
+    "D6": {
+      "title": "Hash, domain-separation and kind choices",
+      "status": "unselected",
+      "selection": null,
+      "rationale": null,
+      "normative_locations": [],
+      "corpus_impact": null,
+      "review_reference": null
+    },
+    "D7": {
+      "title": "Determinism boundary",
+      "status": "unselected",
+      "selection": null,
+      "rationale": null,
+      "normative_locations": [],
+      "corpus_impact": null,
+      "review_reference": null
+    }
+  }
+}

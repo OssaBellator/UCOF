@@ -167,6 +167,7 @@ fn persist_encrypted_retirement_record(
     journal: &LinuxDurableNonceJournal,
     record: EncryptedRestartRetirementRecord,
 ) -> super::CandidateResult<()> {
+    require_linux_nonce_journal_metadata_slots(journal, 1, "encrypted retirement")?;
     let name = encrypted_retirement_name(
         record.crashed_generation,
         record.fresh_generation,

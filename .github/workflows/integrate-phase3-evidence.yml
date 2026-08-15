@@ -5,7 +5,8 @@ on:
     paths:
       - "crates/ucof-experiments/**"
       - "tests/vectors/exp-0002-invalid/**"
-      - "tools/exp0002_invalid_vectors.py"
+      - "tools/**"
+      - "docs/phase3-d1-d7-state.json"
       - ".github/workflows/integrate-phase3-evidence.yml"
   workflow_dispatch:
 
@@ -27,5 +28,7 @@ jobs:
         run: cargo clippy --locked -p ucof-experiments --all-targets -- -D warnings
       - name: Test Phase 3 experiment crate
         run: cargo test --locked -p ucof-experiments --all-targets
+      - name: Test Phase 3 Python preflight tools
+        run: python3 -m unittest tools.test_phase3_preflight_tools
       - name: Verify invalid vector reproducibility
         run: python3 tools/exp0002_invalid_vectors.py --verify-vectors tests/vectors/exp-0002-invalid
