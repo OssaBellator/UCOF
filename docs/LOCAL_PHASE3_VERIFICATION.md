@@ -12,7 +12,7 @@ Run:
 python3 tools/verify_phase3_local.py
 ```
 
-This checks the Experiment 0179 wiring, runs the independent restart-metadata compaction model, and executes the fast Phase 3 Rust/model/corpus surface.
+This checks the Experiment 0179 wiring and fail-closed guard tokens, runs the independent restart-metadata compaction model, runs the Phase 3 Python tool self-tests, and executes the fast Phase 3 Rust/model/corpus surface.
 
 When dependencies are already cached and network access should be forbidden:
 
@@ -52,7 +52,9 @@ Start from a clean worktree at the exact candidate SHA and run:
 python3 tools/verify_phase3_local.py --acceptance
 ```
 
-The verifier refuses a dirty worktree before expensive commands begin. It never installs missing packages/toolchains. A complete acceptance environment must already provide:
+The verifier refuses a dirty worktree before expensive commands begin. It records that initial SHA as `acceptance_sha`, then verifies again after the complete acceptance surface that `HEAD` is unchanged and the worktree is still clean. It never installs missing packages/toolchains.
+
+A complete acceptance environment must already provide:
 
 - the repository's normal Rust toolchain and locked dependencies;
 - Rust 1.85.0;
@@ -63,8 +65,9 @@ The verifier refuses a dirty worktree before expensive commands begin. It never 
 
 The acceptance run includes:
 
-- static 0179 wiring/stale-API guard;
+- static 0179 wiring/stale-API/fail-closed guards, including checkpoint-history consistency, bounded transient checkpoint headroom and destructive prune ordering;
 - independent restart-metadata compaction model;
+- Phase 3 Python tool self-tests for the verifier, recorder, filesystem/key/storage/deployment qualification helpers;
 - locked Cargo metadata;
 - Rust formatting;
 - Phase 3 and workspace Clippy with `-D warnings`;
@@ -78,6 +81,8 @@ The acceptance run includes:
 
 `--skip-fuzz` exists only as a development escape hatch. If it is used, the final report is intentionally not acceptable.
 
+`--model-only` and `--acceptance` are mutually exclusive so a report cannot ambiguously claim both modes.
+
 ## Inspect the report
 
 A candidate acceptance report must contain all of:
@@ -88,7 +93,8 @@ mode = acceptance
 ok = true
 dirty_worktree = false
 skipped = []
-git_sha = <exact candidate commit>
+acceptance_sha = <exact candidate commit at start>
+git_sha = <same exact candidate commit at completion>
 ```
 
 Every check record must have `status = pass`. Historical GitHub Actions results are not substitutes for this report.
@@ -104,17 +110,21 @@ python3 tools/record_phase3_local_acceptance.py
 The recorder verifies:
 
 - report schema/mode/result;
-- exact report SHA equals current `HEAD`;
+- `acceptance_sha == git_sha == current HEAD`;
 - current worktree is still clean;
 - no skipped checks;
-- the complete required check set is present and passing;
-- every fuzz target reported by `cargo fuzz list` has a passing smoke record.
+- Python/Rust/Cargo version evidence is present;
+- the complete required check set is present and passing, including the Phase 3 Python tool self-tests;
+- `cargo fuzz list` produced a non-empty, duplicate-free target set;
+- every listed fuzz target has a matching passing smoke record and no unexpected smoke target exists.
 
-It then writes:
+It hashes the exact source report bytes with SHA-256 and writes a normalized evidence record:
 
 ```text
 docs/verification/phase3-local-acceptance-<40-char-sha>.json
 ```
+
+The record schema is `ucof-phase3-local-acceptance-v2`; it contains the accepted SHA, branch, source-report digest, tool versions, fuzz-target list, normalized checks and explicit non-claims.
 
 Commit that evidence record in a follow-up evidence commit. Re-running the recorder against an identical existing record is idempotent; different evidence for the same SHA is rejected.
 
