@@ -49,7 +49,7 @@ fn newer_checkpoint_cannot_mask_older_same_generation_record_mismatch() {
         key_id: journal.key_id,
         nonce_prefix: journal.nonce_prefix,
         generation: 2,
-        next_unreserved: Some(11),
+        next_unreserved: Some(13),
     };
     let newer = NonceCompactionCheckpoint {
         key_id: journal.key_id,
