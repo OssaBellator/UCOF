@@ -204,14 +204,29 @@ fn compacted_directory_scan_ceiling(
         .ok_or_else(|| "compacted directory entry ceiling".to_owned())
 }
 
+fn is_known_compacted_metadata_name(name: &OsStr) -> bool {
+    if linux_nonce_parse_generation_name(name).is_some()
+        || parse_nonce_compaction_name(name).is_some()
+        || parse_compaction_stage_manifest_name(name).is_some()
+    {
+        return true;
+    }
+    let name_bytes = name.as_bytes();
+    (name_bytes.starts_with(ENCRYPTED_RETIREMENT_PREFIX.as_bytes())
+        && name_bytes.ends_with(ENCRYPTED_RETIREMENT_SUFFIX.as_bytes()))
+        || (name_bytes.starts_with(RESTART_SOURCE_SET_PREFIX.as_bytes())
+            && name_bytes.ends_with(RESTART_SOURCE_SET_SUFFIX.as_bytes()))
+}
+
 fn validate_compacted_directory_entry_count(
     journal: &LinuxDurableNonceJournal,
     directory_entries: usize,
     saw_authenticated_checkpoint: bool,
+    saw_unrecognized_entry: bool,
     label: &'static str,
 ) -> super::CandidateResult<()> {
     if directory_entries > journal.limits.max_directory_entries
-        && !saw_authenticated_checkpoint
+        && (!saw_authenticated_checkpoint || saw_unrecognized_entry)
     {
         return Err(format!("{label} directory entry limit"));
     }
@@ -269,6 +284,7 @@ impl<'a> CompactedNonceJournal<'a> {
         let mut bytes_read = 0u64;
         let mut journal_bytes_read = 0u64;
         let mut saw_authenticated_checkpoint = false;
+        let mut saw_unrecognized_entry = false;
         let directory_scan_ceiling = compacted_directory_scan_ceiling(self.journal)?;
 
         for entry in std::fs::read_dir(linux_nonce_procfd_directory(&self.journal.directory))
@@ -293,6 +309,9 @@ impl<'a> CompactedNonceJournal<'a> {
                 continue;
             }
             let Some(generation) = linux_nonce_parse_generation_name(&name) else {
+                if !is_known_compacted_metadata_name(&name) {
+                    saw_unrecognized_entry = true;
+                }
                 continue;
             };
             if records.len() >= self.journal.limits.max_generations {
@@ -324,6 +343,7 @@ impl<'a> CompactedNonceJournal<'a> {
             self.journal,
             directory_entries,
             saw_authenticated_checkpoint,
+            saw_unrecognized_entry,
             "compacted nonce",
         )?;
 
@@ -537,6 +557,7 @@ fn scan_compaction_metadata(
     let mut inventory = CompactionMetadataInventory::default();
     let mut directory_entries = 0usize;
     let mut saw_authenticated_checkpoint = false;
+    let mut saw_unrecognized_entry = false;
     let directory_scan_ceiling = compacted_directory_scan_ceiling(journal)?;
     for entry in std::fs::read_dir(linux_nonce_procfd_directory(&journal.directory))
         .map_err(|error| error.to_string())?
@@ -553,6 +574,9 @@ fn scan_compaction_metadata(
             load_nonce_compaction_checkpoint(journal, generation)?
                 .ok_or_else(|| "compaction checkpoint disappeared".to_owned())?;
             saw_authenticated_checkpoint = true;
+            continue;
+        }
+        if linux_nonce_parse_generation_name(&name).is_some() {
             continue;
         }
         if let Some((generation, role)) = parse_compaction_stage_manifest_name(&name) {
@@ -619,12 +643,15 @@ fn scan_compaction_metadata(
                 return Err("compaction source-set canonical name".into());
             }
             inventory.source_sets.push((name, record));
+            continue;
         }
+        saw_unrecognized_entry = true;
     }
     validate_compacted_directory_entry_count(
         journal,
         directory_entries,
         saw_authenticated_checkpoint,
+        saw_unrecognized_entry,
         "compaction metadata",
     )?;
 
@@ -863,6 +890,7 @@ fn compaction_nonce_prune_inventory(
     let mut preserved_nonce_records = 0usize;
     let mut directory_entries = 0usize;
     let mut saw_authenticated_checkpoint = false;
+    let mut saw_unrecognized_entry = false;
     let directory_scan_ceiling = compacted_directory_scan_ceiling(journal)?;
     for entry in std::fs::read_dir(linux_nonce_procfd_directory(&journal.directory))
         .map_err(|error| error.to_string())?
@@ -896,12 +924,17 @@ fn compaction_nonce_prune_inventory(
             if generation < checkpoint_generation {
                 old_checkpoints.push((name, checkpoint));
             }
+            continue;
+        }
+        if !is_known_compacted_metadata_name(&name) {
+            saw_unrecognized_entry = true;
         }
     }
     validate_compacted_directory_entry_count(
         journal,
         directory_entries,
         saw_authenticated_checkpoint,
+        saw_unrecognized_entry,
         "compaction prune",
     )?;
     Ok((nonce_records, old_checkpoints, preserved_nonce_records))
