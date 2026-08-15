@@ -25,6 +25,11 @@ PREFLIGHT = ROOT / "tools" / "verify_phase3_deployment_preflight.py"
 SCHEMA = "ucof-phase3-deployment-preflight-bundle-v1"
 INNER_SCHEMA = "ucof-phase3-deployment-preflight-v3"
 GIT_SHA_RE = re.compile(r"^[0-9a-f]{40}$")
+EXPECTED_INNER_CHECKS = (
+    "filesystem mechanical qualification",
+    "key-material preflight",
+    "storage headroom observation",
+)
 
 
 class DeploymentBundleError(RuntimeError):
@@ -70,6 +75,21 @@ def validate_successful_inner_report(report: dict) -> None:
     errors = report.get("child_validation_errors")
     if errors != []:
         raise DeploymentBundleError("deployment report contains child validation errors")
+    checks = report.get("checks")
+    if not isinstance(checks, list) or len(checks) != len(EXPECTED_INNER_CHECKS):
+        raise DeploymentBundleError("deployment report has unexpected child-check set")
+    observed_names: list[str] = []
+    for check in checks:
+        if not isinstance(check, dict):
+            raise DeploymentBundleError("deployment child check is not an object")
+        name = check.get("name")
+        if not isinstance(name, str):
+            raise DeploymentBundleError("deployment child check lacks a name")
+        observed_names.append(name)
+        if check.get("status") != "pass" or check.get("returncode") != 0:
+            raise DeploymentBundleError(f"deployment child check is not successful: {name}")
+    if observed_names != list(EXPECTED_INNER_CHECKS):
+        raise DeploymentBundleError("deployment report child checks changed order or identity")
     if report.get("production_policy") not in {
         "local-mechanical-preflight-only",
         "unsupported-without-provider-qualification",
@@ -117,6 +137,42 @@ def redact_paths(value: object, paths: tuple[str, ...]) -> object:
     if isinstance(value, dict):
         return {key: redact_paths(item, paths) for key, item in value.items()}
     return value
+
+
+def summarize_inner_checks(checks: object) -> list[dict]:
+    if not isinstance(checks, list):
+        raise DeploymentBundleError("deployment report checks cannot be summarized")
+    summarized: list[dict] = []
+    for check in checks:
+        if not isinstance(check, dict):
+            raise DeploymentBundleError("deployment report check cannot be summarized")
+        output = check.get("output")
+        if output is None:
+            output_bytes = 0
+        elif isinstance(output, str):
+            output_bytes = len(output.encode("utf-8", errors="replace"))
+        else:
+            raise DeploymentBundleError("deployment child output is not text")
+        summarized.append(
+            {
+                "name": check.get("name"),
+                "status": check.get("status"),
+                "returncode": check.get("returncode"),
+                "elapsed_seconds": check.get("elapsed_seconds"),
+                "output_bytes": output_bytes,
+                "command_persisted": False,
+                "output_persisted": False,
+            }
+        )
+    return summarized
+
+
+def sanitize_inner_report(report: dict, paths: tuple[str, ...]) -> dict:
+    redacted = redact_paths(report, paths)
+    if not isinstance(redacted, dict):
+        raise DeploymentBundleError("redacted deployment report changed type")
+    redacted["checks"] = summarize_inner_checks(report.get("checks"))
+    return redacted
 
 
 def build_inner_command(args: argparse.Namespace, output: Path) -> list[str]:
@@ -234,10 +290,7 @@ def main() -> int:
                 inner_sha256 = file_sha256(inner_output)
                 if returncode == 0:
                     validate_successful_inner_report(raw)
-                redacted = redact_paths(raw, paths)
-                if not isinstance(redacted, dict):
-                    raise DeploymentBundleError("redacted deployment report changed type")
-                inner_report = redacted
+                inner_report = sanitize_inner_report(raw, paths)
             except DeploymentBundleError as exc:
                 validation_error = str(exc)
         elif validation_error is None:
