@@ -25,9 +25,10 @@ The boxes remain unchecked until the **wired Rust implementation** passes a comp
 - [ ] Checkpoint bytes do not consume the legacy ordinary-journal byte cap during a checkpoint+full-journal crash window; they remain bounded/accounted separately.
 - [ ] Exactly one transient directory entry above `max_directory_entries` is tolerated only when an authenticated checkpoint is present.
 - [ ] An unrecognized directory entry cannot borrow that transient checkpoint slot merely because a checkpoint also exists.
+- [ ] **Before 0179 acceptance:** when recovery is already above `max_directory_entries`, the checkpoint lending the one transient slot must cover the **current recovered durable generation**, not merely be any older authenticated checkpoint. A stale checkpoint plus post-checkpoint recognized state must not authorize creation of another checkpoint at `max+2`.
 - [ ] A compacted nonce commit reserves one directory slot for the next checkpoint and rejects before writing when the configured ceiling is already full.
 - [ ] After compaction restores headroom, future generation allocation resumes without reusing any burned range.
-- [ ] The defensive `max_directory_entries == usize::MAX` scan-ceiling overflow edge is resolved before final implementation polish/acceptance.
+- [ ] **Before 0179 acceptance:** resolve the defensive `max_directory_entries == usize::MAX` scan-ceiling overflow edge without weakening the bounded-scan contract.
 
 ## Authenticated metadata graph
 
@@ -92,7 +93,7 @@ The boxes remain unchecked until the **wired Rust implementation** passes a comp
 - [ ] The static wiring guard confirms every 0179 implementation/regression file is in the Rust compilation graph, including checkpoint-consistency regressions.
 - [ ] Static guards separately record checkpoint-history consistency, directory-headroom discipline, and destructive prune ordering; the acceptance recorder requires those results.
 - [ ] The independent 0179 model passes 12 fixed graph/crash/quota/full-lifecycle/headroom cases, the 64-case state matrix, and randomized campaigns.
-- [ ] Python verification-tool self-tests pass before the report is eligible for acceptance recording.
+- [ ] Python verification-tool self-tests pass before the report is eligible for acceptance recording, including filesystem/key/storage/deployment/qualification evidence validators.
 - [ ] Rust fmt, Clippy with `-D warnings`, wired Rust tests, workspace/doc tests, Rust 1.85, i686, powerpc64, HTTP/S3/policy/vector gates, and fuzz smoke all pass locally.
 - [ ] `tools/record_phase3_local_acceptance.py` accepts the report from the same clean SHA and writes a SHA-bound record under `docs/verification/`.
 - [ ] No historical GitHub Actions run is used as 0179 acceptance evidence.
