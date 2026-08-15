@@ -156,7 +156,7 @@ def build_manifest(files: list[Path], require_all_selected: bool) -> dict:
             bytes=path.stat().st_size,
             sha256=sha256_file(path),
         )
-        for path in files
+        for path in sorted(files, key=lambda item: repo_relative(item).as_posix())
     ]
     return {
         "schema": "ucof-phase3-cleanroom-handoff-v1",
@@ -181,7 +181,7 @@ def manifest_bytes(manifest: dict) -> bytes:
 def write_zip(output: Path, files: list[Path], manifest: dict) -> None:
     output.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:
-        for path in files:
+        for path in sorted(files, key=lambda item: repo_relative(item).as_posix()):
             relative = repo_relative(path).as_posix()
             info = zipfile.ZipInfo(relative, FIXED_ZIP_DATE)
             info.compress_type = zipfile.ZIP_DEFLATED
