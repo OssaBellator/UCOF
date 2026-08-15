@@ -6,6 +6,7 @@ from __future__ import annotations
 import importlib.util
 import os
 from pathlib import Path
+import sys
 import tempfile
 import unittest
 
@@ -15,6 +16,7 @@ SPEC = importlib.util.spec_from_file_location("qualify_phase3_key_material", MOD
 if SPEC is None or SPEC.loader is None:
     raise RuntimeError("cannot load key-material preflight")
 keyq = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = keyq
 SPEC.loader.exec_module(keyq)
 
 
