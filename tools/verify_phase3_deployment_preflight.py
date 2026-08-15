@@ -22,17 +22,35 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 
+FILESYSTEM_SCHEMA = "ucof-phase3-filesystem-smoke-v1"
+KEY_SCHEMA = "ucof-phase3-key-material-preflight-v1"
+STORAGE_SCHEMA = "ucof-phase3-storage-headroom-v1"
+
+
+class DeploymentPreflightError(RuntimeError):
+    pass
+
 
 def run(name: str, command: list[str]) -> dict:
     started = time.monotonic()
-    completed = subprocess.run(
-        command,
-        cwd=ROOT,
-        text=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.STDOUT,
-        check=False,
-    )
+    try:
+        completed = subprocess.run(
+            command,
+            cwd=ROOT,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            check=False,
+        )
+    except OSError as exc:
+        return {
+            "name": name,
+            "command": command,
+            "status": "fail",
+            "returncode": None,
+            "elapsed_seconds": round(time.monotonic() - started, 3),
+            "output": str(exc),
+        }
     return {
         "name": name,
         "command": command,
@@ -41,6 +59,92 @@ def run(name: str, command: list[str]) -> dict:
         "elapsed_seconds": round(time.monotonic() - started, 3),
         "output": completed.stdout,
     }
+
+
+def read_json_report(path: Path, expected_schema: str) -> dict:
+    try:
+        payload = json.loads(path.read_text())
+    except FileNotFoundError as exc:
+        raise DeploymentPreflightError(f"missing child report: {path}") from exc
+    except (OSError, json.JSONDecodeError) as exc:
+        raise DeploymentPreflightError(f"invalid child report {path}: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise DeploymentPreflightError(f"child report is not a JSON object: {path}")
+    if payload.get("schema") != expected_schema:
+        raise DeploymentPreflightError(
+            f"child report schema mismatch for {path}: {payload.get('schema')!r}"
+        )
+    return payload
+
+
+def validate_filesystem_report(report: dict) -> None:
+    if not isinstance(report.get("network_or_distributed_filesystem"), bool):
+        raise DeploymentPreflightError(
+            "filesystem report is missing network/distributed classification"
+        )
+    smoke = report.get("mechanical_smoke")
+    if not isinstance(smoke, dict):
+        raise DeploymentPreflightError("filesystem report is missing mechanical smoke evidence")
+    required = {
+        "file_fsync",
+        "private_directory_fsync",
+        "hard_link_no_overwrite",
+        "publication_directory_fsync",
+        "published_inode_equal",
+        "private_unlink_directory_fsync",
+        "publication_unlink_directory_fsync",
+    }
+    missing = sorted(required - set(smoke))
+    if missing:
+        raise DeploymentPreflightError(
+            "filesystem report is missing mechanical checks: " + ", ".join(missing)
+        )
+    false_checks = sorted(name for name in required if smoke.get(name) is not True)
+    if false_checks:
+        raise DeploymentPreflightError(
+            "filesystem report contains failed mechanical checks: "
+            + ", ".join(false_checks)
+        )
+
+
+def validate_key_report(report: dict) -> None:
+    if report.get("ok") is not True:
+        raise DeploymentPreflightError("key-material child report is not successful")
+    if report.get("secret_material_reported") is not False:
+        raise DeploymentPreflightError("key-material report claims secret material was reported")
+    claims = report.get("claims")
+    if not isinstance(claims, dict):
+        raise DeploymentPreflightError("key-material report is missing claims")
+    required_true = {
+        "exact_width",
+        "regular_file",
+        "effective_uid_owned",
+        "single_hard_link",
+        "no_group_or_world_permissions",
+        "parent_directory_effective_uid_owned",
+        "parent_directory_not_group_or_world_writable",
+        "distinct_files",
+        "distinct_secret_bytes",
+    }
+    missing = sorted(name for name in required_true if claims.get(name) is not True)
+    if missing:
+        raise DeploymentPreflightError(
+            "key-material report is missing required true claims: " + ", ".join(missing)
+        )
+
+
+def validate_storage_report(report: dict) -> None:
+    if report.get("ok") is not True:
+        raise DeploymentPreflightError("storage-headroom child report is not successful")
+    if report.get("reserved") is not False or report.get("race_free") is not False:
+        raise DeploymentPreflightError(
+            "storage report must preserve reservation/race non-claims"
+        )
+    observation = report.get("observation")
+    if not isinstance(observation, dict):
+        raise DeploymentPreflightError("storage report is missing observation")
+    if observation.get("bytes_ok") is not True or observation.get("inodes_ok") is not True:
+        raise DeploymentPreflightError("storage observation does not satisfy byte/inode headroom")
 
 
 def parse_args() -> argparse.Namespace:
@@ -74,6 +178,11 @@ def main() -> int:
 
     output = args.output if args.output.is_absolute() else ROOT / args.output
     output.parent.mkdir(parents=True, exist_ok=True)
+    validation_errors: list[str] = []
+    filesystem: dict | None = None
+    key_material: dict | None = None
+    storage_headroom: dict | None = None
+
     with tempfile.TemporaryDirectory(prefix="ucof-deployment-preflight-") as directory:
         temp = Path(directory)
         fs_report = temp / "filesystem.json"
@@ -124,19 +233,31 @@ def main() -> int:
                 ],
             ),
         ]
-        ok = all(check["status"] == "pass" for check in checks)
 
-        def read_report(path: Path) -> dict | None:
-            if not path.exists():
-                return None
+        if all(check["status"] == "pass" for check in checks):
             try:
-                payload = json.loads(path.read_text())
-            except (OSError, json.JSONDecodeError):
-                return None
-            return payload if isinstance(payload, dict) else None
+                filesystem = read_json_report(fs_report, FILESYSTEM_SCHEMA)
+                validate_filesystem_report(filesystem)
+                key_material = read_json_report(key_report, KEY_SCHEMA)
+                validate_key_report(key_material)
+                storage_headroom = read_json_report(storage_report, STORAGE_SCHEMA)
+                validate_storage_report(storage_headroom)
+            except DeploymentPreflightError as exc:
+                validation_errors.append(str(exc))
+
+        subprocess_ok = all(check["status"] == "pass" for check in checks)
+        evidence_ok = not validation_errors and all(
+            report is not None for report in (filesystem, key_material, storage_headroom)
+        )
+        ok = subprocess_ok and evidence_ok
+        network_filesystem = (
+            filesystem.get("network_or_distributed_filesystem")
+            if isinstance(filesystem, dict)
+            else None
+        )
 
         report = {
-            "schema": "ucof-phase3-deployment-preflight-v1",
+            "schema": "ucof-phase3-deployment-preflight-v2",
             "recorded_utc": datetime.now(timezone.utc).isoformat(),
             "ok": ok,
             "inputs": {
@@ -149,9 +270,19 @@ def main() -> int:
                 "reserve_inodes": args.reserve_inodes,
             },
             "checks": checks,
-            "filesystem": read_report(fs_report),
-            "key_material": read_report(key_report),
-            "storage_headroom": read_report(storage_report),
+            "child_evidence_valid": evidence_ok,
+            "child_validation_errors": validation_errors,
+            "filesystem": filesystem,
+            "key_material": key_material,
+            "storage_headroom": storage_headroom,
+            "network_or_distributed_filesystem": network_filesystem,
+            "production_policy": (
+                "unsupported-without-provider-qualification"
+                if network_filesystem is True
+                else "local-mechanical-preflight-only"
+                if network_filesystem is False
+                else "indeterminate"
+            ),
             "non_claims": {
                 "production_accepted": False,
                 "power_loss_qualified": False,
@@ -159,6 +290,7 @@ def main() -> int:
                 "same_uid_unlink_race_closed": False,
                 "free_space_reserved": False,
                 "key_provisioning_or_rotation_qualified": False,
+                "ancestor_key_path_pinning_qualified": False,
             },
         }
         output.write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
@@ -167,6 +299,8 @@ def main() -> int:
         print(f"{check['status'].upper():4} {check['name']} ({check['elapsed_seconds']}s)")
         if check["status"] != "pass" and check["output"]:
             print(check["output"], file=sys.stderr)
+    for error in validation_errors:
+        print(f"FAIL child evidence: {error}", file=sys.stderr)
     print(f"report={output.relative_to(ROOT) if output.is_relative_to(ROOT) else output}")
     return 0 if ok else 1
 
