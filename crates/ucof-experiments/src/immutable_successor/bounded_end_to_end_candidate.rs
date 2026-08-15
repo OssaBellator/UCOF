@@ -55,6 +55,7 @@ mod bounded_end_to_end_candidate_tests {
         include!("bounded_end_to_end_candidate/encrypted_restart_continuation_tests.rs");
         include!("bounded_end_to_end_candidate/encrypted_restart_publication_tests.rs");
         include!("bounded_end_to_end_candidate/encrypted_restart_retirement_tests.rs");
+        include!("bounded_end_to_end_candidate/journal_metadata_primitive_capacity_tests.rs");
         include!("bounded_end_to_end_candidate/encrypted_private_lifecycle_quota_tests.rs");
         include!("bounded_end_to_end_candidate/encrypted_private_lifecycle_quota_enforcement_tests.rs");
         include!("bounded_end_to_end_candidate/encrypted_tree_stage_consolidation_tests.rs");
