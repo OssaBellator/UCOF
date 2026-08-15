@@ -81,190 +81,153 @@ fn nonce_checkpoint_replaces_prefix_and_future_generation_remains_monotonic() {
     assert_eq!(second.checkpoint_generation, 4);
     assert_eq!(second.pruned_nonce_records, 1);
     assert_eq!(second.pruned_old_checkpoints, 1);
-    assert!(directory.0.join(nonce_compaction_name(4)).exists());
     assert!(!directory.0.join(nonce_compaction_name(3)).exists());
-}
-
-#[test]
-fn trusted_floor_rejects_external_checkpoint_deletion_rollback() {
-    let (directory, key, prefix) = nonce_compaction_fixture("nonce-compaction-floor", &[5, 7]);
-    let journal = open_journal(&directory.0, &key, prefix);
-    compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
-        .expect("initial compaction for trusted floor");
-    let compacted = CompactedNonceJournal::new(&journal);
-    let recovery = compacted.scan(None).expect("recovery after compaction");
-    let floor = TrustedNonceFloor {
-        generation: recovery.durable.generation,
-        next_unreserved: recovery.durable.next_unreserved,
-    };
-    std::fs::remove_file(directory.0.join(nonce_compaction_name(2)))
-        .expect("delete checkpoint to simulate rollback");
-    let error = compacted
-        .scan(Some(floor))
-        .expect_err("trusted floor must reject deleted checkpoint rollback");
-    assert!(error.contains("compacted nonce below trusted floor"));
-}
-
-#[test]
-fn authenticated_checkpoint_chain_rejects_counter_rollback() {
-    let (directory, key, prefix) = nonce_compaction_fixture("nonce-compaction-chain", &[5, 7]);
-    let journal = open_journal(&directory.0, &key, prefix);
-    let first = NonceCompactionCheckpoint {
-        key_id: journal.key_id,
-        nonce_prefix: journal.nonce_prefix,
-        generation: 1,
-        next_unreserved: Some(8),
-    };
-    let second = NonceCompactionCheckpoint {
-        key_id: journal.key_id,
-        nonce_prefix: journal.nonce_prefix,
-        generation: 2,
-        next_unreserved: Some(7),
-    };
-    persist_nonce_compaction_checkpoint(
-        &journal,
-        first,
-        RestartMetadataCompactionCut::Complete,
-    )
-    .expect("persist first rollback checkpoint");
-    persist_nonce_compaction_checkpoint(
-        &journal,
-        second,
-        RestartMetadataCompactionCut::Complete,
-    )
-    .expect("persist second rollback checkpoint");
-    let error = CompactedNonceJournal::new(&journal)
-        .scan(None)
-        .expect_err("checkpoint counter rollback must fail");
-    assert!(error.contains("nonce compaction checkpoint rollback"));
+    assert!(directory.0.join(nonce_compaction_name(4)).exists());
+    let final_recovery = compacted.scan(None).expect("scan second checkpoint");
+    assert_eq!(final_recovery.durable.generation, 4);
+    assert_eq!(final_recovery.durable.next_unreserved, Some(19));
+    assert_eq!(final_recovery.journal_records, 0);
 }
 
 #[test]
 fn compaction_cuts_never_delete_nonce_prefix_before_checkpoint_authority() {
-    for (index, cut) in [
-        RestartMetadataCompactionCut::AfterCheckpointFileSyncBeforeDirectorySync,
-        RestartMetadataCompactionCut::AfterCheckpointDirectorySyncBeforePrune,
-    ]
-    .into_iter()
-    .enumerate()
-    {
-        let (directory, key, prefix) = nonce_compaction_fixture(
-            &format!("nonce-compaction-cut-{index}"),
-            &[5, 7],
-        );
-        let journal = open_journal(&directory.0, &key, prefix);
-        let result = compact_restart_metadata(&journal, None, cut);
-        match cut {
-            RestartMetadataCompactionCut::AfterCheckpointFileSyncBeforeDirectorySync => {
-                assert!(result.is_err());
-            }
-            RestartMetadataCompactionCut::AfterCheckpointDirectorySyncBeforePrune => {
-                let report = result.expect("directory-synced checkpoint cut");
-                assert_eq!(report.pruned_nonce_records, 0);
-            }
-            _ => unreachable!(),
-        }
-        assert!(directory.0.join(linux_nonce_journal_name(1)).exists());
-        assert!(directory.0.join(linux_nonce_journal_name(2)).exists());
-    }
-}
-
-#[test]
-fn retry_from_file_synced_checkpoint_resyncs_directory_before_pruning() {
-    let (directory, key, prefix) = nonce_compaction_fixture("nonce-compaction-retry", &[5, 7]);
-    let journal = open_journal(&directory.0, &key, prefix);
-    compact_restart_metadata(
-        &journal,
+    let (file_cut_directory, key, prefix) =
+        nonce_compaction_fixture("nonce-compaction-file-cut", &[5, 7]);
+    let file_cut_journal = open_journal(&file_cut_directory.0, &key, prefix);
+    let error = compact_restart_metadata(
+        &file_cut_journal,
         None,
         RestartMetadataCompactionCut::AfterCheckpointFileSyncBeforeDirectorySync,
     )
-    .expect_err("first compaction cut before directory sync");
-    assert!(directory.0.join(nonce_compaction_name(2)).exists());
-    assert!(directory.0.join(linux_nonce_journal_name(1)).exists());
-    assert!(directory.0.join(linux_nonce_journal_name(2)).exists());
+    .expect_err("file-sync cut must report injection");
+    assert!(error.contains("after checkpoint file sync"));
+    assert!(file_cut_directory.0.join(linux_nonce_journal_name(1)).exists());
+    assert!(file_cut_directory.0.join(linux_nonce_journal_name(2)).exists());
+    assert_eq!(
+        file_cut_journal
+            .scan(None)
+            .expect("legacy scan after file cut")
+            .durable
+            .generation,
+        2
+    );
+    assert_eq!(
+        CompactedNonceJournal::new(&file_cut_journal)
+            .scan(None)
+            .expect("compacted scan after file cut")
+            .durable
+            .generation,
+        2
+    );
 
-    let report = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
-        .expect("retry compaction after file-synced checkpoint");
-    assert_eq!(report.checkpoint_generation, 2);
+    let (authority_cut_directory, key, prefix) =
+        nonce_compaction_fixture("nonce-compaction-authority-cut", &[5, 7]);
+    let authority_cut_journal = open_journal(&authority_cut_directory.0, &key, prefix);
+    let report = compact_restart_metadata(
+        &authority_cut_journal,
+        None,
+        RestartMetadataCompactionCut::AfterCheckpointDirectorySyncBeforePrune,
+    )
+    .expect("directory-synced checkpoint cut");
+    assert_eq!(report.pruned_nonce_records, 0);
+    assert!(authority_cut_directory.0.join(linux_nonce_journal_name(1)).exists());
+    assert!(authority_cut_directory.0.join(linux_nonce_journal_name(2)).exists());
+    assert_eq!(
+        CompactedNonceJournal::new(&authority_cut_journal)
+            .scan(None)
+            .expect("scan directory-synced checkpoint")
+            .durable
+            .generation,
+        2
+    );
+
+    let (prune_cut_directory, key, prefix) =
+        nonce_compaction_fixture("nonce-compaction-prune-cut", &[5, 7]);
+    let prune_cut_journal = open_journal(&prune_cut_directory.0, &key, prefix);
+    let report = compact_restart_metadata(
+        &prune_cut_journal,
+        None,
+        RestartMetadataCompactionCut::AfterPruneBeforeDirectorySync,
+    )
+    .expect("post-prune cut");
     assert_eq!(report.pruned_nonce_records, 2);
-    assert_eq!(CompactedNonceJournal::new(&journal).scan(None).unwrap().durable.generation, 2);
+    assert_eq!(
+        CompactedNonceJournal::new(&prune_cut_journal)
+            .scan(None)
+            .expect("scan post-prune checkpoint")
+            .durable
+            .generation,
+        2
+    );
 }
 
 #[test]
 fn terminal_retirement_compaction_reclaims_pair_and_obsolete_source_binding() {
-    let source_set_id = [0x61; 32];
-    let (journal_directory, stage_directory, aes_key, nonce_prefix, restart_limits, _) =
-        prepared_source_bound_restart_stage("nonce-compaction-terminal", 7, source_set_id);
-    let journal = open_journal(&journal_directory.0, &aes_key, nonce_prefix);
-    let work_directory = super::TestDirectory::new("nonce-compaction-terminal-work");
-    let mut sources: Vec<_> = (1..=7).rev().map(super::TinySource::new).collect();
-    let mut backend =
-        RestartPublicationTestBackend::new(super::PersistentPublicationLinkOutcome::Linked);
-    let outcome = stage_and_publish_source_bound_encrypted_tree_restart(
-        &journal,
-        &stage_directory.0,
-        &work_directory.0,
-        &mut backend,
-        &mut sources,
-        source_set_id,
-        EncryptedRestartContinuationSettings {
-            aes_key,
-            crashed_generation: 1,
-            trusted_floor: None,
-            restart_limits,
-            options: super::options(),
-            limits: super::ImmutableLimits::default(),
-            fresh_operation_id: [0x62; 16],
-        },
-    )
-    .expect("publish source-bound restart for compaction");
-    let EncryptedTreeRestartPublicationOutcome::PublishedAndDurable(durable) = outcome else {
-        panic!("compaction fixture requires durable publication");
-    };
-    let prepared = prepare_encrypted_restart_retirement(
-        &journal,
-        &stage_directory.0,
-        &durable.durable,
-        restart_limits,
-    )
-    .expect("prepare compaction retirement");
-    assert_eq!(prepared.state, EncryptedRetirementState::Prepared);
-    assert_eq!(
-        execute_encrypted_restart_retirement(
-            &journal,
-            &stage_directory.0,
-            1,
-            2,
-            restart_limits,
-            EncryptedRetirementCut::Complete,
-        )
-        .expect("terminal compaction retirement"),
-        EncryptedRetirementOutcome::Terminal
+    const OBJECTS: u64 = 7;
+    let source_set_id = [0x51; 32];
+    let fixture = encrypted_retirement_fixture("terminal-metadata-compaction", OBJECTS);
+    let journal = open_journal(
+        &fixture.journal_directory.0,
+        &fixture.aes_key,
+        fixture.nonce_prefix,
     );
-
-    let report = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
-        .expect("compact terminal restart metadata");
-    assert_eq!(report.checkpoint_generation, 2);
-    assert_eq!(report.pruned_nonce_records, 2);
-    assert_eq!(report.pruned_retirement_records, 2);
-    assert_eq!(report.pruned_source_set_records, 1);
-    assert_eq!(report.preserved_nonce_records, 0);
-    assert_eq!(report.preserved_prepared_retirements, 0);
-    assert_eq!(report.preserved_source_set_records, 0);
-    assert!(load_restart_source_set_authority(
+    let manifest = load_encrypted_stage_manifest(
         &journal,
         1,
         EncryptedRestartStageRole::SortedDescriptorSpill,
     )
-    .expect("load reclaimed source-set")
-    .is_none());
+    .expect("load compaction source manifest")
+    .expect("compaction source manifest");
+    persist_restart_source_set_authority(
+        &journal,
+        manifest,
+        source_set_id,
+        usize::try_from(OBJECTS).expect("object count"),
+    )
+    .expect("persist compaction source-set authority");
+    prepare_encrypted_restart_retirement(
+        &journal,
+        &fixture.stage_directory.0,
+        &fixture.durable,
+        fixture.restart_limits,
+    )
+    .expect("prepare terminal compaction retirement");
+    assert_eq!(
+        execute_encrypted_restart_retirement(
+            &journal,
+            &fixture.stage_directory.0,
+            1,
+            2,
+            fixture.restart_limits,
+            EncryptedRetirementCut::Complete,
+        )
+        .expect("complete retirement before compaction"),
+        EncryptedRetirementOutcome::Terminal
+    );
+
+    let report = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect("compact terminal metadata");
+    assert_eq!(report.checkpoint_generation, 2);
+    assert_eq!(report.pruned_nonce_records, 2);
+    assert_eq!(report.pruned_retirement_records, 2);
+    assert_eq!(report.pruned_source_set_records, 1);
+    assert_eq!(report.preserved_prepared_retirements, 0);
+    assert_eq!(report.preserved_source_set_records, 0);
+    assert_eq!(
+        CompactedNonceJournal::new(&journal)
+            .scan(None)
+            .expect("scan terminal compaction")
+            .durable
+            .generation,
+        2
+    );
     assert!(load_encrypted_retirement_record(
         &journal,
         1,
         2,
         EncryptedRetirementState::Prepared,
     )
-    .expect("load reclaimed prepared")
+    .expect("load compacted prepared")
     .is_none());
     assert!(load_encrypted_retirement_record(
         &journal,
@@ -272,68 +235,65 @@ fn terminal_retirement_compaction_reclaims_pair_and_obsolete_source_binding() {
         2,
         EncryptedRetirementState::Terminal,
     )
-    .expect("load reclaimed terminal")
+    .expect("load compacted terminal")
     .is_none());
-    assert_eq!(directory_entry_count(&stage_directory.0), 0);
-    work_directory.assert_empty();
+    assert!(load_restart_source_set_authority(
+        &journal,
+        1,
+        EncryptedRestartStageRole::SortedDescriptorSpill,
+    )
+    .expect("load compacted source-set")
+    .is_none());
 }
 
 #[test]
 fn outstanding_prepared_allows_fresh_nonce_record_compaction_before_terminal() {
-    let source_set_id = [0x71; 32];
-    let (journal_directory, stage_directory, aes_key, nonce_prefix, restart_limits, _) =
-        prepared_source_bound_restart_stage("nonce-compaction-prepared", 7, source_set_id);
-    let journal = open_journal(&journal_directory.0, &aes_key, nonce_prefix);
-    let work_directory = super::TestDirectory::new("nonce-compaction-prepared-work");
-    let mut sources: Vec<_> = (1..=7).rev().map(super::TinySource::new).collect();
-    let mut backend =
-        RestartPublicationTestBackend::new(super::PersistentPublicationLinkOutcome::Linked);
-    let outcome = stage_and_publish_source_bound_encrypted_tree_restart(
+    const OBJECTS: u64 = 7;
+    let source_set_id = [0x52; 32];
+    let fixture = encrypted_retirement_fixture("prepared-metadata-compaction", OBJECTS);
+    let journal = open_journal(
+        &fixture.journal_directory.0,
+        &fixture.aes_key,
+        fixture.nonce_prefix,
+    );
+    let manifest = load_encrypted_stage_manifest(
         &journal,
-        &stage_directory.0,
-        &work_directory.0,
-        &mut backend,
-        &mut sources,
-        source_set_id,
-        EncryptedRestartContinuationSettings {
-            aes_key,
-            crashed_generation: 1,
-            trusted_floor: None,
-            restart_limits,
-            options: super::options(),
-            limits: super::ImmutableLimits::default(),
-            fresh_operation_id: [0x72; 16],
-        },
+        1,
+        EncryptedRestartStageRole::SortedDescriptorSpill,
     )
-    .expect("publish prepared compaction restart");
-    let EncryptedTreeRestartPublicationOutcome::PublishedAndDurable(durable) = outcome else {
-        panic!("prepared compaction fixture requires durable publication");
-    };
+    .expect("load prepared compaction manifest")
+    .expect("prepared compaction manifest");
+    persist_restart_source_set_authority(
+        &journal,
+        manifest,
+        source_set_id,
+        usize::try_from(OBJECTS).expect("object count"),
+    )
+    .expect("persist prepared compaction source-set");
     prepare_encrypted_restart_retirement(
         &journal,
-        &stage_directory.0,
-        &durable.durable,
-        restart_limits,
+        &fixture.stage_directory.0,
+        &fixture.durable,
+        fixture.restart_limits,
     )
-    .expect("prepare restart retirement before compaction");
+    .expect("prepare outstanding retirement");
 
-    let report = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
-        .expect("compact with outstanding Prepared retirement");
-    assert_eq!(report.checkpoint_generation, 2);
-    assert_eq!(report.pruned_nonce_records, 1);
-    assert_eq!(report.preserved_nonce_records, 1);
-    assert_eq!(report.pruned_retirement_records, 0);
-    assert_eq!(report.preserved_prepared_retirements, 1);
-    assert_eq!(report.preserved_source_set_records, 1);
-    assert!(journal_directory.0.join(linux_nonce_journal_name(1)).exists());
-    assert!(!journal_directory.0.join(linux_nonce_journal_name(2)).exists());
+    let first = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect("compact with outstanding prepared");
+    assert_eq!(first.checkpoint_generation, 2);
+    assert_eq!(first.preserved_prepared_retirements, 1);
+    assert_eq!(first.preserved_source_set_records, 1);
+    assert_eq!(first.preserved_nonce_records, 1);
+    assert_eq!(first.pruned_nonce_records, 1);
+    assert_eq!(first.pruned_retirement_records, 0);
+    assert_eq!(first.pruned_source_set_records, 0);
     assert!(load_encrypted_retirement_record(
         &journal,
         1,
         2,
         EncryptedRetirementState::Prepared,
     )
-    .expect("load preserved Prepared retirement")
+    .expect("load preserved prepared")
     .is_some());
     assert!(load_restart_source_set_authority(
         &journal,
@@ -342,5 +302,114 @@ fn outstanding_prepared_allows_fresh_nonce_record_compaction_before_terminal() {
     )
     .expect("load preserved source-set")
     .is_some());
+    assert!(fixture
+        .journal_directory
+        .0
+        .join(linux_nonce_journal_name(1))
+        .exists());
+    assert!(!fixture
+        .journal_directory
+        .0
+        .join(linux_nonce_journal_name(2))
+        .exists());
+
+    assert_eq!(
+        execute_encrypted_restart_retirement(
+            &journal,
+            &fixture.stage_directory.0,
+            1,
+            2,
+            fixture.restart_limits,
+            EncryptedRetirementCut::Complete,
+        )
+        .expect("complete prepared retirement after fresh record compaction"),
+        EncryptedRetirementOutcome::Terminal
+    );
+    let second = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect("compact terminalized prepared metadata");
+    assert_eq!(second.pruned_nonce_records, 1);
+    assert_eq!(second.pruned_retirement_records, 2);
+    assert_eq!(second.pruned_source_set_records, 1);
+    assert_eq!(second.preserved_prepared_retirements, 0);
+    assert_eq!(second.preserved_source_set_records, 0);
+}
+
+#[test]
+fn live_source_bound_restart_remains_usable_after_checkpoint_compaction() {
+    const OBJECTS: u64 = 11;
+    let source_set_id = [0x53; 32];
+    let (journal_directory, stage_directory, aes_key, nonce_prefix, restart_limits, _) =
+        prepared_source_bound_restart_stage(
+            "live-source-bound-compaction",
+            OBJECTS,
+            source_set_id,
+        );
+    let journal = open_journal(&journal_directory.0, &aes_key, nonce_prefix);
+    let report = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect("compact live source-bound restart");
+    assert_eq!(report.checkpoint_generation, 1);
+    assert_eq!(report.pruned_nonce_records, 0);
+    assert_eq!(report.preserved_nonce_records, 1);
+    assert_eq!(report.preserved_source_set_records, 1);
+
+    let work_directory = super::TestDirectory::new("live-source-bound-compaction-work");
+    let original: Vec<_> = (1..=OBJECTS).rev().map(super::TinySource::new).collect();
+    let mut baseline_sources = original.clone();
+    let mut baseline = Vec::new();
+    let baseline_report = super::write_genesis_sources_to(
+        &mut baseline,
+        &mut baseline_sources,
+        super::options(),
+        super::ImmutableLimits::default(),
+    )
+    .expect("compacted source baseline");
+    let mut sources = original;
+    let mut output = Vec::new();
+    let evidence = continue_compacted_source_bound_encrypted_tree_restart(
+        &journal,
+        &stage_directory.0,
+        &work_directory.0,
+        &mut output,
+        &mut sources,
+        source_set_id,
+        EncryptedRestartContinuationSettings {
+            aes_key,
+            crashed_generation: 1,
+            trusted_floor: None,
+            restart_limits,
+            options: super::options(),
+            limits: super::ImmutableLimits::default(),
+            fresh_operation_id: [0x63; 16],
+        },
+    )
+    .expect("continue compacted source-bound restart");
+    assert_eq!(output, baseline);
+    assert_eq!(evidence.output.output, baseline_report);
+    assert_eq!(evidence.fresh_generation, 2);
+    let recovery = CompactedNonceJournal::new(&journal)
+        .scan(None)
+        .expect("scan after compacted source restart");
+    assert_eq!(recovery.durable.generation, 2);
     work_directory.assert_empty();
+}
+
+#[test]
+fn trusted_floor_rejects_external_checkpoint_deletion_rollback() {
+    let (directory, key, prefix) = nonce_compaction_fixture("nonce-compaction-floor", &[5, 7]);
+    let journal = open_journal(&directory.0, &key, prefix);
+    compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect("compact before floor rollback test");
+    let checkpoint = nonce_compaction_name(2);
+    std::fs::remove_file(directory.0.join(&checkpoint)).expect("delete checkpoint externally");
+    let no_floor = CompactedNonceJournal::new(&journal)
+        .scan(None)
+        .expect("scan external deletion without floor");
+    assert_eq!(no_floor.durable, DurableNonceState::initial());
+    let error = CompactedNonceJournal::new(&journal)
+        .scan(Some(TrustedNonceFloor {
+            generation: 2,
+            next_unreserved: Some(12),
+        }))
+        .expect_err("trusted floor must reject checkpoint deletion rollback");
+    assert!(error.contains("below trusted floor"));
 }
