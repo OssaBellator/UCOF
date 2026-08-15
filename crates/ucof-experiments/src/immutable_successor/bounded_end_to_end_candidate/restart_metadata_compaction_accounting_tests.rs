@@ -258,3 +258,38 @@ fn compacted_nonce_commit_reserves_one_directory_slot_for_next_checkpoint() {
         .expect("allocation resumes after compaction restores headroom");
     assert_eq!(generation_four.journal_generation, 4);
 }
+
+#[test]
+fn checkpoint_does_not_lend_transient_headroom_to_unknown_entry() {
+    let (directory, key, prefix) =
+        nonce_compaction_fixture("nonce-compaction-checkpoint-plus-unknown", &[5, 7]);
+    let initial = open_journal(&directory.0, &key, prefix);
+    compact_restart_metadata(&initial, None, RestartMetadataCompactionCut::Complete)
+        .expect("reduce fixture to one authenticated checkpoint");
+    assert_eq!(directory_entry_count(&directory.0), 1);
+    assert!(directory.0.join(nonce_compaction_name(2)).exists());
+
+    let constrained = LinuxDurableNonceJournal::open(
+        &directory.0,
+        &key,
+        prefix,
+        [0x5a; 32],
+        LinuxNonceJournalLimits {
+            max_directory_entries: 1,
+            ..LinuxNonceJournalLimits::default()
+        },
+    )
+    .expect("open one-entry checkpoint directory");
+    std::fs::write(directory.0.join("unrelated-extra"), b"x")
+        .expect("create unknown entry beside checkpoint");
+    assert_eq!(directory_entry_count(&directory.0), 2);
+
+    let error = CompactedNonceJournal::new(&constrained)
+        .scan(None)
+        .expect_err("checkpoint must not lend its transient slot to unknown content");
+    assert!(error.contains("compacted nonce directory entry limit"));
+    let inventory_error = scan_compacted_persistent_inventory(&constrained)
+        .expect_err("quota inventory must reject unknown content beside checkpoint too");
+    assert!(inventory_error.contains("compacted inventory directory entry limit"));
+    assert!(directory.0.join(nonce_compaction_name(2)).exists());
+}
