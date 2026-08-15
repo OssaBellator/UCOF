@@ -13,6 +13,7 @@ from tools import check_phase3_storage_headroom as headroom
 from tools import qualify_phase3_filesystem as fsq
 from tools import qualify_phase3_key_material as keyq
 from tools import test_verify_phase3_deployment_preflight as deployment_tests
+from tools import test_verify_phase3_qualification_local as qualification_tests
 
 
 class FakeStatvfs:
@@ -32,8 +33,9 @@ def write_key(path: Path, byte: int, mode: int = 0o600) -> None:
 
 
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: str | None):
-    """Include deployment-bundle evidence tests in the existing acceptance module."""
+    """Include bundle-evidence validators in the existing acceptance module."""
     tests.addTests(loader.loadTestsFromModule(deployment_tests))
+    tests.addTests(loader.loadTestsFromModule(qualification_tests))
     return tests
 
 
