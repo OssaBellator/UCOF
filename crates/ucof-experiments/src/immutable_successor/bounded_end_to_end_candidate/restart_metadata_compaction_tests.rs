@@ -165,7 +165,11 @@ fn compaction_cuts_never_delete_nonce_prefix_before_checkpoint_authority() {
 fn terminal_retirement_compaction_reclaims_pair_and_obsolete_source_binding() {
     const OBJECTS: u64 = 7;
     let source_set_id = [0x51; 32];
-    let fixture = encrypted_retirement_fixture("terminal-metadata-compaction", OBJECTS);
+    let fixture = source_bound_retirement_fixture(
+        "terminal-metadata-compaction",
+        OBJECTS,
+        source_set_id,
+    );
     let journal = open_journal(
         &fixture.journal_directory.0,
         &fixture.aes_key,
@@ -250,7 +254,11 @@ fn terminal_retirement_compaction_reclaims_pair_and_obsolete_source_binding() {
 fn outstanding_prepared_allows_fresh_nonce_record_compaction_before_terminal() {
     const OBJECTS: u64 = 7;
     let source_set_id = [0x52; 32];
-    let fixture = encrypted_retirement_fixture("prepared-metadata-compaction", OBJECTS);
+    let fixture = source_bound_retirement_fixture(
+        "prepared-metadata-compaction",
+        OBJECTS,
+        source_set_id,
+    );
     let journal = open_journal(
         &fixture.journal_directory.0,
         &fixture.aes_key,
