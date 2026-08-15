@@ -92,7 +92,7 @@ def load_report(path: Path) -> tuple[bytes, dict]:
     return raw, payload
 
 
-def validate_report(report: dict) -> tuple[str, list[dict]]:
+def validate_report(report: dict) -> tuple[str, list[dict], list[str]]:
     if report.get("schema") != "ucof-phase3-local-verification-v1":
         raise RecordError("unexpected local verification schema")
     if report.get("mode") != "acceptance" or report.get("ok") is not True:
@@ -121,9 +121,11 @@ def validate_report(report: dict) -> tuple[str, list[dict]]:
     checks = report.get("checks")
     if not isinstance(checks, list) or not checks:
         raise RecordError("acceptance report contains no checks")
+
     normalized: list[dict] = []
     names: set[str] = set()
-    fuzz_smoke = 0
+    listed_fuzz_targets: list[str] | None = None
+    smoked_fuzz_targets: set[str] = set()
     for index, check in enumerate(checks):
         if not isinstance(check, dict):
             raise RecordError(f"check {index} is not an object")
@@ -136,8 +138,20 @@ def validate_report(report: dict) -> tuple[str, list[dict]]:
         if name in names:
             raise RecordError(f"duplicate check name in report: {name}")
         names.add(name)
-        if name.startswith("Fuzz smoke "):
-            fuzz_smoke += 1
+
+        if name == "List fuzz targets":
+            output = check.get("output")
+            if not isinstance(output, str):
+                raise RecordError("List fuzz targets check did not capture output")
+            listed_fuzz_targets = [
+                line.strip() for line in output.splitlines() if line.strip()
+            ]
+        elif name.startswith("Fuzz smoke "):
+            target = name.removeprefix("Fuzz smoke ").strip()
+            if not target:
+                raise RecordError("empty fuzz smoke target name")
+            smoked_fuzz_targets.add(target)
+
         normalized.append(
             {
                 "name": name,
@@ -145,16 +159,30 @@ def validate_report(report: dict) -> tuple[str, list[dict]]:
                 "seconds": check.get("seconds"),
                 "command": check.get("command"),
                 "detail": check.get("detail"),
+                "output": check.get("output") if name == "List fuzz targets" else None,
             }
         )
 
     missing = sorted(REQUIRED_CHECKS - names)
     if missing:
         raise RecordError("acceptance report is missing checks: " + ", ".join(missing))
-    if fuzz_smoke == 0:
-        raise RecordError("acceptance report contains no executed fuzz smoke target")
+    if not listed_fuzz_targets:
+        raise RecordError("acceptance report listed no fuzz targets")
+    if len(set(listed_fuzz_targets)) != len(listed_fuzz_targets):
+        raise RecordError("cargo fuzz list returned duplicate target names")
 
-    return report_sha, normalized
+    listed = set(listed_fuzz_targets)
+    missing_smoke = sorted(listed - smoked_fuzz_targets)
+    unexpected_smoke = sorted(smoked_fuzz_targets - listed)
+    if missing_smoke or unexpected_smoke:
+        detail = []
+        if missing_smoke:
+            detail.append("missing smoke: " + ", ".join(missing_smoke))
+        if unexpected_smoke:
+            detail.append("unexpected smoke: " + ", ".join(unexpected_smoke))
+        raise RecordError("fuzz target coverage mismatch (" + "; ".join(detail) + ")")
+
+    return report_sha, normalized, listed_fuzz_targets
 
 
 def verify_current_checkout(report_sha: str) -> tuple[str, str]:
@@ -178,6 +206,7 @@ def build_record(
     accepted_sha: str,
     branch: str,
     checks: list[dict],
+    fuzz_targets: list[str],
 ) -> dict:
     return {
         "schema": "ucof-phase3-local-acceptance-v2",
@@ -192,6 +221,7 @@ def build_record(
             "rustc": report.get("rustc"),
             "cargo": report.get("cargo"),
         },
+        "fuzz_targets": fuzz_targets,
         "checks": checks,
         "non_claims": [
             "This is deterministic repository-local mechanism evidence, not physical power-loss qualification.",
@@ -235,7 +265,7 @@ def main() -> int:
     report_path = args.report if args.report.is_absolute() else ROOT / args.report
     try:
         raw, report = load_report(report_path)
-        accepted_sha, checks = validate_report(report)
+        accepted_sha, checks, fuzz_targets = validate_report(report)
         _, branch = verify_current_checkout(accepted_sha)
         record = build_record(
             report=report,
@@ -243,6 +273,7 @@ def main() -> int:
             accepted_sha=accepted_sha,
             branch=branch,
             checks=checks,
+            fuzz_targets=fuzz_targets,
         )
         path = write_record(record, accepted_sha)
     except RecordError as exc:
