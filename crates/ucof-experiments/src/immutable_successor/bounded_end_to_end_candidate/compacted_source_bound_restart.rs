@@ -1,27 +1,15 @@
 fn ensure_compacted_restart_publication_directory_headroom(
     journal: &LinuxDurableNonceJournal,
 ) -> super::CandidateResult<()> {
-    linux_nonce_verify_procfd_directory(&journal.directory)
-        .map_err(|error| error.to_string())?;
-    let mut entries = 0usize;
-    for entry in std::fs::read_dir(linux_nonce_procfd_directory(&journal.directory))
-        .map_err(|error| error.to_string())?
-    {
-        entry.map_err(|error| error.to_string())?;
-        entries = entries
-            .checked_add(1)
-            .ok_or_else(|| "compacted publication directory entries".to_owned())?;
-        if entries > journal.limits.max_directory_entries {
-            return Err("compacted publication directory entry limit".into());
-        }
-    }
-    let peak_before_manifest_unlink = entries
-        .checked_add(2)
-        .ok_or_else(|| "compacted publication directory headroom".to_owned())?;
-    if peak_before_manifest_unlink > journal.limits.max_directory_entries {
-        return Err("compacted publication retirement directory headroom".into());
-    }
-    Ok(())
+    require_linux_nonce_journal_metadata_slots(journal, 2, "compacted publication")
+        .map_err(|_| "compacted publication retirement directory headroom".to_owned())
+}
+
+fn ensure_compacted_restart_prepared_directory_headroom(
+    journal: &LinuxDurableNonceJournal,
+) -> super::CandidateResult<()> {
+    require_linux_nonce_journal_metadata_slots(journal, 1, "compacted retirement")
+        .map_err(|_| "compacted retirement Prepared directory headroom".to_owned())
 }
 
 fn prepare_compacted_source_bound_encrypted_tree_restart(
@@ -298,6 +286,7 @@ fn prepare_compacted_encrypted_restart_retirement(
         output_length: durable.output_length,
         output_sha256: durable.output_sha256,
     };
+    ensure_compacted_restart_prepared_directory_headroom(journal)?;
     persist_encrypted_retirement_record(journal, record)?;
     Ok(record)
 }
