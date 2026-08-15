@@ -3,8 +3,8 @@
 
 This wrapper does not weaken or replace qualify_phase3_s3_versioned_source.py.
 It records provenance around that provider report so an externally executed
-qualification can be reviewed against the exact candidate and qualification
--tool source that produced it.
+qualification can be reviewed against the exact candidate and qualification-
+tool source that produced it.
 """
 
 from __future__ import annotations
@@ -36,6 +36,12 @@ REQUIRED_PROVIDER_CHECKS = (
     "current_read_tracks_latest_version",
     "nonexistent_version_rejected",
     "historical_version_survives_delete_marker",
+)
+SENSITIVE_ENV_NAMES = (
+    "AWS_ACCESS_KEY_ID",
+    "AWS_SECRET_ACCESS_KEY",
+    "AWS_SESSION_TOKEN",
+    "AWS_SECURITY_TOKEN",
 )
 
 
@@ -95,6 +101,28 @@ def validate_successful_provider_report(report: dict) -> None:
         raise S3QualificationBundleError("provider report lacks non-claims")
     if any(value is not False for value in non_claims.values()):
         raise S3QualificationBundleError("provider report changed a qualification non-claim")
+
+
+def sensitive_values(profile: str | None) -> tuple[str, ...]:
+    values = [profile or ""]
+    values.extend(os.environ.get(name, "") for name in SENSITIVE_ENV_NAMES)
+    return tuple(value for value in values if value)
+
+
+def redact_sensitive_data(value: object, secrets: tuple[str, ...]) -> object:
+    if isinstance(value, str):
+        redacted = value
+        for secret in secrets:
+            redacted = redacted.replace(secret, "<redacted>")
+        return redacted
+    if isinstance(value, list):
+        return [redact_sensitive_data(item, secrets) for item in value]
+    if isinstance(value, dict):
+        return {
+            key: redact_sensitive_data(item, secrets)
+            for key, item in value.items()
+        }
+    return value
 
 
 def aws_cli_version() -> dict:
@@ -186,9 +214,10 @@ def main() -> int:
     provider_report: dict | None = None
     provider_report_sha256: str | None = None
     validation_error: str | None = None
-    harness_stdout = ""
-    harness_stderr_tail = ""
+    harness_stdout_bytes = 0
+    harness_stderr_bytes = 0
     harness_returncode: int | None = None
+    secrets = sensitive_values(args.profile)
 
     with tempfile.TemporaryDirectory(prefix="ucof-phase3-s3-live-") as directory:
         provider_output = Path(directory) / "provider-report.json"
@@ -203,16 +232,20 @@ def main() -> int:
                 check=False,
             )
             harness_returncode = completed.returncode
-            harness_stdout = completed.stdout[-4096:]
-            harness_stderr_tail = "\n".join(completed.stderr.splitlines()[-30:])
+            harness_stdout_bytes = len(completed.stdout.encode("utf-8", errors="replace"))
+            harness_stderr_bytes = len(completed.stderr.encode("utf-8", errors="replace"))
         except OSError as exc:
             validation_error = f"cannot execute provider harness: {exc}"
         if provider_output.exists():
             try:
-                provider_report = read_provider_report(provider_output)
+                raw_provider_report = read_provider_report(provider_output)
                 provider_report_sha256 = file_sha256(provider_output)
                 if harness_returncode == 0:
-                    validate_successful_provider_report(provider_report)
+                    validate_successful_provider_report(raw_provider_report)
+                redacted = redact_sensitive_data(raw_provider_report, secrets)
+                if not isinstance(redacted, dict):
+                    raise S3QualificationBundleError("redacted provider report changed type")
+                provider_report = redacted
             except S3QualificationBundleError as exc:
                 validation_error = str(exc)
         elif validation_error is None:
@@ -236,8 +269,9 @@ def main() -> int:
             "path": "tools/qualify_phase3_s3_versioned_source.py",
             "schema": PROVIDER_SCHEMA,
             "returncode": harness_returncode,
-            "stdout_tail": harness_stdout,
-            "stderr_tail": harness_stderr_tail,
+            "stdout_bytes": harness_stdout_bytes,
+            "stderr_bytes": harness_stderr_bytes,
+            "raw_output_persisted": False,
         },
         "invocation": sanitized_harness_invocation(args),
         "environment": {
