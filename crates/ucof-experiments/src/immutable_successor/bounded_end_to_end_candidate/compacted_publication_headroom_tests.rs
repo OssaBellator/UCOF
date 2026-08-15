@@ -175,3 +175,93 @@ fn compacted_publication_exact_two_journal_slots_reaches_terminal_and_reclaims()
     assert_eq!(recovery.checkpoint_generation, Some(2));
     work_directory.assert_empty();
 }
+
+#[test]
+fn compacted_prepared_retirement_rechecks_journal_headroom_after_publication() {
+    const OBJECTS: u64 = 11;
+    let source_set_id = [0xb5; 32];
+    let (journal_directory, stage_directory, aes_key, nonce_prefix, restart_limits, _) =
+        prepared_source_bound_restart_stage(
+            "compacted-prepared-retirement-recheck",
+            OBJECTS,
+            source_set_id,
+        );
+    let initial = open_journal(&journal_directory.0, &aes_key, nonce_prefix);
+    compact_restart_metadata(&initial, None, RestartMetadataCompactionCut::Complete)
+        .expect("checkpoint live restart before Prepared recheck");
+    drop(initial);
+    assert_eq!(directory_entry_count(&journal_directory.0), 4);
+
+    let journal = LinuxDurableNonceJournal::open(
+        &journal_directory.0,
+        &aes_key,
+        nonce_prefix,
+        [0x5a; 32],
+        LinuxNonceJournalLimits {
+            max_directory_entries: 6,
+            ..LinuxNonceJournalLimits::default()
+        },
+    )
+    .expect("open Prepared-recheck journal");
+    let work_directory = super::TestDirectory::new("compacted-prepared-retirement-recheck-work");
+    let mut sources: Vec<_> = (1..=OBJECTS).rev().map(super::TinySource::new).collect();
+    let mut backend =
+        RestartPublicationTestBackend::new(super::PersistentPublicationLinkOutcome::Linked);
+
+    let outcome = stage_and_publish_compacted_source_bound_encrypted_tree_restart(
+        &journal,
+        &stage_directory.0,
+        &work_directory.0,
+        &mut backend,
+        &mut sources,
+        source_set_id,
+        EncryptedRestartContinuationSettings {
+            aes_key,
+            crashed_generation: 1,
+            trusted_floor: None,
+            restart_limits,
+            options: super::options(),
+            limits: super::ImmutableLimits::default(),
+            fresh_operation_id: [0xb6; 16],
+        },
+    )
+    .expect("publication succeeds before intervening metadata growth");
+    let EncryptedTreeRestartPublicationOutcome::PublishedAndDurable(durable) = outcome else {
+        panic!("Prepared recheck requires durable publication");
+    };
+    assert_eq!(durable.durable.continuation.fresh_generation, 2);
+    assert_eq!(directory_entry_count(&journal_directory.0), 5);
+
+    std::fs::write(
+        journal_directory.0.join("intervening-journal-entry"),
+        b"occupy final configured journal slot",
+    )
+    .expect("create intervening journal entry");
+    assert_eq!(directory_entry_count(&journal_directory.0), 6);
+
+    let error = prepare_compacted_encrypted_restart_retirement(
+        &journal,
+        &stage_directory.0,
+        &durable.durable,
+        restart_limits,
+    )
+    .expect_err("Prepared retirement must recheck the final journal slot");
+    assert!(error.contains("compacted retirement Prepared directory headroom"));
+    assert!(load_encrypted_retirement_record(
+        &journal,
+        1,
+        2,
+        EncryptedRetirementState::Prepared,
+    )
+    .expect("load rejected Prepared authority")
+    .is_none());
+    assert_eq!(
+        CompactedNonceJournal::new(&journal)
+            .scan(None)
+            .expect("authority remains generation two after Prepared rejection")
+            .durable
+            .generation,
+        2
+    );
+    work_directory.assert_empty();
+}
