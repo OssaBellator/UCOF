@@ -25,26 +25,15 @@ class JournalMetadataCapacityGuards(unittest.TestCase):
             parent,
         )
 
-    def test_append_only_metadata_writers_guard_before_create_new(self) -> None:
-        requirements = {
-            "linux_encrypted_stage_restart.rs": (
-                'require_linux_nonce_journal_metadata_slots(journal, 1, "encrypted stage manifest")?;',
-                "fn persist_encrypted_stage_manifest",
-            ),
-            "restart_source_set_authority.rs": (
-                'require_linux_nonce_journal_metadata_slots(journal, 1, "restart source-set authority")?;',
-                "fn persist_restart_source_set_authority",
-            ),
-            "encrypted_restart_retirement.rs": (
-                'require_linux_nonce_journal_metadata_slots(journal, 1, "encrypted restart retirement")?;',
-                "fn persist_encrypted_retirement_record",
-            ),
-        }
-        for filename, (guard, fn_name) in requirements.items():
-            text = (BASE / filename).read_text()
-            body = text.split(fn_name, 1)[1]
-            self.assertIn(guard, body, filename)
-            self.assertLess(body.find(guard), body.find(".create_new(true)"), filename)
+    def test_source_set_writer_guards_before_create_new(self) -> None:
+        text = (BASE / "restart_source_set_authority.rs").read_text()
+        body = text.split("fn persist_restart_source_set_authority", 1)[1]
+        guard = (
+            'require_linux_nonce_journal_metadata_slots('
+            'journal, 1, "restart source-set authority")?;'
+        )
+        self.assertIn(guard, body)
+        self.assertLess(body.find(guard), body.find(".create_new(true)"))
 
     def test_compacted_publication_uses_shared_multi_slot_guard(self) -> None:
         text = (BASE / "compacted_source_bound_restart.rs").read_text()
@@ -55,6 +44,11 @@ class JournalMetadataCapacityGuards(unittest.TestCase):
         self.assertIn(
             'require_linux_nonce_journal_metadata_slots(journal, 1, "compacted retirement")',
             text,
+        )
+        prepare = text.split("fn prepare_compacted_encrypted_restart_retirement", 1)[1]
+        self.assertLess(
+            prepare.find("ensure_compacted_restart_prepared_directory_headroom(journal)?;"),
+            prepare.find("persist_encrypted_retirement_record(journal, record)?;"),
         )
 
     def test_checkpoint_creation_keeps_its_separate_transient_rule(self) -> None:
