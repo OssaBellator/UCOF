@@ -293,3 +293,53 @@ fn checkpoint_does_not_lend_transient_headroom_to_unknown_entry() {
     assert!(inventory_error.contains("compacted inventory directory entry limit"));
     assert!(directory.0.join(nonce_compaction_name(2)).exists());
 }
+
+#[test]
+fn compacted_inventory_rejects_authenticated_foreign_stage_manifest_context() {
+    const OBJECTS: u64 = 7;
+    let source_set_id = [0xb5; 32];
+    let (journal_directory, _stage_directory, aes_key, nonce_prefix, _restart_limits, _) =
+        prepared_source_bound_restart_stage(
+            "compacted-inventory-foreign-manifest",
+            OBJECTS,
+            source_set_id,
+        );
+    let journal = open_journal(&journal_directory.0, &aes_key, nonce_prefix);
+    let role = EncryptedRestartStageRole::SortedDescriptorSpill;
+    let original = load_encrypted_stage_manifest(&journal, 1, role)
+        .expect("load original compacted inventory manifest")
+        .expect("original compacted inventory manifest");
+    let name = encrypted_stage_manifest_name(1, role);
+    std::fs::remove_file(journal_directory.0.join(&name))
+        .expect("remove original compacted inventory manifest");
+    let forged = LinuxEncryptedStageManifest {
+        key_id: [0xf5; 16],
+        ..original
+    };
+    let sealed = seal_encrypted_stage_manifest(&journal, forged)
+        .expect("seal foreign-context manifest with local authentication key");
+    let path = linux_nonce_procfd_child(&journal.directory, &name)
+        .expect("foreign compacted inventory manifest path");
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .mode(0o600)
+        .custom_flags(LINUX_O_NOFOLLOW | LINUX_O_CLOEXEC)
+        .open(path)
+        .expect("create foreign compacted inventory manifest");
+    file.write_all(&sealed)
+        .expect("write foreign compacted inventory manifest");
+    file.flush()
+        .expect("flush foreign compacted inventory manifest");
+    file.sync_all()
+        .expect("sync foreign compacted inventory manifest");
+    journal
+        .directory
+        .sync_all()
+        .expect("sync foreign compacted inventory manifest directory");
+
+    let error = scan_compacted_persistent_inventory(&journal)
+        .expect_err("authenticated foreign stage manifest must fail quota inventory");
+    assert!(error.contains("compacted inventory stage manifest context"));
+    assert!(!journal_directory.0.join(nonce_compaction_name(1)).exists());
+}
