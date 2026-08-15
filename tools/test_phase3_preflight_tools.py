@@ -12,6 +12,7 @@ from unittest import mock
 from tools import check_phase3_storage_headroom as headroom
 from tools import qualify_phase3_filesystem as fsq
 from tools import qualify_phase3_key_material as keyq
+from tools import test_verify_phase3_deployment_preflight as deployment_tests
 
 
 class FakeStatvfs:
@@ -28,6 +29,12 @@ class FakeStatvfs:
 def write_key(path: Path, byte: int, mode: int = 0o600) -> None:
     path.write_bytes(bytes([byte]) * keyq.KEY_BYTES)
     os.chmod(path, mode)
+
+
+def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: str | None):
+    """Include deployment-bundle evidence tests in the existing acceptance module."""
+    tests.addTests(loader.loadTestsFromModule(deployment_tests))
+    return tests
 
 
 class FilesystemHarnessTests(unittest.TestCase):
@@ -79,6 +86,11 @@ class KeyMaterialTests(unittest.TestCase):
             self.assertTrue(report["ok"])
             self.assertFalse(report["secret_material_reported"])
             self.assertEqual([entry["bytes"] for entry in report["keys"]], [32, 32])
+            self.assertTrue(report["claims"]["parent_directory_effective_uid_owned"])
+            self.assertTrue(
+                report["claims"]["parent_directory_not_group_or_world_writable"]
+            )
+            self.assertFalse(report["non_claims"]["ancestor_path_pinning_qualified"])
 
     def test_wrong_width_permissions_same_bytes_and_hardlink_fail(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ucof-key-preflight-") as directory:
@@ -108,6 +120,23 @@ class KeyMaterialTests(unittest.TestCase):
             os.link(aes, hmac)
             with self.assertRaisesRegex(keyq.KeyMaterialError, "exactly one hard link"):
                 keyq.qualify(aes, hmac)
+
+    def test_group_or_world_writable_parent_fails(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ucof-key-preflight-") as directory:
+            root = Path(directory)
+            aes = root / "aes.key"
+            hmac = root / "hmac.key"
+            write_key(aes, 0x11)
+            write_key(hmac, 0x22)
+            os.chmod(root, 0o770)
+            try:
+                with self.assertRaisesRegex(
+                    keyq.KeyMaterialError,
+                    "parent directory must not be group/world writable",
+                ):
+                    keyq.qualify(aes, hmac)
+            finally:
+                os.chmod(root, 0o700)
 
     def test_symlink_fails_when_no_follow_is_available(self) -> None:
         if not hasattr(os, "O_NOFOLLOW"):
