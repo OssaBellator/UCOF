@@ -41,9 +41,12 @@ class Experiment0179PublicationHeadroomGuards(unittest.TestCase):
         self.assertGreaterEqual(guard, 0)
         self.assertGreaterEqual(prepare, 0)
         self.assertLess(guard, prepare)
-        self.assertIn("checked_add(2)", source)
         self.assertIn(
-            'return Err("compacted publication retirement directory headroom".into());',
+            'require_linux_nonce_journal_metadata_slots(journal, 2, "compacted publication")',
+            source,
+        )
+        self.assertIn(
+            '"compacted publication retirement directory headroom".to_owned()',
             source,
         )
 
@@ -56,7 +59,11 @@ class Experiment0179PublicationHeadroomGuards(unittest.TestCase):
         self.assertGreaterEqual(persist, 0)
         self.assertLess(guard, persist)
         self.assertIn(
-            'return Err("compacted retirement Prepared directory headroom".into());',
+            'require_linux_nonce_journal_metadata_slots(journal, 1, "compacted retirement")',
+            source,
+        )
+        self.assertIn(
+            '"compacted retirement Prepared directory headroom".to_owned()',
             source,
         )
 
