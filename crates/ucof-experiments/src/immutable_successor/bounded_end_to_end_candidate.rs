@@ -68,6 +68,7 @@ mod bounded_end_to_end_candidate_tests {
         include!("bounded_end_to_end_candidate/restart_metadata_compaction_property_tests.rs");
         include!("bounded_end_to_end_candidate/restart_metadata_compaction_accounting_tests.rs");
         include!("bounded_end_to_end_candidate/compacted_restart_retry_tests.rs");
+        include!("bounded_end_to_end_candidate/compacted_publication_headroom_tests.rs");
         include!("bounded_end_to_end_candidate/compacted_private_lifecycle_quota_tests.rs");
         include!("../private_nonce_lease_contract.rs");
     }
