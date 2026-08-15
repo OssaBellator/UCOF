@@ -63,6 +63,29 @@ class StorageHeadroomTests(unittest.TestCase):
             with self.assertRaisesRegex(headroom.HeadroomError, "not a directory"):
                 headroom.observe(file_path, 1, 0, 0, 0)
 
+    def test_real_tree_wires_stale_checkpoint_headroom_regressions(self) -> None:
+        parent = (
+            ROOT
+            / "crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate.rs"
+        )
+        regression = (
+            parent.parent
+            / "bounded_end_to_end_candidate/restart_metadata_compaction_stale_headroom_tests.rs"
+        )
+        self.assertTrue(regression.is_file())
+        self.assertIn(
+            'include!("bounded_end_to_end_candidate/'
+            'restart_metadata_compaction_stale_headroom_tests.rs");',
+            parent.read_text(),
+        )
+        source = regression.read_text()
+        for token in (
+            "stale_checkpoint_cannot_authorize_second_checkpoint_from_transient_over_cap_state",
+            "current_checkpoint_still_authorizes_single_transient_entry_over_cap",
+            "maximum_directory_entry_limit_does_not_overflow_compacted_scan_ceiling",
+        ):
+            self.assertIn(token, source)
+
 
 if __name__ == "__main__":
     unittest.main()
