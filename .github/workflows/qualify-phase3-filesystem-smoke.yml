@@ -1,0 +1,174 @@
+name: Qualify Phase 3 Filesystem Smoke
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/qualify-phase3-filesystem-smoke.yml"
+      - "tools/qualify_phase3_filesystem.py"
+      - "tools/test_qualify_phase3_filesystem.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      QUALIFICATION_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.QUALIFICATION_SOURCE_SHA }}
+
+      - name: Bind qualification to exact source
+        shell: bash
+        run: |
+          set -euo pipefail
+          checkout_sha="$(git rev-parse HEAD)"
+          test "${checkout_sha}" = "${QUALIFICATION_SOURCE_SHA}"
+          mkdir -p target
+          {
+            echo "qualification_source_sha=${QUALIFICATION_SOURCE_SHA}"
+            echo "checkout_sha=${checkout_sha}"
+            echo "workflow_event_sha=${GITHUB_SHA}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+            python3 --version
+            uname -a
+            echo "runner_temp=${RUNNER_TEMP}"
+            df -T "${RUNNER_TEMP}"
+            if command -v findmnt >/dev/null 2>&1; then
+              findmnt -T "${RUNNER_TEMP}" -o TARGET,SOURCE,FSTYPE,OPTIONS
+            fi
+          } > target/phase3-filesystem-smoke-environment.txt
+
+      - name: Test filesystem qualification harness
+        run: python3 tools/test_qualify_phase3_filesystem.py
+
+      - name: Run filesystem mechanical smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/qualify_phase3_filesystem.py \
+            --scratch-dir "${RUNNER_TEMP}" \
+            --output target/phase3-filesystem-smoke.json \
+            > target/phase3-filesystem-smoke.stdout.json
+
+      - name: Validate filesystem evidence contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          source_sha = os.environ["QUALIFICATION_SOURCE_SHA"]
+          environment = Path("target/phase3-filesystem-smoke-environment.txt").read_text()
+          for line in (
+              f"qualification_source_sha={source_sha}\n",
+              f"checkout_sha={source_sha}\n",
+          ):
+              if line not in environment:
+                  raise SystemExit(f"missing exact-head environment binding: {line.strip()}")
+
+          report = json.loads(Path("target/phase3-filesystem-smoke.json").read_text())
+          if report.get("schema") != "ucof-phase3-filesystem-smoke-v1":
+              raise SystemExit("unexpected filesystem smoke schema")
+
+          platform = report.get("platform")
+          if not isinstance(platform, dict) or platform.get("system") != "Linux":
+              raise SystemExit("filesystem smoke did not run on Linux")
+
+          mount = report.get("mount")
+          if not isinstance(mount, dict):
+              raise SystemExit("filesystem smoke lacks mount evidence")
+          for name in ("mount_point", "filesystem_type", "major_minor"):
+              if not isinstance(mount.get(name), str) or not mount[name]:
+                  raise SystemExit(f"filesystem smoke lacks mount field: {name}")
+
+          network = report.get("network_or_distributed_filesystem")
+          if not isinstance(network, bool):
+              raise SystemExit("filesystem network/distributed classification missing")
+          expected_policy = (
+              "unsupported-without-provider-qualification"
+              if network
+              else "local-filesystem-mechanical-smoke-only"
+          )
+          if report.get("production_policy") != expected_policy:
+              raise SystemExit("filesystem production-policy classification mismatch")
+
+          smoke = report.get("mechanical_smoke")
+          if not isinstance(smoke, dict):
+              raise SystemExit("filesystem smoke mechanics missing")
+          if smoke.get("private_mode") != "0700" or smoke.get("file_mode") != "0600":
+              raise SystemExit("filesystem private permission evidence changed")
+          for name in (
+              "file_fsync",
+              "private_directory_fsync",
+              "hard_link_no_overwrite",
+              "publication_directory_fsync",
+              "published_inode_equal",
+              "private_unlink_directory_fsync",
+              "publication_unlink_directory_fsync",
+          ):
+              if smoke.get(name) is not True:
+                  raise SystemExit(f"filesystem mechanical check did not pass: {name}")
+
+          for section in ("capacity_before", "capacity_after"):
+              capacity = report.get(section)
+              if not isinstance(capacity, dict):
+                  raise SystemExit(f"missing filesystem capacity observation: {section}")
+              for name in (
+                  "block_size",
+                  "total_bytes",
+                  "free_bytes",
+                  "available_bytes",
+                  "total_inodes",
+                  "free_inodes",
+                  "available_inodes",
+              ):
+                  value = capacity.get(name)
+                  if not isinstance(value, int) or value < 0:
+                      raise SystemExit(f"invalid filesystem capacity field: {section}.{name}")
+
+          for name in (
+              "power_loss_qualified",
+              "anti_rollback_qualified",
+              "same_uid_unlink_race_closed",
+          ):
+              if report.get(name) is not False:
+                  raise SystemExit(f"filesystem non-claim changed: {name}")
+
+          notes = report.get("notes")
+          if not isinstance(notes, list):
+              raise SystemExit("filesystem evidence notes missing")
+          required_note_fragments = (
+              "not physical power-loss durability",
+              "observations, not reservations",
+              "Network/distributed filesystems require separate provider-specific qualification",
+          )
+          joined = "\n".join(str(note) for note in notes)
+          for fragment in required_note_fragments:
+              if fragment not in joined:
+                  raise SystemExit(f"filesystem evidence boundary note missing: {fragment}")
+
+          print(
+              "validated filesystem smoke: "
+              f"fstype={mount['filesystem_type']} network={network} "
+              f"mount={mount['mount_point']}"
+          )
+          PY
+
+      - name: Upload filesystem smoke evidence
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-filesystem-smoke-${{ env.QUALIFICATION_SOURCE_SHA }}
+          path: |
+            target/phase3-filesystem-smoke-environment.txt
+            target/phase3-filesystem-smoke.json
+            target/phase3-filesystem-smoke.stdout.json
+          if-no-files-found: error
+          retention-days: 14
