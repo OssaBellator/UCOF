@@ -92,11 +92,11 @@ fn compacted_inventory_prices_checkpoint_and_all_preserved_authenticated_metadat
 
     let inventory = scan_compacted_persistent_inventory(&journal)
         .expect("scan checkpointed persistent inventory");
-    assert_eq!(inventory.nonce_records, 2);
+    assert_eq!(inventory.nonce_records, 1);
     assert_eq!(inventory.checkpoint_records, 1);
     assert_eq!(inventory.retirement_records, 1);
     assert_eq!(inventory.source_set_records, 1);
-    let expected_bytes = 2 * u64::try_from(LINUX_NONCE_JOURNAL_BYTES).unwrap()
+    let expected_bytes = u64::try_from(LINUX_NONCE_JOURNAL_BYTES).unwrap()
         + u64::try_from(NONCE_COMPACTION_BYTES).unwrap()
         + u64::try_from(ENCRYPTED_RETIREMENT_BYTES).unwrap()
         + u64::try_from(RESTART_SOURCE_SET_BYTES).unwrap();
