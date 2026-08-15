@@ -1,6 +1,6 @@
 #[test]
 fn repeated_compaction_preserves_generation_and_nonce_monotonicity() {
-    let directory = super::TestDirectory::new("nonce-compaction-monotonicity");
+    let directory = private_directory("nonce-compaction-monotonicity");
     let key = [0x91; 32];
     let prefix = [0x92; 4];
     let journal = open_journal(&directory.0, &key, prefix);
