@@ -132,19 +132,21 @@ class State:
             if not self.at_least(previous.next_unreserved, current.next_unreserved):
                 raise ModelError("checkpoint counter rollback")
 
+        for checkpoint in checkpoints:
+            for record in self.nonce_records.values():
+                if record.generation <= checkpoint.generation:
+                    if record.next_unreserved > checkpoint.next_unreserved:
+                        raise ModelError("checkpoint below historical nonce record")
+                    if (
+                        record.generation == checkpoint.generation
+                        and record.next_unreserved != checkpoint.next_unreserved
+                    ):
+                        raise ModelError("checkpoint disagrees with same-generation record")
+
         if checkpoints:
             selected = checkpoints[-1]
             generation = selected.generation
             next_unreserved = selected.next_unreserved
-            for record in self.nonce_records.values():
-                if record.generation <= selected.generation:
-                    if record.next_unreserved > selected.next_unreserved:
-                        raise ModelError("checkpoint below historical nonce record")
-                    if (
-                        record.generation == selected.generation
-                        and record.next_unreserved != selected.next_unreserved
-                    ):
-                        raise ModelError("checkpoint disagrees with same-generation record")
         else:
             generation = 0
             next_unreserved = 0
@@ -456,6 +458,24 @@ def test_checkpoint_chain_rollback() -> None:
     expect_error("checkpoint counter rollback", state.scan)
 
 
+def test_all_checkpoints_validate_surviving_history() -> None:
+    state = State()
+    state.commit(5)
+    state.commit(7)
+    state.commit(3)
+    state.checkpoints[1] = Checkpoint(1, 4)
+    state.checkpoints[3] = Checkpoint(3, 15)
+    expect_error("checkpoint below historical nonce record", state.scan)
+
+    state = State()
+    state.commit(5)
+    state.commit(7)
+    state.commit(3)
+    state.checkpoints[2] = Checkpoint(2, 13)
+    state.checkpoints[3] = Checkpoint(3, 15)
+    expect_error("checkpoint disagrees with same-generation record", state.scan)
+
+
 def test_graph_fail_closed() -> None:
     state = State()
     state.commit(10)
@@ -687,6 +707,7 @@ def test_small_state_matrix() -> None:
 def run_all(campaigns: int, steps: int) -> dict:
     test_checkpoint_retry_ordering()
     test_checkpoint_chain_rollback()
+    test_all_checkpoints_validate_surviving_history()
     test_graph_fail_closed()
     test_prepared_then_terminal_reclamation()
     test_source_prune_cut_is_retryable()
@@ -699,7 +720,7 @@ def run_all(campaigns: int, steps: int) -> dict:
     for seed in range(campaigns):
         test_repeated_compaction_campaign(seed, steps)
     return {
-        "fixed_cases": 11,
+        "fixed_cases": 12,
         "matrix_cases": 4 * 4 * 4,
         "campaigns": campaigns,
         "campaign_steps": steps,
