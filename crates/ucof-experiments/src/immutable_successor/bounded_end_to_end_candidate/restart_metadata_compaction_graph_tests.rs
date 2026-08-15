@@ -448,3 +448,75 @@ fn compaction_rejects_authenticated_source_set_from_foreign_journal_context() {
     assert!(error.contains("compaction source-set context"));
     assert!(!journal_directory.0.join(nonce_compaction_name(1)).exists());
 }
+
+#[test]
+fn older_checkpoint_cannot_be_masked_by_newer_checkpoint_when_below_surviving_record() {
+    let (directory, key, prefix) = nonce_compaction_fixture(
+        "nonce-compaction-masked-historical-rollback",
+        &[5, 7, 3],
+    );
+    let journal = open_journal(&directory.0, &key, prefix);
+    persist_nonce_compaction_checkpoint(
+        &journal,
+        NonceCompactionCheckpoint {
+            key_id: journal.key_id,
+            nonce_prefix: journal.nonce_prefix,
+            generation: 1,
+            next_unreserved: Some(4),
+        },
+        RestartMetadataCompactionCut::Complete,
+    )
+    .expect("persist older checkpoint below surviving generation-one record");
+    persist_nonce_compaction_checkpoint(
+        &journal,
+        NonceCompactionCheckpoint {
+            key_id: journal.key_id,
+            nonce_prefix: journal.nonce_prefix,
+            generation: 3,
+            next_unreserved: Some(15),
+        },
+        RestartMetadataCompactionCut::Complete,
+    )
+    .expect("persist newer checkpoint that would otherwise mask older contradiction");
+
+    let error = CompactedNonceJournal::new(&journal)
+        .scan(None)
+        .expect_err("older checkpoint contradiction must not be masked by latest checkpoint");
+    assert!(error.contains("nonce compaction checkpoint rollback"));
+}
+
+#[test]
+fn older_same_generation_checkpoint_mismatch_cannot_be_masked_by_newer_checkpoint() {
+    let (directory, key, prefix) = nonce_compaction_fixture(
+        "nonce-compaction-masked-generation-mismatch",
+        &[5, 7, 3],
+    );
+    let journal = open_journal(&directory.0, &key, prefix);
+    persist_nonce_compaction_checkpoint(
+        &journal,
+        NonceCompactionCheckpoint {
+            key_id: journal.key_id,
+            nonce_prefix: journal.nonce_prefix,
+            generation: 2,
+            next_unreserved: Some(13),
+        },
+        RestartMetadataCompactionCut::Complete,
+    )
+    .expect("persist generation-two checkpoint disagreeing with surviving record");
+    persist_nonce_compaction_checkpoint(
+        &journal,
+        NonceCompactionCheckpoint {
+            key_id: journal.key_id,
+            nonce_prefix: journal.nonce_prefix,
+            generation: 3,
+            next_unreserved: Some(15),
+        },
+        RestartMetadataCompactionCut::Complete,
+    )
+    .expect("persist newer checkpoint that would otherwise mask generation-two mismatch");
+
+    let error = CompactedNonceJournal::new(&journal)
+        .scan(None)
+        .expect_err("same-generation checkpoint mismatch must remain visible across newer checkpoint");
+    assert!(error.contains("nonce compaction checkpoint generation mismatch"));
+}
