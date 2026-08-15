@@ -1,0 +1,232 @@
+name: Qualify Phase 3 S3 Emulator
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/qualify-phase3-s3-emulator.yml"
+      - "tools/qualify_phase3_s3_versioned_source.py"
+      - "tools/test_qualify_phase3_s3_versioned_source.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      QUALIFICATION_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      AWS_ACCESS_KEY_ID: ucofminio
+      AWS_SECRET_ACCESS_KEY: ucofminio-local-qualification
+      AWS_DEFAULT_REGION: us-east-1
+      AWS_EC2_METADATA_DISABLED: "true"
+      S3_ENDPOINT_URL: http://127.0.0.1:9000
+      MINIO_ROOT_USER: ucofminio
+      MINIO_ROOT_PASSWORD: ucofminio-local-qualification
+      MINIO_SOURCE_TAG: RELEASE.2025-10-15T17-29-55Z
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.QUALIFICATION_SOURCE_SHA }}
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version: "1.24.8"
+          cache: false
+
+      - name: Verify exact qualification source
+        shell: bash
+        run: |
+          set -euo pipefail
+          checkout_sha="$(git rev-parse HEAD)"
+          test "${checkout_sha}" = "${QUALIFICATION_SOURCE_SHA}"
+          command -v aws >/dev/null
+          mkdir -p target
+          {
+            echo "qualification_source_sha=${QUALIFICATION_SOURCE_SHA}"
+            echo "checkout_sha=${checkout_sha}"
+            echo "workflow_event_sha=${GITHUB_SHA}"
+            echo "target=s3-compatible-minio-emulator"
+            echo "endpoint=${S3_ENDPOINT_URL}"
+            echo "minio_source_tag=${MINIO_SOURCE_TAG}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+            aws --version 2>&1
+            go version
+            python3 --version
+            uname -a
+          } > target/phase3-s3-emulator-environment.txt
+
+      - name: Build pinned MinIO emulator from source
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/ucof-bin"
+          GOBIN="${RUNNER_TEMP}/ucof-bin" \
+            go install "github.com/minio/minio@${MINIO_SOURCE_TAG}"
+          "${RUNNER_TEMP}/ucof-bin/minio" --version \
+            >> target/phase3-s3-emulator-environment.txt 2>&1
+
+      - name: Start MinIO emulator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "${RUNNER_TEMP}/ucof-minio-data"
+          "${RUNNER_TEMP}/ucof-bin/minio" server \
+            --address 127.0.0.1:9000 \
+            "${RUNNER_TEMP}/ucof-minio-data" \
+            > target/phase3-s3-emulator-server.log 2>&1 &
+          echo "MINIO_PID=$!" >> "${GITHUB_ENV}"
+          for attempt in $(seq 1 60); do
+            if curl --fail --silent --show-error \
+              "${S3_ENDPOINT_URL}/minio/health/ready" >/dev/null; then
+              exit 0
+            fi
+            sleep 1
+          done
+          cat target/phase3-s3-emulator-server.log
+          exit 1
+
+      - name: Create versioned emulator bucket
+        shell: bash
+        run: |
+          set -euo pipefail
+          bucket="ucof-phase3-emulator-${GITHUB_RUN_ID}"
+          echo "QUALIFICATION_BUCKET=${bucket}" >> "${GITHUB_ENV}"
+          aws --endpoint-url "${S3_ENDPOINT_URL}" s3api create-bucket \
+            --bucket "${bucket}" >/dev/null
+          aws --endpoint-url "${S3_ENDPOINT_URL}" s3api put-bucket-versioning \
+            --bucket "${bucket}" \
+            --versioning-configuration Status=Enabled
+          status="$(aws --endpoint-url "${S3_ENDPOINT_URL}" s3api get-bucket-versioning \
+            --bucket "${bucket}" --query Status --output text)"
+          test "${status}" = "Enabled"
+
+      - name: Install endpoint-injecting AWS CLI wrapper
+        shell: bash
+        run: |
+          set -euo pipefail
+          real_aws="$(command -v aws)"
+          mkdir -p target/aws-wrapper
+          cat > target/aws-wrapper/aws <<'EOF'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          exec "${REAL_AWS_CLI:?}" --endpoint-url "${S3_ENDPOINT_URL:?}" "$@"
+          EOF
+          chmod 700 target/aws-wrapper/aws
+          echo "REAL_AWS_CLI=${real_aws}" >> "${GITHUB_ENV}"
+          echo "${PWD}/target/aws-wrapper" >> "${GITHUB_PATH}"
+
+      - name: Run unchanged versioned-S3 qualification harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tools/qualify_phase3_s3_versioned_source.py \
+            --bucket "${QUALIFICATION_BUCKET}" \
+            --region "${AWS_DEFAULT_REGION}" \
+            --prefix "ucof-phase3-emulator/${QUALIFICATION_SOURCE_SHA}/" \
+            --payload-bytes 65536 \
+            --allow-write \
+            --output target/phase3-s3-emulator-qualification.json \
+            > target/phase3-s3-emulator-qualification.stdout.json
+
+      - name: Validate emulator qualification report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          source_sha = os.environ["QUALIFICATION_SOURCE_SHA"]
+          environment = Path("target/phase3-s3-emulator-environment.txt").read_text()
+          for line in (
+              f"qualification_source_sha={source_sha}\n",
+              f"checkout_sha={source_sha}\n",
+              "target=s3-compatible-minio-emulator\n",
+          ):
+              if line not in environment:
+                  raise SystemExit(f"missing environment binding: {line.strip()}")
+
+          report = json.loads(Path("target/phase3-s3-emulator-qualification.json").read_text())
+          if report.get("schema") != "ucof-phase3-s3-versioned-source-qualification-v1":
+              raise SystemExit("unexpected S3 qualification schema")
+          if report.get("ok") is not True:
+              raise SystemExit(f"S3 emulator qualification failed: {report.get('failure')}")
+          if report.get("bucket_versioning_status") != "Enabled":
+              raise SystemExit("emulator bucket versioning is not Enabled")
+
+          checks = report.get("checks")
+          required_checks = (
+              "bucket_versioning_enabled",
+              "write_qualification_executed",
+              "distinct_version_ids_for_repeated_put",
+              "historical_version_payload_immutable",
+              "historical_range_read_exact",
+              "current_read_tracks_latest_version",
+              "nonexistent_version_rejected",
+              "historical_version_survives_delete_marker",
+          )
+          if not isinstance(checks, dict):
+              raise SystemExit("missing S3 qualification checks")
+          for name in required_checks:
+              if checks.get(name) is not True:
+                  raise SystemExit(f"S3 emulator check did not pass: {name}")
+
+          versions = report.get("versions")
+          if not isinstance(versions, dict):
+              raise SystemExit("missing S3 version evidence")
+          version_ids = (
+              versions.get("first"),
+              versions.get("same_payload_second_version"),
+              versions.get("latest"),
+          )
+          if any(not isinstance(value, str) or not value or value == "null" for value in version_ids):
+              raise SystemExit("emulator returned missing/null VersionId")
+          if len(set(version_ids)) != 3:
+              raise SystemExit("emulator did not return three distinct VersionIds")
+
+          historical_head = report.get("historical_head")
+          if not isinstance(historical_head, dict) or historical_head.get("version_id") != versions["first"]:
+              raise SystemExit("historical HEAD did not echo the requested VersionId")
+
+          delete_marker = report.get("delete_marker")
+          if not isinstance(delete_marker, dict) or delete_marker.get("delete_marker") is not True:
+              raise SystemExit("unversioned delete did not create a delete marker")
+          marker_id = delete_marker.get("version_id")
+          if not isinstance(marker_id, str) or not marker_id or marker_id == "null":
+              raise SystemExit("delete marker did not receive a non-null VersionId")
+
+          cleanup = report.get("cleanup")
+          if not isinstance(cleanup, dict) or cleanup.get("complete") is not True:
+              raise SystemExit("qualification exact-key cleanup was incomplete")
+
+          non_claims = report.get("non_claims")
+          if not isinstance(non_claims, dict) or any(value is not False for value in non_claims.values()):
+              raise SystemExit("provider qualification non-claim changed")
+
+          print(f"validated strict S3 emulator version semantics for {source_sha}")
+          PY
+
+      - name: Stop emulator
+        if: always()
+        shell: bash
+        run: |
+          if [[ -n "${MINIO_PID:-}" ]]; then
+            kill "${MINIO_PID}" 2>/dev/null || true
+          fi
+
+      - name: Upload S3 emulator qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-s3-emulator-${{ env.QUALIFICATION_SOURCE_SHA }}
+          path: |
+            target/phase3-s3-emulator-environment.txt
+            target/phase3-s3-emulator-qualification.json
+            target/phase3-s3-emulator-qualification.stdout.json
+            target/phase3-s3-emulator-server.log
+          if-no-files-found: warn
+          retention-days: 14
