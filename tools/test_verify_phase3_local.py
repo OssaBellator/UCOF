@@ -285,6 +285,31 @@ class LocalPhase3VerifierGuardrailTests(unittest.TestCase):
                 ):
                     verify.verify_wiring(FakeRunner())
 
+    def test_real_tree_wires_nonce_capacity_regressions(self) -> None:
+        parent = (
+            ROOT
+            / "crates/ucof-experiments/src/immutable_successor/bounded_end_to_end_candidate.rs"
+        )
+        capacity = (
+            parent.parent
+            / "bounded_end_to_end_candidate/linux_durable_nonce_journal_capacity_tests.rs"
+        )
+        self.assertTrue(capacity.is_file())
+        self.assertIn(
+            'include!("bounded_end_to_end_candidate/'
+            'linux_durable_nonce_journal_capacity_tests.rs");',
+            parent.read_text(),
+        )
+        source = capacity.read_text()
+        for token in (
+            "legacy_commit_rejects_exact_generation_capacity_before_creating_next_record",
+            "legacy_commit_rejects_exact_journal_byte_capacity_before_creating_next_record",
+            "legacy_commit_rejects_exact_directory_capacity_before_creating_next_record",
+            "compaction_restores_ordinary_generation_capacity_for_future_commit",
+            "compaction_restores_ordinary_byte_capacity_for_future_commit",
+        ):
+            self.assertIn(token, source)
+
     def test_model_only_and_acceptance_are_mutually_exclusive(self) -> None:
         with mock.patch.object(
             sys,
