@@ -181,11 +181,14 @@ fn scan_compacted_persistent_inventory(
 
         saw_unrecognized_entry = true;
     }
+    if saw_unrecognized_entry {
+        return Err("compacted inventory unrecognized entry".into());
+    }
     validate_compacted_directory_entry_count(
         journal,
         directory_entries,
         saw_authenticated_checkpoint,
-        saw_unrecognized_entry,
+        false,
         "compacted inventory",
     )?;
 
