@@ -76,6 +76,76 @@ fn newer_checkpoint_cannot_mask_older_same_generation_record_mismatch() {
     assert!(error.contains("nonce compaction checkpoint generation mismatch"));
 }
 
+#[test]
+fn stale_checkpoint_cannot_lend_transient_headroom_to_newer_durable_state() {
+    let (directory, key, prefix) = nonce_compaction_fixture(
+        "nonce-compaction-stale-checkpoint-headroom",
+        &[5, 7],
+    );
+    let journal = open_journal(&directory.0, &key, prefix);
+    persist_nonce_compaction_checkpoint(
+        &journal,
+        NonceCompactionCheckpoint {
+            key_id: journal.key_id,
+            nonce_prefix: journal.nonce_prefix,
+            generation: 1,
+            next_unreserved: Some(5),
+        },
+        RestartMetadataCompactionCut::Complete,
+    )
+    .expect("persist stale generation-one checkpoint beside generation two");
+    assert_eq!(directory_entry_count(&directory.0), 3);
+
+    let constrained = LinuxDurableNonceJournal::open(
+        &directory.0,
+        &key,
+        prefix,
+        [0x5a; 32],
+        LinuxNonceJournalLimits {
+            max_directory_entries: 2,
+            max_generations: 8,
+            max_journal_bytes: 8
+                * u64::try_from(LINUX_NONCE_JOURNAL_BYTES).expect("journal width"),
+            max_lease_size: 64,
+        },
+    )
+    .expect("reopen stale-checkpoint fixture with exact directory cap");
+    let error = CompactedNonceJournal::new(&constrained)
+        .scan(None)
+        .expect_err("stale checkpoint must not lend the transient over-cap slot");
+    assert!(error.contains("stale checkpoint headroom"));
+    assert!(!directory.0.join(nonce_compaction_name(2)).exists());
+}
+
+#[test]
+fn usize_max_directory_limit_does_not_overflow_transient_scan_ceiling() {
+    let (directory, key, prefix) = nonce_compaction_fixture(
+        "nonce-compaction-usize-max-directory-limit",
+        &[5],
+    );
+    let journal = LinuxDurableNonceJournal::open(
+        &directory.0,
+        &key,
+        prefix,
+        [0x5a; 32],
+        LinuxNonceJournalLimits {
+            max_directory_entries: usize::MAX,
+            ..LinuxNonceJournalLimits::default()
+        },
+    )
+    .expect("open usize-max directory-limit journal");
+    assert_eq!(
+        compacted_directory_scan_ceiling(&journal)
+            .expect("usize-max scan ceiling must saturate rather than overflow"),
+        usize::MAX
+    );
+    let recovery = CompactedNonceJournal::new(&journal)
+        .scan(None)
+        .expect("usize-max directory limit remains scannable");
+    assert_eq!(recovery.durable.generation, 1);
+    assert_eq!(recovery.durable.next_unreserved, Some(5));
+}
+
 fn exhausted_nonce_compaction_fixture(
     label: &str,
 ) -> (super::TestDirectory, [u8; 32], [u8; 4]) {
