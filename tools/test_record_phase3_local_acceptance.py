@@ -46,7 +46,12 @@ def successful_report(sha: str, fuzz_targets: list[str] | None = None) -> dict:
     targets = fuzz_targets or ["restart_metadata", "immutable_parser"]
     checks = []
     for name in sorted(record.REQUIRED_CHECKS):
-        item = {"name": name, "status": "pass", "command": None, "seconds": 0.0}
+        item = {
+            "name": name,
+            "status": "pass",
+            "command": None,
+            "seconds": 0.0,
+        }
         if name == "List fuzz targets":
             item["output"] = "\n".join(targets) + "\n"
         checks.append(item)
@@ -68,6 +73,7 @@ def successful_report(sha: str, fuzz_targets: list[str] | None = None) -> dict:
         "ok": True,
         "failure": None,
         "git_sha": sha,
+        "acceptance_sha": sha,
         "git_branch": "phase-3/test",
         "dirty_worktree": False,
         "python": "3.test",
@@ -84,8 +90,7 @@ class AcceptanceRecorderTests(unittest.TestCase):
             repo = Path(directory)
             sha = init_repo(repo)
             report = successful_report(sha, ["a", "b", "c"])
-            with mock.patch.object(record, "ROOT", repo):
-                actual_sha, checks, fuzz_targets = record.validate_report(report)
+            actual_sha, checks, fuzz_targets = record.validate_report(report)
             self.assertEqual(actual_sha, sha)
             self.assertEqual(fuzz_targets, ["a", "b", "c"])
             self.assertGreater(len(checks), len(record.REQUIRED_CHECKS))
@@ -96,30 +101,56 @@ class AcceptanceRecorderTests(unittest.TestCase):
             sha = init_repo(repo)
             report = successful_report(sha, ["a", "b"])
             report["checks"] = [
-                item for item in report["checks"] if item.get("name") != "Fuzz smoke b"
+                item
+                for item in report["checks"]
+                if item.get("name") != "Fuzz smoke b"
             ]
-            with mock.patch.object(record, "ROOT", repo):
-                with self.assertRaisesRegex(record.RecordError, "did not smoke every"):
-                    record.validate_report(report)
+            with self.assertRaisesRegex(record.RecordError, "missing smoke: b"):
+                record.validate_report(report)
+
+    def test_unexpected_fuzz_smoke_fails(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ucof-acceptance-recorder-") as directory:
+            repo = Path(directory)
+            sha = init_repo(repo)
+            report = successful_report(sha, ["a"])
+            report["checks"].append(
+                {
+                    "name": "Fuzz smoke injected",
+                    "status": "pass",
+                    "command": None,
+                    "seconds": 0.0,
+                }
+            )
+            with self.assertRaisesRegex(record.RecordError, "unexpected smoke: injected"):
+                record.validate_report(report)
+
+    def test_acceptance_sha_must_match_final_report_sha(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ucof-acceptance-recorder-") as directory:
+            repo = Path(directory)
+            sha = init_repo(repo)
+            report = successful_report(sha)
+            report["acceptance_sha"] = "0" * 40
+            with self.assertRaisesRegex(record.RecordError, "start/end SHA pin"):
+                record.validate_report(report)
 
     def test_dirty_current_worktree_fails_even_if_report_says_clean(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ucof-acceptance-recorder-") as directory:
             repo = Path(directory)
             sha = init_repo(repo)
             report = successful_report(sha)
+            actual_sha, _, _ = record.validate_report(report)
             (repo / "dirty.txt").write_text("dirty\n")
             with mock.patch.object(record, "ROOT", repo):
-                with self.assertRaisesRegex(record.RecordError, "worktree must remain clean"):
-                    record.validate_report(report)
+                with self.assertRaisesRegex(record.RecordError, "same clean checkout"):
+                    record.verify_current_checkout(actual_sha)
 
-    def test_stale_sha_fails(self) -> None:
+    def test_stale_sha_fails_against_current_checkout(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ucof-acceptance-recorder-") as directory:
             repo = Path(directory)
             init_repo(repo)
-            report = successful_report("0" * 40)
             with mock.patch.object(record, "ROOT", repo):
                 with self.assertRaisesRegex(record.RecordError, "does not match current HEAD"):
-                    record.validate_report(report)
+                    record.verify_current_checkout("0" * 40)
 
     def test_duplicate_check_name_fails(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ucof-acceptance-recorder-") as directory:
@@ -127,29 +158,28 @@ class AcceptanceRecorderTests(unittest.TestCase):
             sha = init_repo(repo)
             report = successful_report(sha)
             report["checks"].append(dict(report["checks"][0]))
-            with mock.patch.object(record, "ROOT", repo):
-                with self.assertRaisesRegex(record.RecordError, "duplicate check"):
-                    record.validate_report(report)
+            with self.assertRaisesRegex(record.RecordError, "duplicate check"):
+                record.validate_report(report)
 
-    def test_normalized_record_never_promotes_skips_or_dirty_state(self) -> None:
+    def test_normalized_record_binds_report_hash_and_nonclaims(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ucof-acceptance-recorder-") as directory:
             repo = Path(directory)
             sha = init_repo(repo)
             report = successful_report(sha)
-            with mock.patch.object(record, "ROOT", repo):
-                actual_sha, checks, fuzz_targets = record.validate_report(report)
-            normalized = record.normalized_record(
-                report,
-                actual_sha,
-                checks,
-                fuzz_targets,
-                "2026-08-15T00:02:00+00:00",
+            raw = json.dumps(report, sort_keys=True).encode()
+            actual_sha, checks, fuzz_targets = record.validate_report(report)
+            normalized = record.build_record(
+                report=report,
+                report_raw=raw,
+                accepted_sha=actual_sha,
+                branch="phase-3/test",
+                checks=checks,
+                fuzz_targets=fuzz_targets,
             )
-            self.assertTrue(normalized["ok"])
-            self.assertFalse(normalized["dirty_worktree"])
-            self.assertEqual(normalized["skipped"], [])
-            self.assertEqual(normalized["git_sha"], sha)
+            self.assertEqual(normalized["accepted_sha"], sha)
             self.assertEqual(normalized["fuzz_targets"], fuzz_targets)
+            self.assertEqual(len(normalized["source_report_sha256"]), 64)
+            self.assertGreaterEqual(len(normalized["non_claims"]), 5)
 
 
 if __name__ == "__main__":
