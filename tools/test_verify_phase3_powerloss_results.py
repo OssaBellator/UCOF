@@ -3,21 +3,25 @@
 
 from __future__ import annotations
 
-import copy
 import unittest
 
 from tools import plan_phase3_powerloss_campaign as plan
 from tools import verify_phase3_powerloss_results as verify
 
+CANDIDATE_SHA = "67beca9ce5d1242c5df839c9ef2d7b1ce5a8b774"
+OTHER_SHA = "0" * 40
+
 
 def valid_payload() -> dict:
+    platform = {
+        field: f"value-for-{field}"
+        for field in plan.build_plan()["required_platform_metadata"]
+    }
+    platform["ucof_git_sha"] = CANDIDATE_SHA
     return {
         "schema": verify.SCHEMA,
         "plan_schema": plan.SCHEMA,
-        "platform": {
-            field: f"value-for-{field}"
-            for field in plan.build_plan()["required_platform_metadata"]
-        },
+        "platform": platform,
         "campaign": {
             "operator": "qualification-operator",
             "started_utc": "2026-08-15T00:00:00Z",
@@ -43,6 +47,29 @@ class Phase3PowerlossResultValidatorTests(unittest.TestCase):
         self.assertTrue(summary["ok"])
         self.assertEqual(summary["case_count"], len(plan.CASES))
         self.assertEqual(summary["failed_cases"], [])
+        self.assertEqual(summary["ucof_git_sha"], CANDIDATE_SHA)
+
+    def test_exact_expected_candidate_sha_is_accepted(self) -> None:
+        summary = verify.validate(valid_payload(), expected_git_sha=CANDIDATE_SHA)
+        self.assertTrue(summary["ok"])
+        self.assertEqual(summary["ucof_git_sha"], CANDIDATE_SHA)
+
+    def test_mismatched_expected_candidate_sha_is_rejected(self) -> None:
+        with self.assertRaisesRegex(verify.PowerlossResultError, "git SHA mismatch"):
+            verify.validate(valid_payload(), expected_git_sha=OTHER_SHA)
+
+    def test_expected_candidate_sha_must_be_canonical_full_lowercase_hex(self) -> None:
+        for malformed in (
+            CANDIDATE_SHA[:-1],
+            CANDIDATE_SHA.upper(),
+            "g" * 40,
+            "refs/heads/phase-3/restart-metadata-compaction",
+        ):
+            with self.subTest(malformed=malformed), self.assertRaisesRegex(
+                verify.PowerlossResultError,
+                "40 lowercase hexadecimal",
+            ):
+                verify.validate(valid_payload(), expected_git_sha=malformed)
 
     def test_one_explicit_failure_is_well_formed_but_not_green(self) -> None:
         payload = valid_payload()
