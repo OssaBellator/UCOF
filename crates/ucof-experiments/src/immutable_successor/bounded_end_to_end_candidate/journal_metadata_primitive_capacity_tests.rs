@@ -87,7 +87,30 @@ fn ordinary_stage_manifest_rejects_full_journal_before_durable_stage_creation() 
         directory_entry_count(&stage_directory.0),
         stage_entries_before
     );
-    assert!(!stage_directory.0.join(durable_stage_name).exists());
+    assert!(!stage_directory.0.join(&durable_stage_name).exists());
+    drop(constrained);
+
+    let exact_capacity = journal_entries_before
+        .checked_add(1)
+        .expect("one manifest journal slot");
+    let exact = open_journal_with_entry_capacity(
+        &journal_directory.0,
+        &aes_key,
+        nonce_prefix,
+        exact_capacity,
+    );
+    let manifest = persist_sorted_encrypted_spill_restart_stage(
+        &exact,
+        &stage_directory.0,
+        &preflight,
+        &session,
+        LinuxEncryptedStageRestartLimits::default(),
+        EncryptedStageManifestCommitCut::Complete,
+    )
+    .expect("one free journal slot must permit exact stage-manifest persistence");
+    assert_eq!(manifest.generation, session.journal_generation);
+    assert_eq!(directory_entry_count(&journal_directory.0), exact_capacity);
+    assert!(stage_directory.0.join(&durable_stage_name).exists());
 }
 
 #[test]
@@ -118,5 +141,58 @@ fn ordinary_prepared_retirement_respects_configured_journal_entry_capacity() {
         fixture.durable.continuation.fresh_generation,
         EncryptedRetirementState::Prepared,
     ));
+    fixture.work_directory.assert_empty();
+    drop(constrained);
+
+    let exact_capacity = journal_entries_before
+        .checked_add(1)
+        .expect("one retirement journal slot");
+    let exact = open_journal_with_entry_capacity(
+        &fixture.journal_directory.0,
+        &fixture.aes_key,
+        fixture.nonce_prefix,
+        exact_capacity,
+    );
+    let prepared = prepare_encrypted_restart_retirement(
+        &exact,
+        &fixture.stage_directory.0,
+        &fixture.durable,
+        fixture.restart_limits,
+    )
+    .expect("one free journal slot must permit Prepared retirement authority");
+    assert_eq!(prepared.state, EncryptedRetirementState::Prepared);
+    assert_eq!(
+        directory_entry_count(&fixture.journal_directory.0),
+        exact_capacity
+    );
+    assert!(retirement_file_exists(
+        &fixture.journal_directory.0,
+        fixture.durable.continuation.crashed_generation,
+        fixture.durable.continuation.fresh_generation,
+        EncryptedRetirementState::Prepared,
+    ));
+
+    assert_eq!(
+        execute_encrypted_restart_retirement(
+            &exact,
+            &fixture.stage_directory.0,
+            fixture.durable.continuation.crashed_generation,
+            fixture.durable.continuation.fresh_generation,
+            fixture.restart_limits,
+            EncryptedRetirementCut::Complete,
+        )
+        .expect("manifest reclamation must free the slot needed by Terminal authority"),
+        EncryptedRetirementOutcome::Terminal
+    );
+    assert!(retirement_file_exists(
+        &fixture.journal_directory.0,
+        fixture.durable.continuation.crashed_generation,
+        fixture.durable.continuation.fresh_generation,
+        EncryptedRetirementState::Terminal,
+    ));
+    assert_eq!(
+        directory_entry_count(&fixture.journal_directory.0),
+        exact_capacity
+    );
     fixture.work_directory.assert_empty();
 }
