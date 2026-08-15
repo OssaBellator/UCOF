@@ -24,6 +24,10 @@ class JournalMetadataCapacityGuards(unittest.TestCase):
             'include!("bounded_end_to_end_candidate/journal_metadata_authority_capacity_tests.rs");',
             parent,
         )
+        self.assertIn(
+            'include!("bounded_end_to_end_candidate/journal_metadata_primitive_capacity_tests.rs");',
+            parent,
+        )
 
     def test_source_set_writer_guards_before_create_new(self) -> None:
         text = (BASE / "restart_source_set_authority.rs").read_text()
@@ -34,6 +38,51 @@ class JournalMetadataCapacityGuards(unittest.TestCase):
         )
         self.assertIn(guard, body)
         self.assertLess(body.find(guard), body.find(".create_new(true)"))
+
+    def test_ordinary_stage_manifest_guards_before_stage_and_manifest_create(self) -> None:
+        text = (BASE / "linux_encrypted_stage_restart.rs").read_text()
+        body = text.split("fn persist_sorted_encrypted_spill_restart_stage", 1)[1]
+        body = body.split("\nfn ", 1)[0]
+        guard = (
+            'require_linux_nonce_journal_metadata_slots('
+            'journal, 1, "encrypted stage manifest")'
+        )
+        self.assertEqual(body.count(guard), 2)
+        first_guard = body.find(guard)
+        first_create = body.find(".create_new(true)")
+        second_guard = body.find(guard, first_guard + len(guard))
+        second_create = body.find(".create_new(true)", first_create + 1)
+        self.assertGreaterEqual(first_guard, 0)
+        self.assertGreaterEqual(first_create, 0)
+        self.assertGreaterEqual(second_guard, 0)
+        self.assertGreaterEqual(second_create, 0)
+        self.assertLess(first_guard, first_create)
+        self.assertLess(first_create, second_guard)
+        self.assertLess(second_guard, second_create)
+
+    def test_ordinary_retirement_writer_guards_before_create_new(self) -> None:
+        text = (BASE / "encrypted_restart_retirement.rs").read_text()
+        body = text.split("fn persist_encrypted_retirement_record", 1)[1]
+        body = body.split("\nfn ", 1)[0]
+        guard = (
+            'require_linux_nonce_journal_metadata_slots('
+            'journal, 1, "encrypted retirement")?;'
+        )
+        self.assertIn(guard, body)
+        self.assertLess(body.find(guard), body.find(".create_new(true)"))
+
+    def test_ordinary_primitive_full_and_exact_cap_regressions_are_wired(self) -> None:
+        text = (BASE / "journal_metadata_primitive_capacity_tests.rs").read_text()
+        for token in (
+            "ordinary_stage_manifest_rejects_full_journal_before_durable_stage_creation",
+            "full journal must reject stage-manifest persistence before durable stage creation",
+            "one free journal slot must permit exact stage-manifest persistence",
+            "ordinary_prepared_retirement_respects_configured_journal_entry_capacity",
+            "full journal must reject Prepared retirement authority",
+            "one free journal slot must permit Prepared retirement authority",
+            "manifest reclamation must free the slot needed by Terminal authority",
+        ):
+            self.assertIn(token, text)
 
     def test_compacted_publication_uses_shared_multi_slot_guard(self) -> None:
         text = (BASE / "compacted_source_bound_restart.rs").read_text()
