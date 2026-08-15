@@ -24,6 +24,7 @@ mod bounded_end_to_end_candidate_tests {
         include!("bounded_end_to_end_candidate/encrypted_descriptor.rs");
         include!("bounded_end_to_end_candidate/encrypted_descriptor_spill.rs");
         include!("bounded_end_to_end_candidate/linux_durable_nonce_journal.rs");
+        include!("bounded_end_to_end_candidate/journal_metadata_capacity.rs");
         include!("bounded_end_to_end_candidate/linux_encrypted_stage_restart.rs");
         include!("bounded_end_to_end_candidate/encrypted_restart_continuation.rs");
         include!("bounded_end_to_end_candidate/encrypted_restart_publication.rs");
@@ -47,6 +48,8 @@ mod bounded_end_to_end_candidate_tests {
         include!("bounded_end_to_end_candidate/encrypted_descriptor_spill_tests.rs");
         include!("bounded_end_to_end_candidate/linux_durable_nonce_journal_tests.rs");
         include!("bounded_end_to_end_candidate/linux_durable_nonce_journal_capacity_tests.rs");
+        include!("bounded_end_to_end_candidate/journal_metadata_capacity_tests.rs");
+        include!("bounded_end_to_end_candidate/journal_metadata_authority_capacity_tests.rs");
         include!("bounded_end_to_end_candidate/linux_encrypted_stage_restart_tests.rs");
         include!("bounded_end_to_end_candidate/encrypted_restart_continuation_tests.rs");
         include!("bounded_end_to_end_candidate/encrypted_restart_publication_tests.rs");
