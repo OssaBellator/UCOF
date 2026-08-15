@@ -14,9 +14,20 @@ from tools import check_phase3_storage_headroom as headroom
 from tools import qualify_phase3_filesystem as fsq
 from tools import qualify_phase3_key_material as keyq
 from tools import test_apply_phase3_0179_directory_headroom_fix as headroom_patch_tests
+from tools import test_build_phase3_cleanroom_handoff as cleanroom_handoff_tests
+from tools import test_compare_phase3_cleanroom_corpus as cleanroom_compare_tests
+from tools import test_init_phase3_powerloss_results as powerloss_init_tests
+from tools import test_phase3_0179_publication_headroom as publication_headroom_tests
+from tools import test_phase3_journal_entry_lifecycle_model as journal_entry_model_tests
+from tools import test_phase3_journal_metadata_capacity as journal_capacity_tests
+from tools import test_plan_phase3_powerloss_campaign as powerloss_plan_tests
 from tools import test_plan_phase3_private_inodes as inode_planner_tests
+from tools import test_qualify_phase3_process_crash_cuts as process_crash_tests
+from tools import test_qualify_phase3_s3_versioned_source as s3_tests
 from tools import test_restart_metadata_headroom_model as headroom_model_tests
+from tools import test_verify_phase3_decision_state as decision_state_tests
 from tools import test_verify_phase3_deployment_preflight as deployment_tests
+from tools import test_verify_phase3_powerloss_results as powerloss_verify_tests
 from tools import test_verify_phase3_qualification_local as qualification_tests
 
 
@@ -37,12 +48,23 @@ def write_key(path: Path, byte: int, mode: int = 0o600) -> None:
 
 
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: str | None):
-    """Include bundle/evidence/headroom/patch/inode validators in the acceptance module."""
+    """Include all non-destructive Phase 3 tool/model self-tests in acceptance."""
     tests.addTests(loader.loadTestsFromModule(deployment_tests))
     tests.addTests(loader.loadTestsFromModule(qualification_tests))
     tests.addTests(loader.loadTestsFromModule(headroom_model_tests))
     tests.addTests(loader.loadTestsFromModule(headroom_patch_tests))
     tests.addTests(loader.loadTestsFromModule(inode_planner_tests))
+    tests.addTests(loader.loadTestsFromModule(publication_headroom_tests))
+    tests.addTests(loader.loadTestsFromModule(journal_capacity_tests))
+    tests.addTests(loader.loadTestsFromModule(journal_entry_model_tests))
+    tests.addTests(loader.loadTestsFromModule(decision_state_tests))
+    tests.addTests(loader.loadTestsFromModule(cleanroom_handoff_tests))
+    tests.addTests(loader.loadTestsFromModule(cleanroom_compare_tests))
+    tests.addTests(loader.loadTestsFromModule(s3_tests))
+    tests.addTests(loader.loadTestsFromModule(process_crash_tests))
+    tests.addTests(loader.loadTestsFromModule(powerloss_plan_tests))
+    tests.addTests(loader.loadTestsFromModule(powerloss_init_tests))
+    tests.addTests(loader.loadTestsFromModule(powerloss_verify_tests))
     return tests
 
 
