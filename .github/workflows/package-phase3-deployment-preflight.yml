@@ -1,0 +1,186 @@
+name: Package Phase 3 Deployment Preflight
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/package-phase3-deployment-preflight.yml"
+      - "tools/run_phase3_deployment_preflight_bundle.py"
+      - "tools/test_run_phase3_deployment_preflight_bundle.py"
+      - "tools/verify_phase3_deployment_preflight.py"
+      - "tools/test_verify_phase3_deployment_preflight.py"
+      - "tools/qualify_phase3_filesystem.py"
+      - "tools/qualify_phase3_key_material.py"
+      - "tools/check_phase3_storage_headroom.py"
+      - "tools/plan_phase3_private_inodes.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TARGET_CANDIDATE_SHA: 67beca9ce5d1242c5df839c9ef2d7b1ce5a8b774
+      QUALIFICATION_TOOL_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.QUALIFICATION_TOOL_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact tool and target commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${QUALIFICATION_TOOL_SHA}"
+          git cat-file -e "${TARGET_CANDIDATE_SHA}^{commit}"
+          mkdir -p target/deployment-preflight-kit/qualification-tools/tools
+          {
+            echo "target_candidate_sha=${TARGET_CANDIDATE_SHA}"
+            echo "qualification_tool_sha=${QUALIFICATION_TOOL_SHA}"
+            echo "workflow_event_sha=${GITHUB_SHA}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+            python3 --version
+            uname -a
+          } > target/deployment-preflight-kit/package-environment.txt
+
+      - name: Run deployment evidence self-tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest tools.test_verify_phase3_deployment_preflight
+
+      - name: Package exact candidate source and qualification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          kit=target/deployment-preflight-kit
+          git archive \
+            --format=tar.gz \
+            --prefix="ucof-${TARGET_CANDIDATE_SHA}/" \
+            "${TARGET_CANDIDATE_SHA}" \
+            > "${kit}/ucof-candidate-${TARGET_CANDIDATE_SHA}.tar.gz"
+          for file in \
+            __init__.py \
+            run_phase3_deployment_preflight_bundle.py \
+            verify_phase3_deployment_preflight.py \
+            qualify_phase3_filesystem.py \
+            qualify_phase3_key_material.py \
+            check_phase3_storage_headroom.py \
+            plan_phase3_private_inodes.py
+          do
+            cp "tools/${file}" "${kit}/qualification-tools/tools/${file}"
+          done
+          cat > "${kit}/run-deployment-preflight.sh" <<EOF
+          #!/usr/bin/env bash
+          set -euo pipefail
+          kit_dir="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+          cd "\${kit_dir}/qualification-tools"
+          exec python3 -m tools.run_phase3_deployment_preflight_bundle \\
+            --candidate-git-sha "${TARGET_CANDIDATE_SHA}" \\
+            --qualification-tool-git-sha "${QUALIFICATION_TOOL_SHA}" \\
+            "\$@"
+          EOF
+          chmod 755 "${kit}/run-deployment-preflight.sh"
+
+      - name: Write operator boundary and kit manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          kit=target/deployment-preflight-kit
+          cat > "${kit}/QUALIFICATION.md" <<EOF
+          # Phase 3 deployment-preflight handoff
+
+          Target UCOF candidate: \`${TARGET_CANDIDATE_SHA}\`
+
+          Qualification-tool source: \`${QUALIFICATION_TOOL_SHA}\`
+
+          This kit contains **no AES/HMAC key files and no deployment result**. It packages the exact candidate source plus the local filesystem/key/storage preflight tools and a shareable provenance/redaction wrapper.
+
+          Run on the intended deployment host/filesystem with operator-owned local key files:
+
+          \`./run-deployment-preflight.sh --filesystem-path /TARGET/PRIVATE/FILESYSTEM --aes-key /PRIVATE/aes.key --hmac-key /PRIVATE/hmac.key --required-bytes REQUIRED_BYTES --max-initial-runs MAX_INITIAL_RUNS --output "\$PWD/deployment-preflight-bundle.json"\`
+
+          Optional \`--required-inodes\`, \`--reserve-bytes\`, and \`--reserve-inodes\` can only raise or observe the configured admission requirements; they do not reserve resources against unrelated writers.
+
+          The wrapper hashes the original raw inner preflight report, then removes operator-supplied filesystem/key paths, key-parent paths, child command arrays and child output text from the persisted bundle. Mount/device/filesystem-type evidence remains because it is part of environment qualification, so reviewers can identify the actual storage stack.
+
+          This preflight does not execute the candidate merely because its SHA is recorded. It is deployment-environment readiness evidence. It does not establish production key provisioning/rotation/revocation, KMS/HSM backing, key-memory locking/zeroization, physical power-loss durability, anti-rollback, same-UID unlink-race closure, or resource reservation.
+          EOF
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          kit = Path("target/deployment-preflight-kit")
+          manifest = {
+              "schema": "ucof-phase3-deployment-preflight-kit-v1",
+              "target_candidate_sha": os.environ["TARGET_CANDIDATE_SHA"],
+              "qualification_tool_sha": os.environ["QUALIFICATION_TOOL_SHA"],
+              "inner_report_schema": "ucof-phase3-deployment-preflight-v3",
+              "bundle_schema": "ucof-phase3-deployment-preflight-bundle-v1",
+              "contains_key_material": False,
+              "contains_deployment_results": False,
+              "requires_external_execution": True,
+              "candidate_source_archive_included": True,
+              "candidate_execution_proven_by_preflight": False,
+              "operator_supplied_path_redaction_required": True,
+              "child_command_output_text_persisted": False,
+          }
+          (kit / "kit-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+
+      - name: Verify handoff has no keys or result placeholder
+        shell: bash
+        run: |
+          set -euo pipefail
+          kit=target/deployment-preflight-kit
+          test ! -e "${kit}/deployment-preflight-bundle.json"
+          if find "${kit}" -type f \( -name '*.key' -o -name '*aes*key*' -o -name '*hmac*key*' \) | grep -q .; then
+            echo "deployment kit unexpectedly contains a key-shaped file" >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          kit = Path("target/deployment-preflight-kit")
+          manifest = json.loads((kit / "kit-manifest.json").read_text())
+          if manifest.get("contains_key_material") is not False:
+              raise SystemExit("deployment kit unexpectedly claims key material")
+          if manifest.get("contains_deployment_results") is not False:
+              raise SystemExit("deployment kit unexpectedly contains results")
+          if manifest.get("requires_external_execution") is not True:
+              raise SystemExit("deployment kit lost external-execution boundary")
+          launcher = (kit / "run-deployment-preflight.sh").read_text()
+          if manifest["target_candidate_sha"] not in launcher:
+              raise SystemExit("launcher is not bound to target candidate")
+          if manifest["qualification_tool_sha"] not in launcher:
+              raise SystemExit("launcher is not bound to qualification-tool source")
+          PY
+
+      - name: Write and verify kit hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd target/deployment-preflight-kit
+            find . -type f ! -name SHA256SUMS -print0 \
+              | sort -z \
+              | xargs -0 sha256sum \
+              > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+
+      - name: Upload deployment preflight handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-deployment-preflight-kit-${{ env.TARGET_CANDIDATE_SHA }}-tools-${{ env.QUALIFICATION_TOOL_SHA }}
+          path: target/deployment-preflight-kit
+          if-no-files-found: error
+          retention-days: 30
