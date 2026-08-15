@@ -83,6 +83,23 @@ def _open_key(path: Path, role: str) -> tuple[bytes, KeyFileMetadata]:
 
         parent = path.resolve().parent
         parent_info = parent.stat()
+        if not stat.S_ISDIR(parent_info.st_mode):
+            raise KeyMaterialError(f"{role}: key parent must be a directory")
+        if parent_info.st_uid != os.geteuid():
+            raise KeyMaterialError(
+                f"{role}: key parent owner uid {parent_info.st_uid} "
+                f"does not match effective uid {os.geteuid()}"
+            )
+        parent_mode = stat.S_IMODE(parent_info.st_mode)
+        if parent_mode & 0o022:
+            raise KeyMaterialError(
+                f"{role}: key parent directory must not be group/world writable"
+            )
+        if not parent_mode & stat.S_IXUSR:
+            raise KeyMaterialError(
+                f"{role}: key parent directory requires owner-execute permission"
+            )
+
         metadata = KeyFileMetadata(
             role=role,
             path=str(path.resolve()),
@@ -128,6 +145,8 @@ def qualify(aes_path: Path, hmac_path: Path) -> dict:
             "effective_uid_owned": True,
             "single_hard_link": True,
             "no_group_or_world_permissions": True,
+            "parent_directory_effective_uid_owned": True,
+            "parent_directory_not_group_or_world_writable": True,
             "distinct_files": True,
             "distinct_secret_bytes": True,
         },
@@ -138,6 +157,7 @@ def qualify(aes_path: Path, hmac_path: Path) -> dict:
             "hardware_backing_qualified": False,
             "rollback_qualified": False,
             "secret_zeroization_qualified": False,
+            "ancestor_path_pinning_qualified": False,
         },
     }
 
