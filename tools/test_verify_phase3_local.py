@@ -92,6 +92,7 @@ def synthetic_wiring(root: Path) -> Path:
                 "for checkpoint in checkpoints.iter().copied() {",
                 "validate_compacted_directory_entry_count",
                 "ensure_compacted_nonce_commit_directory_headroom",
+                "saw_unrecognized_entry",
                 "AfterSourceSetPruneBeforeRetirementPrune",
                 "AfterPreparedRetirementPruneBeforeTerminalPrune",
                 "fn compact_restart_metadata(",
@@ -141,6 +142,7 @@ def synthetic_wiring(root: Path) -> Path:
                 "authenticated_checkpoint_gets_exactly_one_transient_directory_entry_at_ceiling",
                 "unrelated_extra_directory_entry_does_not_receive_checkpoint_headroom",
                 "compacted_nonce_commit_reserves_one_directory_slot_for_next_checkpoint",
+                "checkpoint_does_not_lend_transient_headroom_to_unknown_entry",
             ]
         )
         + "\n"
