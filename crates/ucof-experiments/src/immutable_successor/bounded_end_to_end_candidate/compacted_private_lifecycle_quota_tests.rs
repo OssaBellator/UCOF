@@ -56,7 +56,11 @@ fn compaction_checkpoint_quota_rejects_before_checkpoint_or_prune_and_exact_cap_
 fn compacted_inventory_prices_checkpoint_and_all_preserved_authenticated_metadata() {
     const OBJECTS: u64 = 7;
     let source_set_id = [0x71; 32];
-    let fixture = encrypted_retirement_fixture("compacted-inventory", OBJECTS);
+    let fixture = source_bound_retirement_fixture(
+        "compacted-inventory",
+        OBJECTS,
+        source_set_id,
+    );
     let journal = open_journal(
         &fixture.journal_directory.0,
         &fixture.aes_key,
