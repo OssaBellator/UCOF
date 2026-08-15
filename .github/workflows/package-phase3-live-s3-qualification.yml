@@ -1,0 +1,178 @@
+name: Package Phase 3 Live S3 Qualification
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/package-phase3-live-s3-qualification.yml"
+      - "tools/qualify_phase3_s3_versioned_source.py"
+      - "tools/run_phase3_s3_live_qualification.py"
+      - "tools/test_qualify_phase3_s3_versioned_source.py"
+      - "tools/test_run_phase3_s3_live_qualification.py"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      TARGET_CANDIDATE_SHA: 67beca9ce5d1242c5df839c9ef2d7b1ce5a8b774
+      QUALIFICATION_TOOL_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.QUALIFICATION_TOOL_SHA }}
+          fetch-depth: 0
+
+      - name: Verify exact tool and target commits
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "${QUALIFICATION_TOOL_SHA}"
+          git cat-file -e "${TARGET_CANDIDATE_SHA}^{commit}"
+          mkdir -p target/live-s3-kit/qualification-tools/tools
+          {
+            echo "target_candidate_sha=${TARGET_CANDIDATE_SHA}"
+            echo "qualification_tool_sha=${QUALIFICATION_TOOL_SHA}"
+            echo "workflow_event_sha=${GITHUB_SHA}"
+            echo "runner_os=${RUNNER_OS}"
+            echo "runner_arch=${RUNNER_ARCH}"
+            python3 --version
+            uname -a
+            if command -v aws >/dev/null 2>&1; then
+              aws --version 2>&1
+            else
+              echo "aws_cli=not-installed-on-packaging-runner"
+            fi
+          } > target/live-s3-kit/package-environment.txt
+
+      - name: Run S3 qualification tooling self-tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m unittest \
+            tools.test_qualify_phase3_s3_versioned_source \
+            tools.test_run_phase3_s3_live_qualification
+
+      - name: Package exact candidate source and qualification tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          kit=target/live-s3-kit
+          git archive \
+            --format=tar.gz \
+            --prefix="ucof-${TARGET_CANDIDATE_SHA}/" \
+            "${TARGET_CANDIDATE_SHA}" \
+            > "${kit}/ucof-candidate-${TARGET_CANDIDATE_SHA}.tar.gz"
+          cp tools/__init__.py "${kit}/qualification-tools/tools/__init__.py"
+          cp tools/qualify_phase3_s3_versioned_source.py \
+            "${kit}/qualification-tools/tools/qualify_phase3_s3_versioned_source.py"
+          cp tools/run_phase3_s3_live_qualification.py \
+            "${kit}/qualification-tools/tools/run_phase3_s3_live_qualification.py"
+          cat > "${kit}/run-live-s3.sh" <<EOF
+          #!/usr/bin/env bash
+          set -euo pipefail
+          kit_dir="\$(cd "\$(dirname "\${BASH_SOURCE[0]}")" && pwd)"
+          cd "\${kit_dir}/qualification-tools"
+          exec python3 -m tools.run_phase3_s3_live_qualification \\
+            --candidate-git-sha "${TARGET_CANDIDATE_SHA}" \\
+            --qualification-tool-git-sha "${QUALIFICATION_TOOL_SHA}" \\
+            "\$@"
+          EOF
+          chmod 755 "${kit}/run-live-s3.sh"
+
+      - name: Write operator boundary and kit manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          kit=target/live-s3-kit
+          cat > "${kit}/QUALIFICATION.md" <<EOF
+          # Phase 3 live S3 qualification handoff
+
+          Target UCOF candidate: \`${TARGET_CANDIDATE_SHA}\`
+
+          Qualification-tool source: \`${QUALIFICATION_TOOL_SHA}\`
+
+          This kit contains **no credentials and no live-provider result**. Configure the AWS CLI externally using the intended account/role/profile and run only against an explicitly approved versioned qualification bucket.
+
+          Full write qualification example:
+
+          \`./run-live-s3.sh --bucket YOUR_VERSIONED_BUCKET --region YOUR_REGION --profile YOUR_PROFILE --allow-write --output "\$PWD/live-s3-bundle.json"\`
+
+          Omit \`--profile\` when environment/role credentials are intentionally used. The bundle records only whether a profile was named; it recursively redacts the supplied profile string and common AWS credential environment values from the nested provider report. Raw harness stdout/stderr are not persisted in the bundle.
+
+          The inner provider harness still owns VersionId semantics and exact-key cleanup. The outer bundle binds the evidence to the target/tool SHAs and hashes the original inner provider report before redaction.
+
+          Before treating a successful bundle as live AWS evidence, reviewers must independently confirm that the run actually targeted the intended AWS S3 endpoint/account/role and record any proxy, custom CA, VPC endpoint, credential-refresh, or network-path conditions. The wrapper explicitly does not prove endpoint authenticity from the SHA fields alone.
+
+          This qualification does not by itself establish an exhaustive IAM matrix, STS refresh lifecycle, TLS/proxy policy, provider-scale limits, network-fault behavior, or production acceptance.
+          EOF
+          python3 - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          kit = Path("target/live-s3-kit")
+          manifest = {
+              "schema": "ucof-phase3-live-s3-qualification-kit-v1",
+              "target_candidate_sha": os.environ["TARGET_CANDIDATE_SHA"],
+              "qualification_tool_sha": os.environ["QUALIFICATION_TOOL_SHA"],
+              "provider_report_schema": "ucof-phase3-s3-versioned-source-qualification-v1",
+              "bundle_schema": "ucof-phase3-s3-live-qualification-bundle-v1",
+              "contains_credentials": False,
+              "contains_live_provider_results": False,
+              "requires_external_provider_execution": True,
+              "requires_explicit_write_authorization_for_full_qualification": True,
+          }
+          (kit / "kit-manifest.json").write_text(
+              json.dumps(manifest, indent=2, sort_keys=True) + "\n"
+          )
+          PY
+
+      - name: Verify handoff contains no result placeholder
+        shell: bash
+        run: |
+          set -euo pipefail
+          kit=target/live-s3-kit
+          test ! -e "${kit}/live-s3-bundle.json"
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          kit = Path("target/live-s3-kit")
+          manifest = json.loads((kit / "kit-manifest.json").read_text())
+          if manifest.get("contains_credentials") is not False:
+              raise SystemExit("live S3 kit unexpectedly claims credential content")
+          if manifest.get("contains_live_provider_results") is not False:
+              raise SystemExit("live S3 kit unexpectedly contains provider results")
+          if manifest.get("requires_external_provider_execution") is not True:
+              raise SystemExit("live S3 kit lost external-execution boundary")
+          launcher = (kit / "run-live-s3.sh").read_text()
+          if manifest["target_candidate_sha"] not in launcher:
+              raise SystemExit("launcher is not bound to target candidate")
+          if manifest["qualification_tool_sha"] not in launcher:
+              raise SystemExit("launcher is not bound to qualification-tool source")
+          PY
+
+      - name: Write and verify kit hashes
+        shell: bash
+        run: |
+          set -euo pipefail
+          (
+            cd target/live-s3-kit
+            find . -type f ! -name SHA256SUMS -print0 \
+              | sort -z \
+              | xargs -0 sha256sum \
+              > SHA256SUMS
+            sha256sum -c SHA256SUMS
+          )
+
+      - name: Upload live S3 qualification handoff
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase3-live-s3-kit-${{ env.TARGET_CANDIDATE_SHA }}-tools-${{ env.QUALIFICATION_TOOL_SHA }}
+          path: target/live-s3-kit
+          if-no-files-found: error
+          retention-days: 30
