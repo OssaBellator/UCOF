@@ -63,8 +63,7 @@ fn legacy_commit_rejects_exact_generation_capacity_before_creating_next_record()
             5,
             JournalCommitCut::Complete,
         )
-        .err()
-        .expect("exact generation capacity must reject before create");
+        .expect_err("exact generation capacity must reject before create");
     assert_eq!(
         error,
         LinuxNonceJournalError::Limit("journal generation capacity")
@@ -102,8 +101,7 @@ fn legacy_commit_rejects_exact_journal_byte_capacity_before_creating_next_record
             5,
             JournalCommitCut::Complete,
         )
-        .err()
-        .expect("exact journal byte capacity must reject before create");
+        .expect_err("exact journal byte capacity must reject before create");
     assert_eq!(error, LinuxNonceJournalError::Limit("journal byte capacity"));
     assert_eq!(authority.durable.generation, 1);
     assert!(!directory.0.join(linux_nonce_journal_name(2)).exists());
@@ -141,8 +139,7 @@ fn legacy_commit_rejects_exact_directory_capacity_before_creating_next_record() 
             5,
             JournalCommitCut::Complete,
         )
-        .err()
-        .expect("exact directory capacity must reject before create");
+        .expect_err("exact directory capacity must reject before create");
     assert_eq!(
         error,
         LinuxNonceJournalError::Limit("directory entry capacity")
@@ -191,8 +188,7 @@ fn compaction_restores_ordinary_generation_capacity_for_future_commit() {
             5,
             JournalCommitCut::Complete,
         )
-        .err()
-        .expect("compacted path must honor ordinary generation capacity");
+        .expect_err("compacted path must honor ordinary generation capacity");
     assert!(error.contains("journal generation capacity"));
     assert!(!directory.0.join(linux_nonce_journal_name(2)).exists());
 
@@ -246,8 +242,7 @@ fn compaction_restores_ordinary_byte_capacity_for_future_commit() {
             5,
             JournalCommitCut::Complete,
         )
-        .err()
-        .expect("compacted path must honor ordinary journal byte capacity");
+        .expect_err("compacted path must honor ordinary journal byte capacity");
     assert!(error.contains("journal byte capacity"));
     assert!(!directory.0.join(linux_nonce_journal_name(2)).exists());
 
