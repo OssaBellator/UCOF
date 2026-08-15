@@ -37,6 +37,13 @@ class KeyMaterialQualificationTests(unittest.TestCase):
             self.assertTrue(report["ok"])
             self.assertFalse(report["secret_material_reported"])
             self.assertEqual([entry["bytes"] for entry in report["keys"]], [32, 32])
+            self.assertTrue(report["claims"]["parent_directory_effective_uid_owned"])
+            self.assertTrue(
+                report["claims"]["parent_directory_not_group_or_world_writable"]
+            )
+            self.assertFalse(
+                report["non_claims"]["ancestor_path_pinning_qualified"]
+            )
             self.assertNotIn("11" * 32, str(report))
             self.assertNotIn("22" * 32, str(report))
 
@@ -60,6 +67,23 @@ class KeyMaterialQualificationTests(unittest.TestCase):
             write_key(hmac, 0x22)
             with self.assertRaisesRegex(keyq.KeyMaterialError, "group/world"):
                 keyq.qualify(aes, hmac)
+
+    def test_group_or_world_writable_parent_fails(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ucof-key-preflight-") as directory:
+            root = Path(directory)
+            aes = root / "aes.key"
+            hmac = root / "hmac.key"
+            write_key(aes, 0x11)
+            write_key(hmac, 0x22)
+            os.chmod(root, 0o770)
+            try:
+                with self.assertRaisesRegex(
+                    keyq.KeyMaterialError,
+                    "parent directory must not be group/world writable",
+                ):
+                    keyq.qualify(aes, hmac)
+            finally:
+                os.chmod(root, 0o700)
 
     def test_same_secret_bytes_fail_even_in_distinct_files(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ucof-key-preflight-") as directory:
