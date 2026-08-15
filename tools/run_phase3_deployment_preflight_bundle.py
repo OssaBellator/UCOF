@@ -91,12 +91,19 @@ def validate_successful_inner_report(report: dict) -> None:
 def redaction_values(paths: tuple[Path, ...]) -> tuple[str, ...]:
     values: set[str] = set()
     for path in paths:
-        values.add(str(path))
+        candidates = [path]
         try:
-            values.add(str(path.resolve()))
+            candidates.append(path.resolve())
         except OSError:
             pass
-    return tuple(sorted((value for value in values if value), key=len, reverse=True))
+        for candidate in candidates:
+            anchor = Path(candidate.anchor) if candidate.anchor else Path(".")
+            if candidate == anchor:
+                continue
+            text = str(candidate)
+            if text:
+                values.add(text)
+    return tuple(sorted(values, key=len, reverse=True))
 
 
 def redact_paths(value: object, paths: tuple[str, ...]) -> object:
@@ -195,7 +202,15 @@ def main() -> int:
     returncode: int | None = None
     stdout_bytes = 0
     stderr_bytes = 0
-    paths = redaction_values((args.filesystem_path, args.aes_key, args.hmac_key))
+    paths = redaction_values(
+        (
+            args.filesystem_path,
+            args.aes_key,
+            args.hmac_key,
+            args.aes_key.resolve().parent,
+            args.hmac_key.resolve().parent,
+        )
+    )
 
     with tempfile.TemporaryDirectory(prefix="ucof-phase3-deployment-bundle-") as directory:
         inner_output = Path(directory) / "deployment-preflight.json"
