@@ -123,7 +123,6 @@ fn legacy_commit_rejects_exact_directory_capacity_before_creating_next_record() 
         "nonce-journal-directory-capacity",
         &key,
         prefix,
-        [0x5a; 32],
         LinuxNonceJournalLimits {
             max_directory_entries: 1,
             max_generations: 8,
