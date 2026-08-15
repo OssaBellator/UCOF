@@ -180,6 +180,7 @@ fn persist_restart_source_set_authority(
     };
     let sealed = seal_restart_source_set_authority(journal, record)?;
     let name = restart_source_set_authority_name(record.generation, record.role);
+    require_linux_nonce_journal_metadata_slots(journal, 1, "restart source-set authority")?;
     let path = linux_nonce_procfd_child(&journal.directory, &name).map_err(|error| error.to_string())?;
     let mut file = std::fs::OpenOptions::new()
         .write(true)
