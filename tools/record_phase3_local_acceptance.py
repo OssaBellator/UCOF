@@ -24,6 +24,8 @@ DEFAULT_REPORT = ROOT / "target" / "phase3-local-verification.json"
 EVIDENCE_DIR = ROOT / "docs" / "verification"
 REQUIRED_CHECKS = {
     "Pinned clean acceptance candidate",
+    "Experiment 0179 checkpoint history consistency",
+    "Experiment 0179 directory headroom",
     "Experiment 0179 prune order",
     "Experiment 0179 wiring",
     "Independent restart-metadata compaction model",
