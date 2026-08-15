@@ -15,16 +15,24 @@ jobs:
   qualify:
     runs-on: ubuntu-24.04
     timeout-minutes: 10
+    env:
+      QUALIFICATION_SOURCE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.QUALIFICATION_SOURCE_SHA }}
 
       - name: Record qualification environment
         shell: bash
         run: |
           set -euo pipefail
+          checkout_sha="$(git rev-parse HEAD)"
+          test "${checkout_sha}" = "${QUALIFICATION_SOURCE_SHA}"
           mkdir -p target
           {
-            echo "commit=${GITHUB_SHA}"
+            echo "qualification_source_sha=${QUALIFICATION_SOURCE_SHA}"
+            echo "checkout_sha=${checkout_sha}"
+            echo "workflow_event_sha=${GITHUB_SHA}"
             echo "runner_os=${RUNNER_OS}"
             echo "runner_arch=${RUNNER_ARCH}"
             python3 --version
@@ -50,7 +58,15 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import json
+          import os
           from pathlib import Path
+
+          source_sha = os.environ["QUALIFICATION_SOURCE_SHA"]
+          environment = Path("target/phase3-process-crash-environment.txt").read_text()
+          if f"qualification_source_sha={source_sha}\n" not in environment:
+              raise SystemExit("qualification environment is not bound to exact source SHA")
+          if f"checkout_sha={source_sha}\n" not in environment:
+              raise SystemExit("qualification checkout does not match exact source SHA")
 
           path = Path("target/phase3-process-crash-cuts.json")
           report = json.loads(path.read_text())
@@ -85,13 +101,13 @@ jobs:
           for name in required_false:
               if non_claims.get(name) is not False:
                   raise SystemExit(f"process-crash non-claim changed: {name}")
-          print(f"validated {len(cases)} fresh-process crash cuts")
+          print(f"validated {len(cases)} fresh-process crash cuts for {source_sha}")
           PY
 
       - name: Upload process-crash qualification evidence
         uses: actions/upload-artifact@v4
         with:
-          name: phase3-process-crash-cuts-${{ github.sha }}
+          name: phase3-process-crash-cuts-${{ env.QUALIFICATION_SOURCE_SHA }}
           path: |
             target/phase3-process-crash-cuts.json
             target/phase3-process-crash-environment.txt
