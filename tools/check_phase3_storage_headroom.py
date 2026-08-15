@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Observe Phase 3 byte/inode headroom without claiming reservation.
 
-The lifecycle planners compute required private bytes deterministically. This
-helper compares a supplied requirement with the filesystem's current statvfs
-observations plus caller-selected safety margins. A PASS is only a point-in-
-time admission observation: unrelated writers can consume the space/inodes
-immediately afterward.
+The lifecycle planners compute required private bytes and additional inodes
+deterministically. This helper compares supplied requirements with the
+filesystem's current statvfs observations plus caller-selected safety margins.
+A PASS is only a point-in-time admission observation: unrelated writers can
+consume the space/inodes immediately afterward.
 """
 
 from __future__ import annotations
@@ -114,7 +114,8 @@ def main() -> int:
         "notes": [
             "statvfs values are point-in-time observations, not reservations.",
             "Unrelated writers may consume bytes or inodes after this check.",
-            "Use the deterministic lifecycle planner output as required_bytes rather than estimating here.",
+            "Use the deterministic byte lifecycle planner output as required_bytes rather than estimating here.",
+            "Use tools/plan_phase3_private_inodes.py or the deployment bundle's derived value as required_inodes rather than guessing it.",
         ],
     }
     encoded = json.dumps(report, indent=2, sort_keys=True) + "\n"
