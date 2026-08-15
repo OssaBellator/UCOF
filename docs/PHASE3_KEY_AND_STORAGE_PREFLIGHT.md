@@ -24,7 +24,7 @@ Self-test the checker with:
 python3 tools/test_qualify_phase3_key_material.py
 ```
 
-The checker opens each file read-only with close-on-exec and no-follow semantics where the platform provides them, then validates the opened descriptor rather than trusting only pathname metadata.
+The checker opens each key read-only with close-on-exec and no-follow semantics where the platform provides them, then validates the opened descriptor rather than trusting only pathname metadata. It also validates the resolved immediate parent directory because a private file inside a writable parent is not a meaningful pathname-hygiene boundary.
 
 It requires:
 
@@ -33,11 +33,14 @@ It requires:
 - effective-UID ownership;
 - exactly one hard link;
 - owner-read permission;
-- no group/world permission bits;
+- no group/world permission bits on the key file;
+- an immediate parent directory owned by the effective UID;
+- owner-execute permission on that parent;
+- no group/world write bits on that parent;
 - distinct AES and HMAC inodes;
 - distinct AES and HMAC secret bytes.
 
-The JSON report contains only metadata such as path, mode, uid/gid, device/inode, link count, width, and parent-directory metadata. It deliberately does **not** print key bytes, hashes, fingerprints, derived key IDs, or any other reusable secret-derived value.
+The JSON report contains only metadata such as path, mode, uid/gid, device/inode, link count, width, and immediate parent-directory metadata. It deliberately does **not** print key bytes, hashes, fingerprints, derived key IDs, or any other reusable secret-derived value.
 
 ### Key preflight non-claims
 
@@ -50,9 +53,10 @@ A PASS does not establish:
 - zeroization after use;
 - backup/recovery policy;
 - anti-rollback or freshness anchoring;
-- multi-process key distribution safety.
+- multi-process key distribution safety;
+- descriptor-pinned validation of every ancestor component of the supplied pathname.
 
-Those remain production design/qualification work under issue #11.
+The immediate-parent check closes the obvious writable-parent replacement hole in the local file preflight; it is **not** a general proof against ancestor-path replacement or privileged/same-UID interference after preflight. Those remain production design/qualification work under issue #11.
 
 ## Storage headroom observation
 
@@ -108,5 +112,7 @@ Before treating a deployment environment as a serious Phase 3 candidate, retain 
 4. key-material preflight report for the actual local key files if file-backed secrets are used;
 5. storage headroom observation using the exact lifecycle planner requirement;
 6. separate destructive/power-loss evidence before making physical-durability claims.
+
+`tools/verify_phase3_deployment_preflight.py` can collect the filesystem, key and storage observations into one deployment-adjacent report. That bundle is still only as strong as the individual reports and their explicit non-claims.
 
 No combination of these local preflights selects EXP-0003 wire decisions or turns the current research mechanism into a stable compatibility contract.
