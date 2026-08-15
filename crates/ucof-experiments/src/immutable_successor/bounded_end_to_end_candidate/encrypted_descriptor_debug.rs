@@ -11,6 +11,14 @@ impl std::fmt::Debug for DescriptorEncryptionSession {
     }
 }
 
+impl Drop for DescriptorEncryptionSession {
+    fn drop(&mut self) {
+        // Best-effort overwrite only; this is not a formal compiler-resistant
+        // zeroization guarantee or a production key-lifecycle claim.
+        self.key.fill(0);
+    }
+}
+
 #[test]
 fn descriptor_encryption_session_debug_redacts_key_material() {
     let mut authority = DescriptorNonceAuthority::initial();
