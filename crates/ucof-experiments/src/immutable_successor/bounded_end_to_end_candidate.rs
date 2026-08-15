@@ -64,6 +64,7 @@ mod bounded_end_to_end_candidate_tests {
         include!("bounded_end_to_end_candidate/restart_metadata_compaction_retry_tests.rs");
         include!("bounded_end_to_end_candidate/restart_metadata_compaction_graph_tests.rs");
         include!("bounded_end_to_end_candidate/restart_metadata_compaction_checkpoint_consistency_tests.rs");
+        include!("bounded_end_to_end_candidate/restart_metadata_compaction_stale_headroom_tests.rs");
         include!("bounded_end_to_end_candidate/restart_metadata_compaction_property_tests.rs");
         include!("bounded_end_to_end_candidate/restart_metadata_compaction_accounting_tests.rs");
         include!("bounded_end_to_end_candidate/compacted_restart_retry_tests.rs");
