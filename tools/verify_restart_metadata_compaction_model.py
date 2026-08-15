@@ -116,7 +116,9 @@ class State:
         entries = self.persistent_entries()
         if entries > self.max_directory_entries + 1:
             raise ModelError("directory entry limit")
-        if entries > self.max_directory_entries and not self.checkpoints:
+        if entries > self.max_directory_entries and (
+            not self.checkpoints or self.unrelated_entries
+        ):
             raise ModelError("directory entry limit")
 
     @staticmethod
@@ -637,6 +639,14 @@ def test_directory_checkpoint_headroom() -> None:
     unrelated.commit(7)
     unrelated.unrelated_entries = 1
     expect_error("directory entry limit", unrelated.scan)
+
+    checkpoint_plus_unknown = State(max_directory_entries=2)
+    checkpoint_plus_unknown.commit(5)
+    checkpoint_plus_unknown.commit(7)
+    checkpoint_plus_unknown.compact()
+    checkpoint_plus_unknown.max_directory_entries = 1
+    checkpoint_plus_unknown.unrelated_entries = 1
+    expect_error("directory entry limit", checkpoint_plus_unknown.scan)
 
 
 def test_trusted_floor_boundary() -> None:
