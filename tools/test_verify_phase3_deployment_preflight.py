@@ -46,13 +46,17 @@ def valid_key_report() -> dict:
     }
 
 
-def valid_storage_report() -> dict:
+def valid_storage_report(required_inodes: int = 7) -> dict:
     return {
         "schema": preflight.STORAGE_SCHEMA,
         "ok": True,
         "reserved": False,
         "race_free": False,
-        "observation": {"bytes_ok": True, "inodes_ok": True},
+        "observation": {
+            "bytes_ok": True,
+            "inodes_ok": True,
+            "required_inodes": required_inodes,
+        },
     }
 
 
@@ -117,6 +121,33 @@ class DeploymentPreflightEvidenceTests(unittest.TestCase):
             preflight.DeploymentPreflightError, "byte/inode headroom"
         ):
             preflight.validate_storage_report(report)
+
+    def test_inode_requirement_is_derived_from_spill_run_limit(self) -> None:
+        plan, effective = preflight.resolve_inode_requirement(1, 0)
+        self.assertEqual(plan.required_additional_inodes, 7)
+        self.assertEqual(effective, 7)
+
+        plan, effective = preflight.resolve_inode_requirement(10, 0)
+        self.assertEqual(plan.required_additional_inodes, 13)
+        self.assertEqual(effective, 13)
+
+    def test_operator_inode_floor_can_only_raise_requirement(self) -> None:
+        plan, effective = preflight.resolve_inode_requirement(2, 20)
+        self.assertEqual(plan.required_additional_inodes, 7)
+        self.assertEqual(effective, 20)
+
+        _, effective = preflight.resolve_inode_requirement(10, 2)
+        self.assertEqual(effective, 13)
+
+    def test_invalid_inode_planner_inputs_fail_closed(self) -> None:
+        with self.assertRaisesRegex(
+            preflight.DeploymentPreflightError, "max initial runs must be positive"
+        ):
+            preflight.resolve_inode_requirement(0, 0)
+        with self.assertRaisesRegex(
+            preflight.DeploymentPreflightError, "required inodes must be nonnegative"
+        ):
+            preflight.resolve_inode_requirement(1, -1)
 
 
 if __name__ == "__main__":
