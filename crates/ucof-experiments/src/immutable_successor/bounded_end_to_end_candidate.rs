@@ -63,6 +63,7 @@ mod bounded_end_to_end_candidate_tests {
         include!("bounded_end_to_end_candidate/encrypted_tree_restart_continuation_tests.rs");
         include!("bounded_end_to_end_candidate/encrypted_tree_restart_publication_tests.rs");
         include!("bounded_end_to_end_candidate/restart_source_set_authority_tests.rs");
+        include!("bounded_end_to_end_candidate/source_bound_retirement_fixture.rs");
         include!("bounded_end_to_end_candidate/source_bound_lifecycle_quota_tests.rs");
         include!("bounded_end_to_end_candidate/restart_metadata_compaction_tests.rs");
         include!("bounded_end_to_end_candidate/restart_metadata_compaction_retry_tests.rs");
