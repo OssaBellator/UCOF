@@ -173,7 +173,10 @@ fn unrelated_extra_directory_entry_does_not_receive_checkpoint_headroom() {
     assert!(error.contains("compacted nonce directory entry limit"));
     let inventory_error = scan_compacted_persistent_inventory(&journal)
         .expect_err("quota inventory must reject unrelated extra entry too");
-    assert!(inventory_error.contains("compacted inventory directory entry limit"));
+    assert!(
+        inventory_error.contains("compacted inventory directory entry limit")
+            || inventory_error.contains("compacted inventory unrecognized entry")
+    );
     assert!(!directory.0.join(nonce_compaction_name(2)).exists());
 }
 
@@ -290,7 +293,10 @@ fn checkpoint_does_not_lend_transient_headroom_to_unknown_entry() {
     assert!(error.contains("compacted nonce directory entry limit"));
     let inventory_error = scan_compacted_persistent_inventory(&constrained)
         .expect_err("quota inventory must reject unknown content beside checkpoint too");
-    assert!(inventory_error.contains("compacted inventory directory entry limit"));
+    assert!(
+        inventory_error.contains("compacted inventory directory entry limit")
+            || inventory_error.contains("compacted inventory unrecognized entry")
+    );
     assert!(directory.0.join(nonce_compaction_name(2)).exists());
 }
 
@@ -342,4 +348,27 @@ fn compacted_inventory_rejects_authenticated_foreign_stage_manifest_context() {
         .expect_err("authenticated foreign stage manifest must fail quota inventory");
     assert!(error.contains("compacted inventory stage manifest context"));
     assert!(!journal_directory.0.join(nonce_compaction_name(1)).exists());
+}
+
+#[test]
+fn compacted_inventory_rejects_unrecognized_entry_even_below_directory_limit() {
+    let (directory, key, prefix) =
+        nonce_compaction_fixture("compacted-inventory-unrecognized-below-cap", &[5]);
+    let journal = open_journal(&directory.0, &key, prefix);
+    std::fs::write(directory.0.join("unrecognized-private-metadata"), vec![0x5a; 4096])
+        .expect("create unrecognized private metadata file");
+    assert!(directory_entry_count(&directory.0) < journal.limits.max_directory_entries);
+
+    let recovery = CompactedNonceJournal::new(&journal)
+        .scan(None)
+        .expect("lightweight recovery remains tolerant of bounded unrelated entry");
+    assert_eq!(recovery.durable.generation, 1);
+
+    let error = scan_compacted_persistent_inventory(&journal)
+        .expect_err("quota inventory must not ignore unrecognized bytes below entry cap");
+    assert!(error.contains("compacted inventory unrecognized entry"));
+    let plan_error = compaction_storage_plan(&journal)
+        .expect_err("standalone compaction quota plan must reject unaccounted bytes too");
+    assert!(plan_error.contains("compacted inventory unrecognized entry"));
+    assert!(!directory.0.join(nonce_compaction_name(1)).exists());
 }
