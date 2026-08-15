@@ -344,7 +344,7 @@ impl<'a> CompactedNonceJournal<'a> {
         let checkpoint_generation = checkpoint.map(|checkpoint| checkpoint.generation);
 
         records.sort_unstable_by_key(|record| record.generation);
-        if let Some(checkpoint) = checkpoint {
+        for checkpoint in checkpoints.iter().copied() {
             for record in records
                 .iter()
                 .filter(|record| record.generation <= checkpoint.generation)
