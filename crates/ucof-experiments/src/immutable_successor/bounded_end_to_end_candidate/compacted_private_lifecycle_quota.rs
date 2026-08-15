@@ -92,7 +92,14 @@ fn scan_compacted_persistent_inventory(
 
         if let Some((generation, role)) = parse_compaction_stage_manifest_name(&name) {
             let manifest = load_encrypted_stage_manifest(journal, generation, role)
-                .map_err(|error| error.to_string())?
+                .map_err(|error| match error {
+                    LinuxEncryptedStageRestartError::ForeignKey
+                    | LinuxEncryptedStageRestartError::ForeignNoncePrefix
+                    | LinuxEncryptedStageRestartError::ForeignGeneration => {
+                        "compacted inventory stage manifest context".to_owned()
+                    }
+                    _ => error.to_string(),
+                })?
                 .ok_or_else(|| "compacted inventory stage manifest disappeared".to_owned())?;
             if manifest.generation != generation
                 || manifest.role != role
