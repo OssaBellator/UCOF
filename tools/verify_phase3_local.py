@@ -348,6 +348,20 @@ def run_model(runner: Runner, campaigns: int, steps: int) -> None:
 
 def run_quick(runner: Runner) -> None:
     runner.run(
+        "Phase 3 Python tool self-tests",
+        [
+            sys.executable,
+            "-m",
+            "unittest",
+            "tools.test_verify_phase3_local",
+            "tools.test_record_phase3_local_acceptance",
+            "tools.test_check_phase3_storage_headroom",
+            "tools.test_phase3_preflight_tools",
+            "tools.test_qualify_phase3_filesystem",
+            "tools.test_qualify_phase3_key_material",
+        ],
+    )
+    runner.run(
         "Locked dependency graph",
         ["cargo", "metadata", "--locked", "--no-deps", "--format-version", "1"],
     )
