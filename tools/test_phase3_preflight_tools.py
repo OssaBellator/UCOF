@@ -9,9 +9,11 @@ import tempfile
 import unittest
 from unittest import mock
 
+from tools import apply_phase3_0179_directory_headroom_fix as headroom_patch
 from tools import check_phase3_storage_headroom as headroom
 from tools import qualify_phase3_filesystem as fsq
 from tools import qualify_phase3_key_material as keyq
+from tools import test_apply_phase3_0179_directory_headroom_fix as headroom_patch_tests
 from tools import test_restart_metadata_headroom_model as headroom_model_tests
 from tools import test_verify_phase3_deployment_preflight as deployment_tests
 from tools import test_verify_phase3_qualification_local as qualification_tests
@@ -34,11 +36,24 @@ def write_key(path: Path, byte: int, mode: int = 0o600) -> None:
 
 
 def load_tests(loader: unittest.TestLoader, tests: unittest.TestSuite, pattern: str | None):
-    """Include bundle/evidence/headroom validators in the acceptance module."""
+    """Include bundle/evidence/headroom/patch validators in the acceptance module."""
     tests.addTests(loader.loadTestsFromModule(deployment_tests))
     tests.addTests(loader.loadTestsFromModule(qualification_tests))
     tests.addTests(loader.loadTestsFromModule(headroom_model_tests))
+    tests.addTests(loader.loadTestsFromModule(headroom_patch_tests))
     return tests
+
+
+class Experiment0179SourceFixTests(unittest.TestCase):
+    def test_directory_headroom_source_fix_is_complete(self) -> None:
+        source = headroom_patch.DEFAULT_SOURCE
+        self.assertTrue(source.is_file(), f"missing 0179 source: {source}")
+        state = headroom_patch.inspect_source(source.read_text())
+        self.assertTrue(
+            state.complete,
+            "Experiment 0179 directory-headroom source fixes are still pending; "
+            "run tools/apply_phase3_0179_directory_headroom_fix.py --apply from a clean checkout",
+        )
 
 
 class FilesystemHarnessTests(unittest.TestCase):
