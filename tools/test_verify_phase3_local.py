@@ -69,6 +69,7 @@ def synthetic_wiring(root: Path) -> Path:
         "compacted_restart_classification.rs",
         "compacted_source_bound_restart.rs",
         "compacted_private_lifecycle_quota.rs",
+        "journal_metadata_authority_capacity_tests.rs",
         "journal_metadata_primitive_capacity_tests.rs",
         "restart_metadata_compaction_tests.rs",
         "restart_metadata_mutation_lock_tests.rs",
@@ -111,11 +112,16 @@ def synthetic_wiring(root: Path) -> Path:
     )
     (base / "restart_source_set_authority.rs").write_text(
         "acquire_restart_metadata_mutation_lock(journal)\n"
+        "require_linux_nonce_journal_metadata_slots(journal, 1, \"restart source-set authority\")\n"
     )
     (base / "encrypted_restart_retirement.rs").write_text(
         "acquire_restart_metadata_mutation_lock(journal)\n"
         "require_linux_nonce_journal_metadata_slots(journal, 1, \"encrypted retirement\")\n"
         "persist_encrypted_retirement_record(journal, &mutation, terminal)\n"
+    )
+    (base / "journal_metadata_authority_capacity_tests.rs").write_text(
+        "source_set_authority_respects_configured_journal_entry_capacity\n"
+        "one free journal entry permits source-set authority\n"
     )
     (base / "journal_metadata_primitive_capacity_tests.rs").write_text(
         "ordinary_stage_manifest_rejects_full_journal_before_durable_stage_creation\n"
