@@ -159,6 +159,16 @@ jobs:
       - name: Lint workspace
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - name: Lint HTTP feature
-        run: cargo clippy --locked -p ucof-experiments --all-targets --features http-reqwest -- -D warnings
+        shell: pwsh
+        run: |
+          $output = & cargo clippy --locked -p ucof-experiments --all-targets --features http-reqwest -- -D warnings 2>&1
+          $code = $LASTEXITCODE
+          $output | ForEach-Object { Write-Host $_ }
+          if ($code -ne 0) {
+            $tail = ($output | Select-Object -Last 80) -join "`n"
+            $escaped = $tail.Replace("%", "%25").Replace("`r", "%0D").Replace("`n", "%0A")
+            Write-Host "::error title=Windows HTTP Clippy::$escaped"
+            exit $code
+          }
       - name: Test workspace
         run: cargo test --locked --workspace --all-targets
