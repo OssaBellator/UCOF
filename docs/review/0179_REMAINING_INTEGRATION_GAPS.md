@@ -4,31 +4,23 @@ This note records unresolved integration boundaries discovered while auditing th
 
 Experiment 0179 remains **pending**. None of the items below may be silently inherited as a production guarantee from the deterministic mechanism tests.
 
-## 1. Post-checkpoint allocation must not fall back to the legacy journal view
+## 1. Post-checkpoint legacy allocation guard is executable
 
-`CompactedNonceJournal` is the authority-aware allocation/recovery path once a compaction checkpoint exists. The older `LinuxDurableNonceJournal` scanner intentionally understands only the original contiguous ordinary-generation journal.
+`CompactedNonceJournal` is the authority-aware allocation/recovery path once a compaction checkpoint exists. The older `LinuxDurableNonceJournal` scanner still intentionally understands only the original contiguous ordinary-generation journal, but its allocator now cross-checks that legacy view against `CompactedNonceJournal::scan` while holding the restart-metadata mutation lock and before reserving any nonce lease.
 
-That distinction is safe only if integration makes it impossible to choose the legacy allocator after ordinary history has been reclaimed. In particular, a checkpoint may summarize a durable generation/counter floor while the corresponding ordinary generation file has already been deleted. A legacy-only view can then observe less authority than the checkpointed state. A caller that allocates from that lower view could attempt to reuse a generation/counter range that compaction intentionally preserved only in the checkpoint.
+Legacy allocation is therefore permitted only while the two durable authority views agree. This preserves the immediate checkpoint crash window where the complete ordinary prefix still represents the checkpointed state, while failing closed once checkpoint-covered ordinary history has been reclaimed and only the authenticated checkpoint retains that authority. Regressions prove both cases and verify that the rejected path cannot recreate generation 1 after compaction.
 
-Before 0179 can be treated as an integration-ready mechanism, one of these must be made explicit and executable:
-
-- the legacy allocator fails closed whenever checkpointed state is not fully represented by the surviving contiguous ordinary journal; or
-- the production integration statically/structurally makes `CompactedNonceJournal` the only allocation entry point once compaction is enabled, with a regression proving no post-checkpoint path can reach the legacy allocator.
-
-Immediate checkpoint crash windows where the complete ordinary prefix is still present are different: the legacy journal can still reconstruct the same or stronger contiguous ordinary authority there. The unsafe class is fallback after checkpoint-covered ordinary history has been pruned.
+This closes the deterministic fallback item for the candidate. It does not make the legacy scanner itself checkpoint-aware, and it does not replace the remaining platform-qualification or production entry-point work below.
 
 ## 2. Unknown metadata during destructive compaction
 
 The lightweight compacted nonce recovery scan is deliberately tolerant of bounded unrelated directory entries. This lets nonce recovery ignore non-authoritative files while still enforcing the directory-entry work bound.
 
-Quota accounting is stricter: `scan_compacted_persistent_inventory` now rejects any unrecognized private metadata entry, even below the directory-count limit, because otherwise unknown bytes could disappear from private-storage arithmetic.
+Quota accounting is stricter: `scan_compacted_persistent_inventory` rejects any unrecognized private metadata entry, even below the directory-count limit, because otherwise unknown bytes could disappear from private-storage arithmetic.
 
-Destructive compaction is not yet equally strict for every below-cap unknown entry. An older compactor therefore needs an explicit schema/forward-compatibility contract before it can safely coexist with future authenticated metadata families. Production integration should choose one of two policies:
+The destructive compactor now selects the same fail-closed policy. `scan_compaction_metadata` rejects any unrecognized entry before checkpoint creation, and `compaction_nonce_prune_inventory` rechecks the condition before returning any deletion inventory. Regressions require both pre-checkpoint and pre-prune rejection while preserving the unknown file and all ordinary nonce records.
 
-- fail closed before checkpoint creation/pruning when the journal directory contains any unrecognized metadata family; or
-- define a versioned registry and retention rule proving unknown/newer metadata can never depend on history selected for deletion by the older compactor.
-
-Until that policy exists, unknown future metadata plus destructive compaction is an open compatibility boundary.
+The production compactor also holds the shared mutation lock described below, so cooperating writers cannot insert restart metadata between classification and pruning. The lightweight `CompactedNonceJournal` recovery scan remains tolerant because it does not delete unrelated entries. Protocol-ignoring same-UID mutation remains an explicit deployment boundary rather than a deterministic compaction guarantee.
 
 ## 3. Restart-metadata mutation serialization is executable
 

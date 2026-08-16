@@ -95,6 +95,8 @@ def synthetic_wiring(root: Path) -> Path:
     )
     (base / "linux_durable_nonce_journal.rs").write_text(
         "acquire_restart_metadata_mutation_lock(self)\n"
+        "CompactedNonceJournal::new(self)\n"
+        "LinuxNonceJournalError::CompactedAuthority\n"
         "persist_record(&mutation, record, cut)\n"
     )
     (base / "linux_encrypted_stage_restart.rs").write_text(
@@ -111,6 +113,12 @@ def synthetic_wiring(root: Path) -> Path:
         "mutation_lock_blocks_compaction_and_nonce_commit_until_release\n"
         "LinuxNonceJournalError::MutationLockBusy\n"
     )
+    (base / "restart_metadata_compaction_tests.rs").write_text(
+        "legacy_allocator_accepts_checkpoint_when_ordinary_history_still_matches\n"
+        "legacy_allocator_rejects_checkpoint_only_authority_after_prune\n"
+        "destructive_compaction_rejects_unrecognized_metadata_before_checkpoint_creation\n"
+        "prune_inventory_rejects_unrecognized_metadata_before_deletion\n"
+    )
 
     (base / "restart_metadata_compaction.rs").write_text(
         "\n".join(
@@ -126,6 +134,8 @@ def synthetic_wiring(root: Path) -> Path:
                 "validate_compacted_directory_entry_count",
                 "ensure_compacted_nonce_commit_directory_headroom",
                 "saw_unrecognized_entry",
+                'return Err("compaction metadata unrecognized entry".into());',
+                'return Err("compaction prune unrecognized entry".into());',
                 "AfterSourceSetPruneBeforeRetirementPrune",
                 "AfterPreparedRetirementPruneBeforeTerminalPrune",
                 "fn compact_restart_metadata(",
@@ -248,6 +258,8 @@ class LocalPhase3VerifierGuardrailTests(unittest.TestCase):
             self.assertEqual(
                 [name for name, _ in runner.static],
                 [
+                    "Experiment 0179 legacy allocation guard",
+                    "Experiment 0179 unknown metadata fail-closed",
                     "Experiment 0179 mutation serialization",
                     "Experiment 0179 checkpoint history consistency",
                     "Experiment 0179 directory headroom",
@@ -298,7 +310,7 @@ class LocalPhase3VerifierGuardrailTests(unittest.TestCase):
                 parent.parent
                 / "bounded_end_to_end_candidate/restart_metadata_compaction_tests.rs"
             )
-            stale.write_text("let _ = fixture.publication;\n")
+            stale.write_text(stale.read_text() + "let _ = fixture.publication;\n")
             with mock.patch.object(verify, "ROOT", root):
                 with self.assertRaisesRegex(
                     verify.VerificationFailure, "stale 0179 API"

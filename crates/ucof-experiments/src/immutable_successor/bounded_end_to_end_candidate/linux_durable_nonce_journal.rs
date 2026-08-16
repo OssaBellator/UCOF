@@ -69,6 +69,7 @@ enum LinuxNonceJournalError {
     LeaseRange,
     Rollback,
     MutationLockBusy,
+    CompactedAuthority,
     StaleAuthority,
     Limit(&'static str),
     InjectedCut(JournalCommitCut),
@@ -89,6 +90,10 @@ impl std::fmt::Display for LinuxNonceJournalError {
             Self::LeaseRange => write!(formatter, "nonce journal lease range mismatch"),
             Self::Rollback => write!(formatter, "nonce journal is below trusted freshness floor"),
             Self::MutationLockBusy => write!(formatter, "restart metadata mutation lock is busy"),
+            Self::CompactedAuthority => write!(
+                formatter,
+                "compacted nonce authority is not represented by legacy journal history"
+            ),
             Self::StaleAuthority => write!(formatter, "nonce authority is stale"),
             Self::Limit(label) => write!(formatter, "nonce journal limit exceeded: {label}"),
             Self::InjectedCut(cut) => write!(formatter, "injected nonce journal cut: {cut:?}"),
@@ -375,6 +380,13 @@ impl LinuxDurableNonceJournal {
         }
         let mutation = acquire_restart_metadata_mutation_lock(self)?;
         let observed = self.scan(None)?.durable;
+        let compacted_observed = CompactedNonceJournal::new(self)
+            .scan(None)
+            .map_err(|_| LinuxNonceJournalError::CompactedAuthority)?
+            .durable;
+        if compacted_observed != observed {
+            return Err(LinuxNonceJournalError::CompactedAuthority);
+        }
         if observed != authority.durable {
             return Err(LinuxNonceJournalError::StaleAuthority);
         }

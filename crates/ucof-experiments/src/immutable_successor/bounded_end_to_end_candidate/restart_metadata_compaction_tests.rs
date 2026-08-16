@@ -90,6 +90,111 @@ fn nonce_checkpoint_replaces_prefix_and_future_generation_remains_monotonic() {
 }
 
 #[test]
+fn legacy_allocator_accepts_checkpoint_when_ordinary_history_still_matches() {
+    let (directory, key, prefix) =
+        nonce_compaction_fixture("legacy-checkpoint-full-prefix", &[5, 7]);
+    let journal = open_journal(&directory.0, &key, prefix);
+    let report = compact_restart_metadata(
+        &journal,
+        None,
+        RestartMetadataCompactionCut::AfterCheckpointDirectorySyncBeforePrune,
+    )
+    .expect("checkpoint without pruning ordinary prefix");
+    assert_eq!(report.pruned_nonce_records, 0);
+
+    let mut authority = journal
+        .recover_authority(None)
+        .expect("legacy authority while ordinary prefix remains");
+    assert_eq!(authority.durable.generation, 2);
+    let session = journal
+        .commit_descriptor_session(
+            &mut authority,
+            key,
+            [0x45; 16],
+            3,
+            JournalCommitCut::Complete,
+        )
+        .expect("legacy allocation remains safe while views agree");
+    assert_eq!(session.journal_generation, 3);
+    assert_eq!(session.lease.first, 12);
+    assert_eq!(session.lease.last, 14);
+}
+
+#[test]
+fn legacy_allocator_rejects_checkpoint_only_authority_after_prune() {
+    let (directory, key, prefix) =
+        nonce_compaction_fixture("legacy-checkpoint-pruned-prefix", &[5, 7]);
+    let journal = open_journal(&directory.0, &key, prefix);
+    compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect("prune ordinary history behind checkpoint");
+    assert!(!directory.0.join(linux_nonce_journal_name(1)).exists());
+    assert!(!directory.0.join(linux_nonce_journal_name(2)).exists());
+    assert!(directory.0.join(nonce_compaction_name(2)).exists());
+
+    let mut legacy_authority = journal
+        .recover_authority(None)
+        .expect("legacy view after checkpoint-only compaction");
+    assert_eq!(legacy_authority.durable, DurableNonceState::initial());
+    let error = journal
+        .commit_descriptor_session(
+            &mut legacy_authority,
+            key,
+            [0x46; 16],
+            3,
+            JournalCommitCut::Complete,
+        )
+        .expect_err("legacy allocator must not reuse checkpointed authority");
+    assert_eq!(error, LinuxNonceJournalError::CompactedAuthority);
+    assert!(!directory.0.join(linux_nonce_journal_name(1)).exists());
+    assert!(directory.0.join(nonce_compaction_name(2)).exists());
+}
+
+#[test]
+fn destructive_compaction_rejects_unrecognized_metadata_before_checkpoint_creation() {
+    let (directory, key, prefix) =
+        nonce_compaction_fixture("compaction-unrecognized-before-checkpoint", &[5, 7]);
+    let journal = open_journal(&directory.0, &key, prefix);
+    let unknown = directory.0.join("future-private-metadata-v2");
+    std::fs::write(&unknown, [0x5au8; 32]).expect("write unrecognized metadata");
+
+    let error = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
+        .expect_err("destructive compaction must reject unrecognized metadata");
+    assert!(error.contains("compaction metadata unrecognized entry"));
+    assert!(unknown.exists());
+    assert!(directory.0.join(linux_nonce_journal_name(1)).exists());
+    assert!(directory.0.join(linux_nonce_journal_name(2)).exists());
+    assert!(!directory.0.join(nonce_compaction_name(2)).exists());
+}
+
+#[test]
+fn prune_inventory_rejects_unrecognized_metadata_before_deletion() {
+    let (directory, key, prefix) =
+        nonce_compaction_fixture("compaction-unrecognized-before-prune", &[5, 7]);
+    let journal = open_journal(&directory.0, &key, prefix);
+    let report = compact_restart_metadata(
+        &journal,
+        None,
+        RestartMetadataCompactionCut::AfterCheckpointDirectorySyncBeforePrune,
+    )
+    .expect("persist checkpoint without pruning");
+    assert_eq!(report.checkpoint_generation, 2);
+    let unknown = directory.0.join("future-private-metadata-v2");
+    std::fs::write(&unknown, [0x6bu8; 32]).expect("write unrecognized metadata after checkpoint");
+
+    let error = compaction_nonce_prune_inventory(
+        &journal,
+        2,
+        &std::collections::BTreeSet::new(),
+    )
+    .expect_err("prune inventory must reject unrecognized metadata");
+    assert!(error.contains("compaction prune unrecognized entry"));
+    assert!(unknown.exists());
+    assert!(directory.0.join(linux_nonce_journal_name(1)).exists());
+    assert!(directory.0.join(linux_nonce_journal_name(2)).exists());
+    assert!(directory.0.join(nonce_compaction_name(2)).exists());
+}
+
+#[test]
 fn compaction_cuts_never_delete_nonce_prefix_before_checkpoint_authority() {
     let (file_cut_directory, key, prefix) =
         nonce_compaction_fixture("nonce-compaction-file-cut", &[5, 7]);

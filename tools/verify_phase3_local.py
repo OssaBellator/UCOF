@@ -246,6 +246,8 @@ def verify_wiring(runner: Runner) -> None:
             "validate_compacted_directory_entry_count",
             "ensure_compacted_nonce_commit_directory_headroom",
             "saw_unrecognized_entry",
+            'return Err("compaction metadata unrecognized entry".into());',
+            'return Err("compaction prune unrecognized entry".into());',
             "AfterSourceSetPruneBeforeRetirementPrune",
             "AfterPreparedRetirementPruneBeforeTerminalPrune",
         ],
@@ -256,6 +258,8 @@ def verify_wiring(runner: Runner) -> None:
         ],
         "linux_durable_nonce_journal.rs": [
             "acquire_restart_metadata_mutation_lock(self)",
+            "CompactedNonceJournal::new(self)",
+            "LinuxNonceJournalError::CompactedAuthority",
             "persist_record(&mutation, record, cut)",
         ],
         "linux_encrypted_stage_restart.rs": [
@@ -276,6 +280,12 @@ def verify_wiring(runner: Runner) -> None:
         "restart_metadata_mutation_lock_tests.rs": [
             "mutation_lock_blocks_compaction_and_nonce_commit_until_release",
             "LinuxNonceJournalError::MutationLockBusy",
+        ],
+        "restart_metadata_compaction_tests.rs": [
+            "legacy_allocator_accepts_checkpoint_when_ordinary_history_still_matches",
+            "legacy_allocator_rejects_checkpoint_only_authority_after_prune",
+            "destructive_compaction_rejects_unrecognized_metadata_before_checkpoint_creation",
+            "prune_inventory_rejects_unrecognized_metadata_before_deletion",
         ],
         "restart_metadata_compaction_graph_tests.rs": [
             "compacted_scan_rejects_authenticated_record_replayed_under_wrong_generation_name",
@@ -336,6 +346,14 @@ def verify_wiring(runner: Runner) -> None:
             "nonce -> source-set -> Prepared -> Terminal -> old checkpoint"
         )
 
+    runner.record_static(
+        "Experiment 0179 legacy allocation guard",
+        "legacy allocation is allowed only while ordinary and compacted authority views agree",
+    )
+    runner.record_static(
+        "Experiment 0179 unknown metadata fail-closed",
+        "destructive compaction rejects unrecognized metadata before checkpointing and pruning",
+    )
     runner.record_static(
         "Experiment 0179 mutation serialization",
         "nonce allocation, durable restart metadata writers, retirement, and compaction share "

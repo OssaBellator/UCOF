@@ -657,6 +657,9 @@ fn scan_compaction_metadata(
         saw_unrecognized_entry,
         "compaction metadata",
     )?;
+    if saw_unrecognized_entry {
+        return Err("compaction metadata unrecognized entry".into());
+    }
 
     let mut fresh_by_crashed = std::collections::BTreeMap::new();
     for (crashed, fresh) in inventory
@@ -957,6 +960,9 @@ fn compaction_nonce_prune_inventory(
         saw_unrecognized_entry,
         "compaction prune",
     )?;
+    if saw_unrecognized_entry {
+        return Err("compaction prune unrecognized entry".into());
+    }
     Ok((nonce_records, old_checkpoints, preserved_nonce_records))
 }
 
