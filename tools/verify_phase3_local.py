@@ -183,6 +183,7 @@ def verify_wiring(runner: Runner) -> None:
     text = parent.read_text()
     required = [
         "linux_durable_nonce_journal.rs",
+        "journal_metadata_capacity.rs",
         "restart_metadata_mutation_lock.rs",
         "linux_encrypted_stage_restart.rs",
         "encrypted_restart_retirement.rs",
@@ -191,6 +192,7 @@ def verify_wiring(runner: Runner) -> None:
         "compacted_restart_classification.rs",
         "compacted_source_bound_restart.rs",
         "compacted_private_lifecycle_quota.rs",
+        "journal_metadata_primitive_capacity_tests.rs",
         "restart_metadata_compaction_tests.rs",
         "restart_metadata_mutation_lock_tests.rs",
         "restart_metadata_compaction_retry_tests.rs",
@@ -251,6 +253,10 @@ def verify_wiring(runner: Runner) -> None:
             "AfterSourceSetPruneBeforeRetirementPrune",
             "AfterPreparedRetirementPruneBeforeTerminalPrune",
         ],
+        "journal_metadata_capacity.rs": [
+            "fn require_linux_nonce_journal_metadata_slots(",
+            "if required > journal.limits.max_directory_entries",
+        ],
         "restart_metadata_mutation_lock.rs": [
             "NonBlockingLockExclusive",
             "LinuxNonceJournalError::MutationLockBusy",
@@ -264,18 +270,26 @@ def verify_wiring(runner: Runner) -> None:
         ],
         "linux_encrypted_stage_restart.rs": [
             "acquire_restart_metadata_mutation_lock(journal)",
+            "require_linux_nonce_journal_metadata_slots(journal, 1, \"encrypted stage manifest\")",
         ],
         "restart_source_set_authority.rs": [
             "acquire_restart_metadata_mutation_lock(journal)",
         ],
         "encrypted_restart_retirement.rs": [
             "acquire_restart_metadata_mutation_lock(journal)",
+            "require_linux_nonce_journal_metadata_slots(journal, 1, \"encrypted retirement\")",
             "persist_encrypted_retirement_record(journal, &mutation, terminal)",
         ],
         "compacted_source_bound_restart.rs": [
             'return Err("compacted restart manifest/nonce context".into());',
             "acquire_restart_metadata_mutation_lock(journal)",
             "persist_encrypted_retirement_record(journal, &mutation, record)",
+        ],
+        "journal_metadata_primitive_capacity_tests.rs": [
+            "ordinary_stage_manifest_rejects_full_journal_before_durable_stage_creation",
+            "ordinary_prepared_retirement_respects_configured_journal_entry_capacity",
+            "one free journal slot must permit exact stage-manifest persistence",
+            "one free journal slot must permit Prepared retirement authority",
         ],
         "restart_metadata_mutation_lock_tests.rs": [
             "mutation_lock_blocks_compaction_and_nonce_commit_until_release",
@@ -358,6 +372,11 @@ def verify_wiring(runner: Runner) -> None:
         "Experiment 0179 mutation serialization",
         "nonce allocation, durable restart metadata writers, retirement, and compaction share "
         "one non-blocking pinned-directory mutation lock",
+    )
+    runner.record_static(
+        "Experiment 0179 primitive metadata capacity",
+        "ordinary stage-manifest and retirement create_new paths use the shared journal "
+        "entry-slot guard with full/exact-capacity regressions",
     )
     runner.record_static(
         "Experiment 0179 checkpoint history consistency",

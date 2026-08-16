@@ -60,6 +60,7 @@ def synthetic_wiring(root: Path) -> Path:
     base.mkdir(parents=True)
     required = [
         "linux_durable_nonce_journal.rs",
+        "journal_metadata_capacity.rs",
         "restart_metadata_mutation_lock.rs",
         "linux_encrypted_stage_restart.rs",
         "encrypted_restart_retirement.rs",
@@ -68,6 +69,7 @@ def synthetic_wiring(root: Path) -> Path:
         "compacted_restart_classification.rs",
         "compacted_source_bound_restart.rs",
         "compacted_private_lifecycle_quota.rs",
+        "journal_metadata_primitive_capacity_tests.rs",
         "restart_metadata_compaction_tests.rs",
         "restart_metadata_mutation_lock_tests.rs",
         "restart_metadata_compaction_retry_tests.rs",
@@ -88,6 +90,10 @@ def synthetic_wiring(root: Path) -> Path:
     for name in required:
         (base / name).write_text("// synthetic wired file\n")
 
+    (base / "journal_metadata_capacity.rs").write_text(
+        "fn require_linux_nonce_journal_metadata_slots(\n"
+        "if required > journal.limits.max_directory_entries\n"
+    )
     (base / "restart_metadata_mutation_lock.rs").write_text(
         "NonBlockingLockExclusive\n"
         "LinuxNonceJournalError::MutationLockBusy\n"
@@ -101,13 +107,21 @@ def synthetic_wiring(root: Path) -> Path:
     )
     (base / "linux_encrypted_stage_restart.rs").write_text(
         "acquire_restart_metadata_mutation_lock(journal)\n"
+        "require_linux_nonce_journal_metadata_slots(journal, 1, \"encrypted stage manifest\")\n"
     )
     (base / "restart_source_set_authority.rs").write_text(
         "acquire_restart_metadata_mutation_lock(journal)\n"
     )
     (base / "encrypted_restart_retirement.rs").write_text(
         "acquire_restart_metadata_mutation_lock(journal)\n"
+        "require_linux_nonce_journal_metadata_slots(journal, 1, \"encrypted retirement\")\n"
         "persist_encrypted_retirement_record(journal, &mutation, terminal)\n"
+    )
+    (base / "journal_metadata_primitive_capacity_tests.rs").write_text(
+        "ordinary_stage_manifest_rejects_full_journal_before_durable_stage_creation\n"
+        "ordinary_prepared_retirement_respects_configured_journal_entry_capacity\n"
+        "one free journal slot must permit exact stage-manifest persistence\n"
+        "one free journal slot must permit Prepared retirement authority\n"
     )
     (base / "restart_metadata_mutation_lock_tests.rs").write_text(
         "mutation_lock_blocks_compaction_and_nonce_commit_until_release\n"
@@ -261,6 +275,7 @@ class LocalPhase3VerifierGuardrailTests(unittest.TestCase):
                     "Experiment 0179 legacy allocation guard",
                     "Experiment 0179 unknown metadata fail-closed",
                     "Experiment 0179 mutation serialization",
+                    "Experiment 0179 primitive metadata capacity",
                     "Experiment 0179 checkpoint history consistency",
                     "Experiment 0179 directory headroom",
                     "Experiment 0179 prune order",
@@ -294,6 +309,28 @@ class LocalPhase3VerifierGuardrailTests(unittest.TestCase):
             source.write_text(
                 source.read_text().replace(
                     "for checkpoint in checkpoints.iter().copied() {\n", ""
+                )
+            )
+            with mock.patch.object(verify, "ROOT", root):
+                with self.assertRaisesRegex(
+                    verify.VerificationFailure, "fail-closed coverage"
+                ):
+                    verify.verify_wiring(FakeRunner())
+
+    def test_wiring_guard_rejects_missing_primitive_capacity_guard(self) -> None:
+        with tempfile.TemporaryDirectory(prefix="ucof-local-verify-") as directory:
+            root = Path(directory)
+            synthetic_wiring(root)
+            source = (
+                root
+                / "crates/ucof-experiments/src/immutable_successor/"
+                "bounded_end_to_end_candidate/encrypted_restart_retirement.rs"
+            )
+            source.write_text(
+                source.read_text().replace(
+                    "require_linux_nonce_journal_metadata_slots(journal, 1, "
+                    "\"encrypted retirement\")\n",
+                    "",
                 )
             )
             with mock.patch.object(verify, "ROOT", root):
