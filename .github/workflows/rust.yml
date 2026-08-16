@@ -158,5 +158,7 @@ jobs:
         run: cargo fmt --all -- --check
       - name: Lint workspace
         run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Lint HTTP feature
+        run: cargo clippy --locked -p ucof-experiments --all-targets --features http-reqwest -- -D warnings
       - name: Test workspace
         run: cargo test --locked --workspace --all-targets
