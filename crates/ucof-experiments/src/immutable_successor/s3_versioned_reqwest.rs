@@ -942,15 +942,16 @@ mod s3_versioned_reqwest_tests {
         let _ = shutdown.send(());
         server.await.expect("server");
 
-        let captured = requests.lock().expect("requests");
-        assert!(captured.iter().any(|request| request.starts_with("HEAD /object ")));
-        assert!(captured.iter().any(|request| request
-            .starts_with("GET /object?versionId=version%2B1%2Fopaque ")));
-        assert!(captured.iter().filter(|request| request.starts_with("GET ")).all(|request| {
-            header_value(request, "authorization")
-                .is_some_and(|value| value.contains("SignedHeaders=host;range;x-amz-content-sha256;x-amz-date"))
-        }));
-        drop(captured);
+        {
+            let captured = requests.lock().expect("requests");
+            assert!(captured.iter().any(|request| request.starts_with("HEAD /object ")));
+            assert!(captured.iter().any(|request| request
+                .starts_with("GET /object?versionId=version%2B1%2Fopaque ")));
+            assert!(captured.iter().filter(|request| request.starts_with("GET ")).all(|request| {
+                header_value(request, "authorization")
+                    .is_some_and(|value| value.contains("SignedHeaders=host;range;x-amz-content-sha256;x-amz-date"))
+            }));
+        }
 
         let (recovery_url, _, recovery_shutdown, recovery_server) =
             serve_versioned_object(recovery_bytes).await;
