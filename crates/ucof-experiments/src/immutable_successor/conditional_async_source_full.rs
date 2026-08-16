@@ -830,10 +830,11 @@ mod conditional_async_source_full_tests {
         assert_eq!(async_report.strict, sync);
         assert_eq!(async_report.source_length, bytes.len() as u64);
         assert_eq!(async_report.source_version.as_str(), "\"v1\"");
-        let observed = counts.lock().expect("counts");
+        {
+            let observed = counts.lock().expect("counts");
         assert_eq!(observed.head, 1);
         assert_eq!(observed.ranges as u64, async_report.strict.stats.read_operations);
-        drop(observed);
+        }
         let _ = shutdown.send(());
         server.await.expect("server");
     }
@@ -849,10 +850,11 @@ mod conditional_async_source_full_tests {
                 ConditionalSourceError::VersionChanged
             ))
         );
-        let observed = counts.lock().expect("counts");
+        {
+            let observed = counts.lock().expect("counts");
         assert_eq!(observed.head, 1);
         assert_eq!(observed.ranges, 9);
-        drop(observed);
+        }
         let _ = shutdown.send(());
         server.await.expect("server");
     }

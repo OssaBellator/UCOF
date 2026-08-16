@@ -912,10 +912,11 @@ mod conditional_async_source_lookup_tests {
         assert_eq!(async_report.lookup, sync);
         assert_eq!(async_report.source_length, bytes.len() as u64);
         assert_eq!(async_report.source_version.as_str(), "\"v1\"");
-        let observed = counts.lock().expect("counts");
+        {
+            let observed = counts.lock().expect("counts");
         assert_eq!(observed.head, 1);
         assert_eq!(observed.ranges as u64, async_report.lookup.stats.read_operations);
-        drop(observed);
+        }
         let _ = shutdown.send(());
         server.await.expect("server");
     }
@@ -961,10 +962,11 @@ mod conditional_async_source_lookup_tests {
                 ConditionalSourceError::VersionChanged
             ))
         );
-        let observed = counts.lock().expect("counts");
+        {
+            let observed = counts.lock().expect("counts");
         assert_eq!(observed.head, 1);
         assert_eq!(observed.ranges, 1);
-        drop(observed);
+        }
         let _ = shutdown.send(());
         server.await.expect("server");
     }
@@ -990,10 +992,11 @@ mod conditional_async_source_lookup_tests {
                 ImmutableSourceError::Limit("read operations")
             ))
         );
-        let observed = counts.lock().expect("counts");
+        {
+            let observed = counts.lock().expect("counts");
         assert_eq!(observed.head, 1);
         assert_eq!(observed.ranges, 1);
-        drop(observed);
+        }
         let _ = shutdown.send(());
         server.await.expect("server");
     }
