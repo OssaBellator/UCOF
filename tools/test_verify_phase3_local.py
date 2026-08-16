@@ -170,8 +170,17 @@ def synthetic_wiring(root: Path) -> Path:
 
 class LocalPhase3VerifierGuardrailTests(unittest.TestCase):
     def test_runner_suppresses_python_bytecode_writes(self) -> None:
-        runner = verify.Runner(Path("phase3-local-verification.json"), offline=False)
-        self.assertEqual(runner.env["PYTHONDONTWRITEBYTECODE"], "1")
+        with tempfile.TemporaryDirectory(prefix="ucof-local-bytecode-") as directory:
+            root = Path(directory)
+            (root / "helper.py").write_text("VALUE = 1\n")
+            runner = verify.Runner(root / "report.json", offline=False)
+            with mock.patch.object(verify, "ROOT", root):
+                runner.run(
+                    "Bytecode suppression probe",
+                    [sys.executable, "-c", "import helper; assert helper.VALUE == 1"],
+                )
+            self.assertEqual(runner.env["PYTHONDONTWRITEBYTECODE"], "1")
+            self.assertFalse((root / "__pycache__").exists())
 
     def test_acceptance_candidate_requires_clean_git_head_and_pins_sha(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ucof-local-verify-") as directory:
