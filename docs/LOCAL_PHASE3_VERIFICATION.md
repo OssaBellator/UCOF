@@ -12,7 +12,7 @@ Run:
 python3 tools/verify_phase3_local.py
 ```
 
-This checks the Experiment 0179 wiring and fail-closed guard tokens, runs the independent restart-metadata compaction model, runs the Phase 3 Python tool self-tests, and executes the fast Phase 3 Rust/model/corpus surface.
+This checks the Experiment 0179 wiring and fail-closed guard tokens, runs the independent restart-metadata compaction model, runs the Phase 3 Python tool self-tests, and executes the fast Phase 3 Rust/model/corpus surface. Because the qualification-helper self-tests exercise POSIX ownership and filesystem-capacity APIs, this gate requires a POSIX host; use `--model-only` for the portable second-model check.
 
 When dependencies are already cached and network access should be forbidden:
 
@@ -52,10 +52,11 @@ Start from a clean worktree at the exact candidate SHA and run:
 python3 tools/verify_phase3_local.py --acceptance
 ```
 
-The verifier refuses a dirty worktree before expensive commands begin. It records that initial SHA as `acceptance_sha`, then verifies again after the complete acceptance surface that `HEAD` is unchanged and the worktree is still clean. It never installs missing packages/toolchains.
+The verifier refuses a dirty worktree before expensive commands begin. It records that initial SHA as `acceptance_sha`, then verifies again after the complete acceptance surface that `HEAD` is unchanged and the worktree is still clean. Child Python checks run with bytecode-cache writes disabled so the verifier does not dirty the candidate checkout itself. It never installs missing packages/toolchains.
 
 A complete acceptance environment must already provide:
 
+- a POSIX host exposing `os.geteuid` and `os.statvfs` for the filesystem/key/storage qualification helpers;
 - the repository's normal Rust toolchain and locked dependencies;
 - Rust 1.85.0;
 - `i686-unknown-linux-gnu`;
