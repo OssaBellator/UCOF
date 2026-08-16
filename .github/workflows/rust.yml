@@ -143,3 +143,20 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y gcc-multilib
       - name: Check portability target
         run: cargo check --locked --workspace --all-targets --target ${{ matrix.target }}
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: windows
+      - name: Check formatting
+        run: cargo fmt --all -- --check
+      - name: Lint workspace
+        run: cargo clippy --locked --workspace --all-targets -- -D warnings
+      - name: Test workspace
+        run: cargo test --locked --workspace --all-targets
