@@ -153,6 +153,7 @@ where
     })
 }
 
+#[cfg(unix)]
 pub(crate) fn classify_external_restart_inventory<I>(
     entries: I,
     expected_identity: [u8; 32],

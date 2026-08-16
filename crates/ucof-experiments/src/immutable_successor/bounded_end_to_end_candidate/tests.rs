@@ -124,6 +124,7 @@ fn end_to_end_bounded_candidate_matches_three_level_canonical_writer() {
 
     assert_eq!(actual, baseline);
     assert_eq!(evidence.output, baseline_report);
+    assert_eq!(evidence.descriptor_ciphertext_sha256, None);
     assert_eq!(evidence.peak_locator_entries, LEAF_CAPACITY);
     assert_eq!(evidence.peak_page_ref_entries, INTERNAL_FANOUT);
     assert_eq!(
