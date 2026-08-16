@@ -117,7 +117,7 @@ def synthetic_wiring(root: Path) -> Path:
             [
                 'return Err("compacted nonce filename generation".into());',
                 "acquire_restart_metadata_mutation_lock(journal)",
-                "persist_nonce_compaction_checkpoint(journal, &mutation",
+                "persist_nonce_compaction_checkpoint_locked(journal, &mutation",
                 "remove_verified_nonce_record(journal, &mutation",
                 'return Err("compaction retirement context".into());',
                 'return Err("compaction source-set context".into());',

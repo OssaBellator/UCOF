@@ -762,6 +762,16 @@ fn scan_compaction_metadata(
 
 fn persist_nonce_compaction_checkpoint(
     journal: &LinuxDurableNonceJournal,
+    checkpoint: NonceCompactionCheckpoint,
+    cut: RestartMetadataCompactionCut,
+) -> super::CandidateResult<()> {
+    let mutation =
+        acquire_restart_metadata_mutation_lock(journal).map_err(|error| error.to_string())?;
+    persist_nonce_compaction_checkpoint_locked(journal, &mutation, checkpoint, cut)
+}
+
+fn persist_nonce_compaction_checkpoint_locked(
+    journal: &LinuxDurableNonceJournal,
     _mutation: &RestartMetadataMutationGuard,
     checkpoint: NonceCompactionCheckpoint,
     cut: RestartMetadataCompactionCut,
@@ -1001,7 +1011,7 @@ fn compact_restart_metadata(
         metadata.live_manifests.keys().copied().collect();
 
     let checkpoint = NonceCompactionCheckpoint::from_durable(journal, recovery.durable)?;
-    persist_nonce_compaction_checkpoint(journal, &mutation, checkpoint, cut)?;
+    persist_nonce_compaction_checkpoint_locked(journal, &mutation, checkpoint, cut)?;
     let (nonce_records, old_checkpoints, preserved_nonce_records) =
         compaction_nonce_prune_inventory(
             journal,
