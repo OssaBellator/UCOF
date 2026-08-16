@@ -4,18 +4,13 @@ This note records unresolved integration boundaries discovered while auditing th
 
 Experiment 0179 remains **pending**. None of the items below may be silently inherited as a production guarantee from the deterministic mechanism tests.
 
-## 1. Post-checkpoint allocation must not fall back to the legacy journal view
+## 1. Post-checkpoint legacy allocation guard is executable
 
-`CompactedNonceJournal` is the authority-aware allocation/recovery path once a compaction checkpoint exists. The older `LinuxDurableNonceJournal` scanner intentionally understands only the original contiguous ordinary-generation journal.
+`CompactedNonceJournal` is the authority-aware allocation/recovery path once a compaction checkpoint exists. The older `LinuxDurableNonceJournal` scanner still intentionally understands only the original contiguous ordinary-generation journal, but its allocator now cross-checks that legacy view against `CompactedNonceJournal::scan` before reserving any nonce lease.
 
-That distinction is safe only if integration makes it impossible to choose the legacy allocator after ordinary history has been reclaimed. In particular, a checkpoint may summarize a durable generation/counter floor while the corresponding ordinary generation file has already been deleted. A legacy-only view can then observe less authority than the checkpointed state. A caller that allocates from that lower view could attempt to reuse a generation/counter range that compaction intentionally preserved only in the checkpoint.
+Legacy allocation is therefore permitted only while the two durable authority views agree. This preserves the immediate checkpoint crash window where the complete ordinary prefix still represents the checkpointed state, while failing closed once checkpoint-covered ordinary history has been reclaimed and only the authenticated checkpoint retains that authority. A regression proves both cases and verifies that the rejected path cannot recreate generation 1 after compaction.
 
-Before 0179 can be treated as an integration-ready mechanism, one of these must be made explicit and executable:
-
-- the legacy allocator fails closed whenever checkpointed state is not fully represented by the surviving contiguous ordinary journal; or
-- the production integration statically/structurally makes `CompactedNonceJournal` the only allocation entry point once compaction is enabled, with a regression proving no post-checkpoint path can reach the legacy allocator.
-
-Immediate checkpoint crash windows where the complete ordinary prefix is still present are different: the legacy journal can still reconstruct the same or stronger contiguous ordinary authority there. The unsafe class is fallback after checkpoint-covered ordinary history has been pruned.
+This closes the deterministic fallback item for the candidate. It does not make the legacy scanner itself checkpoint-aware, and it does not replace the remaining synchronization, platform-qualification, or production entry-point work below.
 
 ## 2. Unknown metadata during destructive compaction
 

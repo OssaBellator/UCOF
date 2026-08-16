@@ -105,6 +105,14 @@ def synthetic_wiring(root: Path) -> Path:
         )
         + "\n"
     )
+    (base / "linux_durable_nonce_journal.rs").write_text(
+        "CompactedNonceJournal::new(self)\n"
+        "LinuxNonceJournalError::CompactedAuthority\n"
+    )
+    (base / "restart_metadata_compaction_tests.rs").write_text(
+        "legacy_allocator_accepts_checkpoint_when_ordinary_history_still_matches\n"
+        "legacy_allocator_rejects_checkpoint_only_authority_after_prune\n"
+    )
     (base / "compacted_source_bound_restart.rs").write_text(
         'return Err("compacted restart manifest/nonce context".into());\n'
     )
@@ -213,6 +221,7 @@ class LocalPhase3VerifierGuardrailTests(unittest.TestCase):
             self.assertEqual(
                 [name for name, _ in runner.static],
                 [
+                    "Experiment 0179 legacy allocation guard",
                     "Experiment 0179 checkpoint history consistency",
                     "Experiment 0179 directory headroom",
                     "Experiment 0179 prune order",
@@ -262,7 +271,7 @@ class LocalPhase3VerifierGuardrailTests(unittest.TestCase):
                 parent.parent
                 / "bounded_end_to_end_candidate/restart_metadata_compaction_tests.rs"
             )
-            stale.write_text("let _ = fixture.publication;\n")
+            stale.write_text(stale.read_text() + "let _ = fixture.publication;\n")
             with mock.patch.object(verify, "ROOT", root):
                 with self.assertRaisesRegex(
                     verify.VerificationFailure, "stale 0179 API"

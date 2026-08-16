@@ -302,6 +302,28 @@ def verify_wiring(runner: Runner) -> None:
             "nonce -> source-set -> Prepared -> Terminal -> old checkpoint"
         )
 
+    legacy_source = (base / "linux_durable_nonce_journal.rs").read_text()
+    legacy_tests = (base / "restart_metadata_compaction_tests.rs").read_text()
+    legacy_tokens = [
+        "CompactedNonceJournal::new(self)",
+        "LinuxNonceJournalError::CompactedAuthority",
+    ]
+    legacy_test_tokens = [
+        "legacy_allocator_accepts_checkpoint_when_ordinary_history_still_matches",
+        "legacy_allocator_rejects_checkpoint_only_authority_after_prune",
+    ]
+    if any(token not in legacy_source for token in legacy_tokens) or any(
+        token not in legacy_tests for token in legacy_test_tokens
+    ):
+        raise VerificationFailure(
+            "Experiment 0179 legacy allocation must fail closed when compacted "
+            "authority is not represented by ordinary history"
+        )
+
+    runner.record_static(
+        "Experiment 0179 legacy allocation guard",
+        "legacy allocation is allowed only while ordinary and compacted authority views agree",
+    )
     runner.record_static(
         "Experiment 0179 checkpoint history consistency",
         "every authenticated checkpoint is checked against all surviving "

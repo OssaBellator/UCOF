@@ -68,6 +68,7 @@ enum LinuxNonceJournalError {
     GenerationGap,
     LeaseRange,
     Rollback,
+    CompactedAuthority,
     StaleAuthority,
     Limit(&'static str),
     InjectedCut(JournalCommitCut),
@@ -87,6 +88,10 @@ impl std::fmt::Display for LinuxNonceJournalError {
             Self::GenerationGap => write!(formatter, "nonce journal generation gap"),
             Self::LeaseRange => write!(formatter, "nonce journal lease range mismatch"),
             Self::Rollback => write!(formatter, "nonce journal is below trusted freshness floor"),
+            Self::CompactedAuthority => write!(
+                formatter,
+                "compacted nonce authority is not represented by legacy journal history"
+            ),
             Self::StaleAuthority => write!(formatter, "nonce authority is stale"),
             Self::Limit(label) => write!(formatter, "nonce journal limit exceeded: {label}"),
             Self::InjectedCut(cut) => write!(formatter, "injected nonce journal cut: {cut:?}"),
@@ -372,6 +377,13 @@ impl LinuxDurableNonceJournal {
             return Err(LinuxNonceJournalError::ForeignKey);
         }
         let observed = self.scan(None)?.durable;
+        let compacted_observed = CompactedNonceJournal::new(self)
+            .scan(None)
+            .map_err(|_| LinuxNonceJournalError::CompactedAuthority)?
+            .durable;
+        if compacted_observed != observed {
+            return Err(LinuxNonceJournalError::CompactedAuthority);
+        }
         if observed != authority.durable {
             return Err(LinuxNonceJournalError::StaleAuthority);
         }
