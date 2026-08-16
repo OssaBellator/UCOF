@@ -48,6 +48,7 @@ class Runner:
     def __init__(self, report_path: Path, offline: bool) -> None:
         self.report_path = report_path
         self.env = os.environ.copy()
+        self.env["PYTHONDONTWRITEBYTECODE"] = "1"
         if offline:
             self.env["CARGO_NET_OFFLINE"] = "true"
         self.records: list[dict] = []
@@ -157,6 +158,17 @@ def verify_acceptance_candidate(runner: Runner) -> None:
         raise VerificationFailure("acceptance requires a clean worktree")
     runner.acceptance_sha = sha
     runner.record_static("Pinned clean acceptance candidate", sha)
+
+
+def verify_phase3_tooling_host() -> None:
+    required_apis = ("geteuid", "statvfs")
+    missing = [name for name in required_apis if not hasattr(os, name)]
+    if os.name != "posix" or missing:
+        detail = "" if not missing else f"; missing os APIs: {', '.join(missing)}"
+        raise VerificationFailure(
+            "Phase 3 tool checks require a POSIX host with os.geteuid and os.statvfs"
+            f" (os.name={os.name!r}{detail})"
+        )
 
 
 def verify_acceptance_candidate_unchanged(runner: Runner) -> None:
@@ -703,6 +715,8 @@ def main() -> int:
     try:
         if args.acceptance:
             verify_acceptance_candidate(runner)
+        if not args.model_only:
+            verify_phase3_tooling_host()
         verify_wiring(runner)
         run_model(runner, args.campaigns, args.steps)
         if not args.model_only:

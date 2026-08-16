@@ -169,6 +169,10 @@ def synthetic_wiring(root: Path) -> Path:
 
 
 class LocalPhase3VerifierGuardrailTests(unittest.TestCase):
+    def test_runner_suppresses_python_bytecode_writes(self) -> None:
+        runner = verify.Runner(Path("phase3-local-verification.json"), offline=False)
+        self.assertEqual(runner.env["PYTHONDONTWRITEBYTECODE"], "1")
+
     def test_acceptance_candidate_requires_clean_git_head_and_pins_sha(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ucof-local-verify-") as directory:
             repo = Path(directory)
@@ -188,6 +192,16 @@ class LocalPhase3VerifierGuardrailTests(unittest.TestCase):
                     verify.VerificationFailure, "clean worktree"
                 ):
                     verify.verify_acceptance_candidate(FakeRunner())
+
+    def test_phase3_tool_checks_require_posix_host_apis(self) -> None:
+        with mock.patch.object(verify.os, "name", "nt"):
+            with self.assertRaisesRegex(
+                verify.VerificationFailure, "Phase 3 tool checks require a POSIX host"
+            ):
+                verify.verify_phase3_tooling_host()
+
+        if verify.os.name == "posix":
+            verify.verify_phase3_tooling_host()
 
     def test_acceptance_candidate_must_remain_same_clean_head(self) -> None:
         with tempfile.TemporaryDirectory(prefix="ucof-local-verify-") as directory:
