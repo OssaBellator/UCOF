@@ -30,18 +30,15 @@ Destructive compaction is not yet equally strict for every below-cap unknown ent
 
 Until that policy exists, unknown future metadata plus destructive compaction is an open compatibility boundary.
 
-## 3. Compaction requires exclusive restart-metadata mutation or stronger synchronization
+## 3. Restart-metadata mutation serialization is executable
 
-The compactor authenticates a bounded metadata graph, creates/synchronizes a replacement checkpoint, then reopens and re-authenticates each selected file immediately before unlink. Those checks narrow stale-file replacement mistakes, but the graph is still a snapshot.
+The candidate now acquires one non-blocking exclusive advisory lock on an independently opened descriptor for the same pinned restart-metadata directory before any durable authority mutation. Ordinary and compacted nonce allocation, durable stage-manifest publication, source-set authority publication, retirement preparation/execution, and compaction all participate in the same lock. Compaction holds it from the first recovery/classification scan through checkpoint creation, pruning, and final directory sync.
 
-A concurrent operation can create new metadata after graph classification. For example, a new live manifest could begin depending on an ordinary generation that the earlier snapshot considered reclaimable. The eventual result is designed to fail closed rather than reuse a nonce, but availability/restart continuity under arbitrary concurrent mutation is not established.
+The lock is tied to the directory inode rather than a lockfile: acquisition re-verifies device/inode identity against the pinned descriptor, contention fails closed before mutation, and descriptor close/process exit releases the advisory lock without stale cleanup state. The low-level nonce and retirement persistence/prune helpers require a guard parameter, so their production callers cannot bypass the lock accidentally.
 
-Production integration therefore needs either:
+A regression opens independent handles to the same directory, holds one mutation guard, and proves both a nonce commit and compaction make no side effects while contended; after guard release both succeed. This closes the candidate's deterministic concurrent-writer gap for cooperating writers using these entry points.
 
-- an exclusive journal/restart-metadata mutation lock spanning compaction classification through final directory sync; or
-- a stronger transactional/versioned protocol whose tests prove concurrent creators cannot acquire authority over metadata already selected for reclamation.
-
-The same caveat applies to the new ordinary-record capacity preflight: it is a logical pre-write guard, not a filesystem reservation against another actor consuming an entry between the preflight and `create_new`.
+The lock is advisory. A rogue or same-UID process that ignores the protocol remains outside this mechanism and belongs to the explicit deployment/same-UID isolation assumptions in platform qualification.
 
 ## 4. Local acceptance requires an exclusive candidate checkout
 

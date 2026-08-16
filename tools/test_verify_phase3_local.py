@@ -59,11 +59,17 @@ def synthetic_wiring(root: Path) -> Path:
     base = parent.parent / "bounded_end_to_end_candidate"
     base.mkdir(parents=True)
     required = [
+        "linux_durable_nonce_journal.rs",
+        "restart_metadata_mutation_lock.rs",
+        "linux_encrypted_stage_restart.rs",
+        "encrypted_restart_retirement.rs",
+        "restart_source_set_authority.rs",
         "restart_metadata_compaction.rs",
         "compacted_restart_classification.rs",
         "compacted_source_bound_restart.rs",
         "compacted_private_lifecycle_quota.rs",
         "restart_metadata_compaction_tests.rs",
+        "restart_metadata_mutation_lock_tests.rs",
         "restart_metadata_compaction_retry_tests.rs",
         "restart_metadata_compaction_graph_tests.rs",
         "restart_metadata_compaction_checkpoint_consistency_tests.rs",
@@ -82,10 +88,37 @@ def synthetic_wiring(root: Path) -> Path:
     for name in required:
         (base / name).write_text("// synthetic wired file\n")
 
+    (base / "restart_metadata_mutation_lock.rs").write_text(
+        "NonBlockingLockExclusive\n"
+        "LinuxNonceJournalError::MutationLockBusy\n"
+        "mutation lock directory identity\n"
+    )
+    (base / "linux_durable_nonce_journal.rs").write_text(
+        "acquire_restart_metadata_mutation_lock(self)\n"
+        "persist_record(&mutation, record, cut)\n"
+    )
+    (base / "linux_encrypted_stage_restart.rs").write_text(
+        "acquire_restart_metadata_mutation_lock(journal)\n"
+    )
+    (base / "restart_source_set_authority.rs").write_text(
+        "acquire_restart_metadata_mutation_lock(journal)\n"
+    )
+    (base / "encrypted_restart_retirement.rs").write_text(
+        "acquire_restart_metadata_mutation_lock(journal)\n"
+        "persist_encrypted_retirement_record(journal, &mutation, terminal)\n"
+    )
+    (base / "restart_metadata_mutation_lock_tests.rs").write_text(
+        "mutation_lock_blocks_compaction_and_nonce_commit_until_release\n"
+        "LinuxNonceJournalError::MutationLockBusy\n"
+    )
+
     (base / "restart_metadata_compaction.rs").write_text(
         "\n".join(
             [
                 'return Err("compacted nonce filename generation".into());',
+                "acquire_restart_metadata_mutation_lock(journal)",
+                "persist_nonce_compaction_checkpoint(journal, &mutation",
+                "remove_verified_nonce_record(journal, &mutation",
                 'return Err("compaction retirement context".into());',
                 'return Err("compaction source-set context".into());',
                 "nonce_record.generation != manifest.generation",
@@ -107,6 +140,8 @@ def synthetic_wiring(root: Path) -> Path:
     )
     (base / "compacted_source_bound_restart.rs").write_text(
         'return Err("compacted restart manifest/nonce context".into());\n'
+        "acquire_restart_metadata_mutation_lock(journal)\n"
+        "persist_encrypted_retirement_record(journal, &mutation, record)\n"
     )
     (base / "restart_metadata_compaction_graph_tests.rs").write_text(
         "\n".join(
@@ -213,6 +248,7 @@ class LocalPhase3VerifierGuardrailTests(unittest.TestCase):
             self.assertEqual(
                 [name for name, _ in runner.static],
                 [
+                    "Experiment 0179 mutation serialization",
                     "Experiment 0179 checkpoint history consistency",
                     "Experiment 0179 directory headroom",
                     "Experiment 0179 prune order",

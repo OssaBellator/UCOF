@@ -68,6 +68,7 @@ enum LinuxNonceJournalError {
     GenerationGap,
     LeaseRange,
     Rollback,
+    MutationLockBusy,
     StaleAuthority,
     Limit(&'static str),
     InjectedCut(JournalCommitCut),
@@ -87,6 +88,7 @@ impl std::fmt::Display for LinuxNonceJournalError {
             Self::GenerationGap => write!(formatter, "nonce journal generation gap"),
             Self::LeaseRange => write!(formatter, "nonce journal lease range mismatch"),
             Self::Rollback => write!(formatter, "nonce journal is below trusted freshness floor"),
+            Self::MutationLockBusy => write!(formatter, "restart metadata mutation lock is busy"),
             Self::StaleAuthority => write!(formatter, "nonce authority is stale"),
             Self::Limit(label) => write!(formatter, "nonce journal limit exceeded: {label}"),
             Self::InjectedCut(cut) => write!(formatter, "injected nonce journal cut: {cut:?}"),
@@ -371,6 +373,7 @@ impl LinuxDurableNonceJournal {
         if linux_nonce_key_id(&aes_key) != self.key_id {
             return Err(LinuxNonceJournalError::ForeignKey);
         }
+        let mutation = acquire_restart_metadata_mutation_lock(self)?;
         let observed = self.scan(None)?.durable;
         if observed != authority.durable {
             return Err(LinuxNonceJournalError::StaleAuthority);
@@ -387,7 +390,7 @@ impl LinuxDurableNonceJournal {
             operation_id,
             pending,
         )?;
-        self.persist_record(record, cut)?;
+        self.persist_record(&mutation, record, cut)?;
         let (durable, lease) = activate_nonce_lease(authority.durable, pending, true)
             .map_err(|error| LinuxNonceJournalError::Lease(format!("{error:?}")))?;
         authority.durable = durable;
@@ -438,6 +441,7 @@ impl LinuxDurableNonceJournal {
 
     fn persist_record(
         &self,
+        _mutation: &RestartMetadataMutationGuard,
         record: LinuxNonceJournalRecord,
         cut: JournalCommitCut,
     ) -> Result<(), LinuxNonceJournalError> {

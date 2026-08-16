@@ -419,6 +419,8 @@ fn persist_sorted_encrypted_spill_restart_stage(
     if session.nonce_prefix != journal.nonce_prefix {
         return Err(LinuxEncryptedStageRestartError::ForeignNoncePrefix);
     }
+    let _mutation = acquire_restart_metadata_mutation_lock(journal)
+        .map_err(|error| LinuxEncryptedStageRestartError::Journal(error.to_string()))?;
     let nonce_record = load_nonce_generation_record(journal, session.journal_generation)?;
     if nonce_record.operation_id != session.operation_id {
         return Err(LinuxEncryptedStageRestartError::ForeignOperation);

@@ -1484,6 +1484,7 @@ version = "0.1.0"
 dependencies = [
  "aws-lc-rs",
  "reqwest",
+ "rustix",
  "sha2",
  "tokio",
 ]

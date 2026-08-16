@@ -182,11 +182,17 @@ def verify_wiring(runner: Runner) -> None:
     require_file(parent)
     text = parent.read_text()
     required = [
+        "linux_durable_nonce_journal.rs",
+        "restart_metadata_mutation_lock.rs",
+        "linux_encrypted_stage_restart.rs",
+        "encrypted_restart_retirement.rs",
+        "restart_source_set_authority.rs",
         "restart_metadata_compaction.rs",
         "compacted_restart_classification.rs",
         "compacted_source_bound_restart.rs",
         "compacted_private_lifecycle_quota.rs",
         "restart_metadata_compaction_tests.rs",
+        "restart_metadata_mutation_lock_tests.rs",
         "restart_metadata_compaction_retry_tests.rs",
         "restart_metadata_compaction_graph_tests.rs",
         "restart_metadata_compaction_checkpoint_consistency_tests.rs",
@@ -230,6 +236,9 @@ def verify_wiring(runner: Runner) -> None:
     required_tokens = {
         "restart_metadata_compaction.rs": [
             'return Err("compacted nonce filename generation".into());',
+            "acquire_restart_metadata_mutation_lock(journal)",
+            "persist_nonce_compaction_checkpoint(journal, &mutation",
+            "remove_verified_nonce_record(journal, &mutation",
             'return Err("compaction retirement context".into());',
             'return Err("compaction source-set context".into());',
             "nonce_record.generation != manifest.generation",
@@ -240,8 +249,33 @@ def verify_wiring(runner: Runner) -> None:
             "AfterSourceSetPruneBeforeRetirementPrune",
             "AfterPreparedRetirementPruneBeforeTerminalPrune",
         ],
+        "restart_metadata_mutation_lock.rs": [
+            "NonBlockingLockExclusive",
+            "LinuxNonceJournalError::MutationLockBusy",
+            "mutation lock directory identity",
+        ],
+        "linux_durable_nonce_journal.rs": [
+            "acquire_restart_metadata_mutation_lock(self)",
+            "persist_record(&mutation, record, cut)",
+        ],
+        "linux_encrypted_stage_restart.rs": [
+            "acquire_restart_metadata_mutation_lock(journal)",
+        ],
+        "restart_source_set_authority.rs": [
+            "acquire_restart_metadata_mutation_lock(journal)",
+        ],
+        "encrypted_restart_retirement.rs": [
+            "acquire_restart_metadata_mutation_lock(journal)",
+            "persist_encrypted_retirement_record(journal, &mutation, terminal)",
+        ],
         "compacted_source_bound_restart.rs": [
             'return Err("compacted restart manifest/nonce context".into());',
+            "acquire_restart_metadata_mutation_lock(journal)",
+            "persist_encrypted_retirement_record(journal, &mutation, record)",
+        ],
+        "restart_metadata_mutation_lock_tests.rs": [
+            "mutation_lock_blocks_compaction_and_nonce_commit_until_release",
+            "LinuxNonceJournalError::MutationLockBusy",
         ],
         "restart_metadata_compaction_graph_tests.rs": [
             "compacted_scan_rejects_authenticated_record_replayed_under_wrong_generation_name",
@@ -302,6 +336,11 @@ def verify_wiring(runner: Runner) -> None:
             "nonce -> source-set -> Prepared -> Terminal -> old checkpoint"
         )
 
+    runner.record_static(
+        "Experiment 0179 mutation serialization",
+        "nonce allocation, durable restart metadata writers, retirement, and compaction share "
+        "one non-blocking pinned-directory mutation lock",
+    )
     runner.record_static(
         "Experiment 0179 checkpoint history consistency",
         "every authenticated checkpoint is checked against all surviving "

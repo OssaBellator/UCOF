@@ -19,6 +19,7 @@ tokio = { version = "1.53.1", features = ["io-util", "macros", "net", "rt", "syn
 
 [target.'cfg(all(target_os = "linux", target_arch = "x86_64"))'.dev-dependencies]
 aws-lc-rs = { version = "=1.18.0", default-features = false, features = ["aws-lc-sys"] }
+rustix = { version = "=1.1.4", features = ["fs"] }
 
 [lints]
 workspace = true

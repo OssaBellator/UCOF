@@ -434,6 +434,8 @@ impl<'a> CompactedNonceJournal<'a> {
         if linux_nonce_key_id(&aes_key) != self.journal.key_id {
             return Err("compacted nonce foreign key".into());
         }
+        let mutation = acquire_restart_metadata_mutation_lock(self.journal)
+            .map_err(|error| error.to_string())?;
         let observed = self.scan(None)?.durable;
         if observed != authority.durable {
             return Err("compacted nonce stale authority".into());
@@ -453,7 +455,7 @@ impl<'a> CompactedNonceJournal<'a> {
         )
         .map_err(|error| error.to_string())?;
         self.journal
-            .persist_record(record, cut)
+            .persist_record(&mutation, record, cut)
             .map_err(|error| error.to_string())?;
         let (durable, lease) = activate_nonce_lease(authority.durable, pending, true)
             .map_err(|error| format!("compacted nonce activate: {error:?}"))?;
@@ -760,6 +762,7 @@ fn scan_compaction_metadata(
 
 fn persist_nonce_compaction_checkpoint(
     journal: &LinuxDurableNonceJournal,
+    _mutation: &RestartMetadataMutationGuard,
     checkpoint: NonceCompactionCheckpoint,
     cut: RestartMetadataCompactionCut,
 ) -> super::CandidateResult<()> {
@@ -797,6 +800,7 @@ fn persist_nonce_compaction_checkpoint(
 
 fn remove_verified_nonce_record(
     journal: &LinuxDurableNonceJournal,
+    _mutation: &RestartMetadataMutationGuard,
     name: &OsStr,
     expected: LinuxNonceJournalRecord,
 ) -> super::CandidateResult<()> {
@@ -815,6 +819,7 @@ fn remove_verified_nonce_record(
 
 fn remove_verified_checkpoint(
     journal: &LinuxDurableNonceJournal,
+    _mutation: &RestartMetadataMutationGuard,
     name: &OsStr,
     expected: NonceCompactionCheckpoint,
 ) -> super::CandidateResult<()> {
@@ -833,6 +838,7 @@ fn remove_verified_checkpoint(
 
 fn remove_verified_retirement(
     journal: &LinuxDurableNonceJournal,
+    _mutation: &RestartMetadataMutationGuard,
     name: &OsStr,
     expected: EncryptedRestartRetirementRecord,
 ) -> super::CandidateResult<()> {
@@ -861,6 +867,7 @@ fn remove_verified_retirement(
 
 fn remove_verified_source_set(
     journal: &LinuxDurableNonceJournal,
+    _mutation: &RestartMetadataMutationGuard,
     name: &OsStr,
     expected: RestartSourceSetAuthority,
 ) -> super::CandidateResult<()> {
@@ -948,6 +955,8 @@ fn compact_restart_metadata(
     trusted_floor: Option<TrustedNonceFloor>,
     cut: RestartMetadataCompactionCut,
 ) -> super::CandidateResult<RestartMetadataCompactionReport> {
+    let mutation = acquire_restart_metadata_mutation_lock(journal)
+        .map_err(|error| error.to_string())?;
     let compacted = CompactedNonceJournal::new(journal);
     let recovery = compacted.scan(trusted_floor)?;
     if recovery.durable.generation == 0 {
@@ -992,7 +1001,7 @@ fn compact_restart_metadata(
         metadata.live_manifests.keys().copied().collect();
 
     let checkpoint = NonceCompactionCheckpoint::from_durable(journal, recovery.durable)?;
-    persist_nonce_compaction_checkpoint(journal, checkpoint, cut)?;
+    persist_nonce_compaction_checkpoint(journal, &mutation, checkpoint, cut)?;
     let (nonce_records, old_checkpoints, preserved_nonce_records) =
         compaction_nonce_prune_inventory(
             journal,
@@ -1019,14 +1028,14 @@ fn compact_restart_metadata(
     let mut preserved_source_set_records = 0usize;
 
     for (name, record) in nonce_records {
-        remove_verified_nonce_record(journal, &name, record)?;
+        remove_verified_nonce_record(journal, &mutation, &name, record)?;
         pruned_nonce_records = pruned_nonce_records
             .checked_add(1)
             .ok_or_else(|| "pruned nonce record count".to_owned())?;
     }
     for (name, record) in &metadata.source_sets {
         if terminal_crashed.contains(&record.generation) {
-            remove_verified_source_set(journal, name, *record)?;
+            remove_verified_source_set(journal, &mutation, name, *record)?;
             pruned_source_set_records = pruned_source_set_records
                 .checked_add(1)
                 .ok_or_else(|| "pruned source-set record count".to_owned())?;
@@ -1054,7 +1063,7 @@ fn compact_restart_metadata(
         if record.state == EncryptedRetirementState::Prepared
             && metadata.terminal_pairs.contains(&pair)
         {
-            remove_verified_retirement(journal, name, *record)?;
+            remove_verified_retirement(journal, &mutation, name, *record)?;
             pruned_retirement_records = pruned_retirement_records
                 .checked_add(1)
                 .ok_or_else(|| "pruned retirement record count".to_owned())?;
@@ -1074,14 +1083,14 @@ fn compact_restart_metadata(
     }
     for (name, record) in &metadata.retirement_files {
         if record.state == EncryptedRetirementState::Terminal {
-            remove_verified_retirement(journal, name, *record)?;
+            remove_verified_retirement(journal, &mutation, name, *record)?;
             pruned_retirement_records = pruned_retirement_records
                 .checked_add(1)
                 .ok_or_else(|| "pruned retirement record count".to_owned())?;
         }
     }
     for (name, old_checkpoint) in old_checkpoints {
-        remove_verified_checkpoint(journal, &name, old_checkpoint)?;
+        remove_verified_checkpoint(journal, &mutation, &name, old_checkpoint)?;
         pruned_old_checkpoints = pruned_old_checkpoints
             .checked_add(1)
             .ok_or_else(|| "pruned checkpoint count".to_owned())?;

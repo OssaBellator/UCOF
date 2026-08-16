@@ -25,6 +25,7 @@ mod bounded_end_to_end_candidate_tests {
         include!("bounded_end_to_end_candidate/encrypted_descriptor_debug.rs");
         include!("bounded_end_to_end_candidate/encrypted_descriptor_spill.rs");
         include!("bounded_end_to_end_candidate/linux_durable_nonce_journal.rs");
+        include!("bounded_end_to_end_candidate/restart_metadata_mutation_lock.rs");
         include!("bounded_end_to_end_candidate/journal_metadata_capacity.rs");
         include!("bounded_end_to_end_candidate/linux_encrypted_stage_restart.rs");
         include!("bounded_end_to_end_candidate/encrypted_restart_continuation.rs");
@@ -67,6 +68,7 @@ mod bounded_end_to_end_candidate_tests {
         include!("bounded_end_to_end_candidate/source_bound_retirement_fixture.rs");
         include!("bounded_end_to_end_candidate/source_bound_lifecycle_quota_tests.rs");
         include!("bounded_end_to_end_candidate/restart_metadata_compaction_tests.rs");
+        include!("bounded_end_to_end_candidate/restart_metadata_mutation_lock_tests.rs");
         include!("bounded_end_to_end_candidate/restart_metadata_compaction_retry_tests.rs");
         include!("bounded_end_to_end_candidate/restart_metadata_compaction_graph_tests.rs");
         include!("bounded_end_to_end_candidate/restart_metadata_compaction_checkpoint_consistency_tests.rs");

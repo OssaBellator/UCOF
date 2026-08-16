@@ -210,6 +210,8 @@ fn prepare_compacted_encrypted_restart_retirement(
 ) -> super::CandidateResult<EncryptedRestartRetirementRecord> {
     let crashed_generation = durable.continuation.crashed_generation;
     let fresh_generation = durable.continuation.fresh_generation;
+    let mutation = acquire_restart_metadata_mutation_lock(journal)
+        .map_err(|error| error.to_string())?;
     let recovery = CompactedNonceJournal::new(journal).scan(None)?;
     if recovery.durable.generation != fresh_generation {
         return Err("compacted retirement fresh generation".into());
@@ -287,6 +289,6 @@ fn prepare_compacted_encrypted_restart_retirement(
         output_sha256: durable.output_sha256,
     };
     ensure_compacted_restart_prepared_directory_headroom(journal)?;
-    persist_encrypted_retirement_record(journal, record)?;
+    persist_encrypted_retirement_record(journal, &mutation, record)?;
     Ok(record)
 }

@@ -165,6 +165,7 @@ fn open_encrypted_retirement_record(
 
 fn persist_encrypted_retirement_record(
     journal: &LinuxDurableNonceJournal,
+    _mutation: &RestartMetadataMutationGuard,
     record: EncryptedRestartRetirementRecord,
 ) -> super::CandidateResult<()> {
     require_linux_nonce_journal_metadata_slots(journal, 1, "encrypted retirement")?;
@@ -247,6 +248,8 @@ fn prepare_encrypted_restart_retirement(
 ) -> super::CandidateResult<EncryptedRestartRetirementRecord> {
     let crashed_generation = durable.continuation.crashed_generation;
     let fresh_generation = durable.continuation.fresh_generation;
+    let mutation = acquire_restart_metadata_mutation_lock(journal)
+        .map_err(|error| error.to_string())?;
     let recovery = journal.scan(None).map_err(|error| error.to_string())?;
     if recovery.durable.generation != fresh_generation {
         return Err("retirement fresh generation".into());
@@ -304,7 +307,7 @@ fn prepare_encrypted_restart_retirement(
         output_length: durable.output_length,
         output_sha256: durable.output_sha256,
     };
-    persist_encrypted_retirement_record(journal, record)?;
+    persist_encrypted_retirement_record(journal, &mutation, record)?;
     Ok(record)
 }
 
@@ -359,6 +362,8 @@ fn execute_encrypted_restart_retirement(
     limits: LinuxEncryptedStageRestartLimits,
     cut: EncryptedRetirementCut,
 ) -> super::CandidateResult<EncryptedRetirementOutcome> {
+    let mutation = acquire_restart_metadata_mutation_lock(journal)
+        .map_err(|error| error.to_string())?;
     if load_encrypted_retirement_record(
         journal,
         crashed_generation,
@@ -440,6 +445,6 @@ fn execute_encrypted_restart_retirement(
     }
 
     let terminal = prepared.with_state(EncryptedRetirementState::Terminal);
-    persist_encrypted_retirement_record(journal, terminal)?;
+    persist_encrypted_retirement_record(journal, &mutation, terminal)?;
     Ok(EncryptedRetirementOutcome::Terminal)
 }

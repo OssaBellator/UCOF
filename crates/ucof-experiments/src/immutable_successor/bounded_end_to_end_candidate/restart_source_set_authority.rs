@@ -159,6 +159,8 @@ fn persist_restart_source_set_authority(
     if manifest.key_id != journal.key_id || manifest.nonce_prefix != journal.nonce_prefix {
         return Err("restart source-set manifest context".into());
     }
+    let _mutation = acquire_restart_metadata_mutation_lock(journal)
+        .map_err(|error| error.to_string())?;
     let nonce_record = load_nonce_generation_record(journal, manifest.generation)
         .map_err(|error| error.to_string())?;
     if nonce_record.operation_id != manifest.operation_id {

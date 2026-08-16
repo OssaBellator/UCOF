@@ -80,8 +80,12 @@ fn competing_authenticated_retirement_generations_fail_before_checkpoint_creatio
         fresh_generation: 3,
         ..prepared
     };
-    persist_encrypted_retirement_record(&journal, competing)
-        .expect("persist authenticated competing retirement pair");
+    {
+        let mutation = acquire_restart_metadata_mutation_lock(&journal)
+            .expect("acquire mutation lock for competing retirement");
+        persist_encrypted_retirement_record(&journal, &mutation, competing)
+            .expect("persist authenticated competing retirement pair");
+    }
 
     let error = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
         .expect_err("competing retirement generations must fail closed");
@@ -121,8 +125,12 @@ fn prepared_and_terminal_payloads_must_match_before_reclamation() {
         output_sha256: forged_digest,
         ..prepared
     };
-    persist_encrypted_retirement_record(&journal, forged_terminal)
-        .expect("persist authenticated mismatched terminal");
+    {
+        let mutation = acquire_restart_metadata_mutation_lock(&journal)
+            .expect("acquire mutation lock for forged terminal");
+        persist_encrypted_retirement_record(&journal, &mutation, forged_terminal)
+            .expect("persist authenticated mismatched terminal");
+    }
 
     let error = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
         .expect_err("mismatched retirement payloads must fail closed");
@@ -320,8 +328,12 @@ fn retirement_generation_ahead_of_global_nonce_authority_fails_before_checkpoint
         fresh_generation: 3,
         ..prepared
     };
-    persist_encrypted_retirement_record(&journal, forged)
-        .expect("persist future retirement authority");
+    {
+        let mutation = acquire_restart_metadata_mutation_lock(&journal)
+            .expect("acquire mutation lock for future retirement");
+        persist_encrypted_retirement_record(&journal, &mutation, forged)
+            .expect("persist future retirement authority");
+    }
 
     let error = compact_restart_metadata(&journal, None, RestartMetadataCompactionCut::Complete)
         .expect_err("future retirement generation must fail closed");
