@@ -237,11 +237,17 @@ def verify_wiring(runner: Runner) -> None:
             "validate_compacted_directory_entry_count",
             "ensure_compacted_nonce_commit_directory_headroom",
             "saw_unrecognized_entry",
+            'return Err("compaction metadata unrecognized entry".into());',
+            'return Err("compaction prune unrecognized entry".into());',
             "AfterSourceSetPruneBeforeRetirementPrune",
             "AfterPreparedRetirementPruneBeforeTerminalPrune",
         ],
         "compacted_source_bound_restart.rs": [
             'return Err("compacted restart manifest/nonce context".into());',
+        ],
+        "restart_metadata_compaction_tests.rs": [
+            "destructive_compaction_rejects_unrecognized_metadata_before_checkpoint_creation",
+            "prune_inventory_rejects_unrecognized_metadata_before_deletion",
         ],
         "restart_metadata_compaction_graph_tests.rs": [
             "compacted_scan_rejects_authenticated_record_replayed_under_wrong_generation_name",

@@ -23,12 +23,11 @@ The lightweight compacted nonce recovery scan is deliberately tolerant of bounde
 
 Quota accounting is stricter: `scan_compacted_persistent_inventory` now rejects any unrecognized private metadata entry, even below the directory-count limit, because otherwise unknown bytes could disappear from private-storage arithmetic.
 
-Destructive compaction is not yet equally strict for every below-cap unknown entry. An older compactor therefore needs an explicit schema/forward-compatibility contract before it can safely coexist with future authenticated metadata families. Production integration should choose one of two policies:
+This child selects the fail-closed policy for destructive compaction. `scan_compaction_metadata` rejects any unrecognized entry before checkpoint creation, and `compaction_nonce_prune_inventory` rechecks the same condition before returning any deletion inventory. Regressions require both pre-checkpoint and pre-prune rejection while preserving the unknown file and all ordinary nonce records.
 
-- fail closed before checkpoint creation/pruning when the journal directory contains any unrecognized metadata family; or
-- define a versioned registry and retention rule proving unknown/newer metadata can never depend on history selected for deletion by the older compactor.
+The lightweight `CompactedNonceJournal` recovery scan remains deliberately tolerant of bounded unrelated entries because it does not delete them. This change therefore closes the static forward-compatibility boundary for destructive compaction without redefining recovery semantics.
 
-Until that policy exists, unknown future metadata plus destructive compaction is an open compatibility boundary.
+This does **not** establish concurrent mutation safety: an entry created after the final prune-inventory scan remains part of the exclusive-mutation/synchronization gap below.
 
 ## 3. Compaction requires exclusive restart-metadata mutation or stronger synchronization
 
